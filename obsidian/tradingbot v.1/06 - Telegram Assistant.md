@@ -1,0 +1,48 @@
+# Telegram Assistant
+
+## Version
+
+Activo desde `v1.3`; mejorado en `v1.5` con cupos, descartes y menos ruido.
+
+## Tipo
+
+IA basica basada en reglas y SQLite.
+
+No usa OpenAI API.
+
+## Comandos
+
+```text
+/help
+/status
+/cupos
+/top
+/top_memecoins
+/top_stocks
+/alertas
+/descartes
+/analiza NVDA
+/noticias NVDA
+/patron NVDA
+/analiza 0x...
+/pausar
+/reanudar
+/config
+```
+
+## Comportamiento
+
+- Solo responde al chat autorizado.
+- Puede explicar datos guardados.
+- Puede pausar alertas automaticas.
+- Puede reanudar alertas automaticas.
+- No puede operar mercados.
+- Puede consultar titulares/eventos publicos por simbolo.
+- Puede analizar patron tecnico basico para acciones.
+
+## Pendientes
+
+- Responder preguntas mas naturales.
+- Mejorar explicaciones de descartes con mas contexto historico.
+- Resumir semanalmente que filtros estan funcionando mejor.
+- Conectar memoria automatica con aprendizajes manuales del usuario.
