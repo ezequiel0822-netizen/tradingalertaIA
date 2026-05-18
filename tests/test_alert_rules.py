@@ -66,6 +66,13 @@ def _settings() -> Settings:
         chains_to_monitor=["ethereum", "base", "bsc", "solana"],
         sqlite_path=Path(":memory:"),
         request_timeout_seconds=15,
+        enable_price_snapshots=True,
+        snapshot_retention_days=30,
+        horizon_min_snapshots=2,
+        enable_horizon_evaluator=True,
+        backtest_min_samples=5,
+        backtest_default_horizon_hours=24,
+        enable_weekly_obsidian_report=False,
     )
 
 

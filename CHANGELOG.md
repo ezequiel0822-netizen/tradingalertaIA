@@ -1,5 +1,20 @@
 # Changelog
 
+## Trading Alert AI v1.6.0
+
+- Agrega persistencia historica de precios en `price_snapshots` con purga automatica.
+- Crea tabla `alert_outcome_horizons` con outcomes por horizonte fijo (1h, 6h, 24h, 7d).
+- Calcula MFE (max favorable excursion) y MAE (max adverse excursion) por ventana.
+- Agrega modulo `app/learning/horizon_evaluator.py` integrado en `run_learning_cycle`.
+- Agrega modulo `app/learning/backtester.py` con `backtest_strategy()` y `rank_top_strategies()`.
+- Agrega comandos Telegram `/horizontes SIMBOLO` y `/backtest [Nh] [features...]`.
+- Agrega seccion "Rendimiento por horizonte" en el dashboard Streamlit (tabla MFE/MAE, equity curve, ranking).
+- Agrega reporte semanal automatico en `obsidian/tradingbot v.1/11 - Reporte Semanal.md`.
+- Agrega 16 tests nuevos (snapshots, horizon evaluator, backtester, comandos Telegram, reporte semanal).
+- Agrega 7 settings (`ENABLE_PRICE_SNAPSHOTS`, `SNAPSHOT_RETENTION_DAYS`, `HORIZON_MIN_SNAPSHOTS`, `ENABLE_HORIZON_EVALUATOR`, `BACKTEST_MIN_SAMPLES`, `BACKTEST_DEFAULT_HORIZON_HOURS`, `ENABLE_WEEKLY_OBSIDIAN_REPORT`).
+- Bumpea `APP_VERSION` a `v1.6.0`.
+- Mantiene el sistema read-only: no compra, no vende y no ejecuta ordenes.
+
 ## Trading Alert AI v1.5.2
 
 - Agrega Learning Engine local.

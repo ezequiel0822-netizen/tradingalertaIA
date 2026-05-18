@@ -634,3 +634,202 @@ class Repository:
                 (limit,),
             ).fetchall()
         return [dict(row) for row in rows]
+
+    def latest_alert_for_token(
+        self,
+        chain: str,
+        token_address: str,
+    ) -> dict[str, Any] | None:
+        with get_connection(self.db_path) as connection:
+            row = connection.execute(
+                """
+                SELECT *
+                FROM alerts
+                WHERE chain = ? AND token_address = ?
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (chain, token_address),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def insert_price_snapshot(self, snapshot: TokenSnapshot, token_id: int) -> int:
+        with get_connection(self.db_path) as connection:
+            cursor = connection.execute(
+                """
+                INSERT INTO price_snapshots (
+                    token_id, chain, token_address, category, price,
+                    liquidity_usd, volume_5m, volume_1h, volume_24h,
+                    captured_at, source
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    token_id,
+                    snapshot.chain,
+                    snapshot.token_address,
+                    snapshot.category,
+                    snapshot.price,
+                    snapshot.liquidity_usd,
+                    snapshot.volume_5m,
+                    snapshot.volume_1h,
+                    snapshot.volume_24h,
+                    utc_now_iso(),
+                    snapshot.source,
+                ),
+            )
+            return int(cursor.lastrowid)
+
+    def fetch_snapshots_in_window(
+        self,
+        chain: str,
+        token_address: str,
+        start_iso: str,
+        end_iso: str,
+    ) -> list[dict[str, Any]]:
+        with get_connection(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT *
+                FROM price_snapshots
+                WHERE chain = ?
+                  AND token_address = ?
+                  AND captured_at >= ?
+                  AND captured_at <= ?
+                ORDER BY captured_at ASC
+                """,
+                (chain, token_address, start_iso, end_iso),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def purge_old_snapshots(self, retention_days: int) -> int:
+        cutoff = minutes_ago(retention_days * 24 * 60)
+        with get_connection(self.db_path) as connection:
+            cursor = connection.execute(
+                "DELETE FROM price_snapshots WHERE captured_at < ?",
+                (cutoff,),
+            )
+            return int(cursor.rowcount or 0)
+
+    def upsert_alert_outcome_horizon(self, row: dict[str, Any]) -> bool:
+        with get_connection(self.db_path) as connection:
+            existing = connection.execute(
+                """
+                SELECT id FROM alert_outcome_horizons
+                WHERE alert_id = ? AND horizon_hours = ?
+                """,
+                (row["alert_id"], row["horizon_hours"]),
+            ).fetchone()
+            connection.execute(
+                """
+                INSERT INTO alert_outcome_horizons (
+                    alert_id, horizon_hours, entry_price, exit_price,
+                    return_pct, mfe_pct, mae_pct, snapshots_used,
+                    outcome_label, status, evaluated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(alert_id, horizon_hours) DO UPDATE SET
+                    exit_price = excluded.exit_price,
+                    return_pct = excluded.return_pct,
+                    mfe_pct = excluded.mfe_pct,
+                    mae_pct = excluded.mae_pct,
+                    snapshots_used = excluded.snapshots_used,
+                    outcome_label = excluded.outcome_label,
+                    status = excluded.status,
+                    evaluated_at = excluded.evaluated_at
+                """,
+                (
+                    row["alert_id"],
+                    row["horizon_hours"],
+                    row["entry_price"],
+                    row.get("exit_price"),
+                    row.get("return_pct"),
+                    row.get("mfe_pct"),
+                    row.get("mae_pct"),
+                    row.get("snapshots_used", 0),
+                    row.get("outcome_label"),
+                    row.get("status"),
+                    row.get("evaluated_at") or utc_now_iso(),
+                ),
+            )
+        return existing is None
+
+    def fetch_alert_outcome_horizons(
+        self,
+        alert_id: int | None = None,
+        horizon_hours: int | None = None,
+        status: str | None = None,
+        limit: int = 1000,
+    ) -> list[dict[str, Any]]:
+        clauses: list[str] = []
+        params: list[Any] = []
+        if alert_id is not None:
+            clauses.append("alert_id = ?")
+            params.append(alert_id)
+        if horizon_hours is not None:
+            clauses.append("horizon_hours = ?")
+            params.append(horizon_hours)
+        if status is not None:
+            clauses.append("status = ?")
+            params.append(status)
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        params.append(limit)
+        with get_connection(self.db_path) as connection:
+            rows = connection.execute(
+                f"""
+                SELECT *
+                FROM alert_outcome_horizons
+                {where}
+                ORDER BY evaluated_at DESC
+                LIMIT ?
+                """,
+                params,
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def fetch_horizons_by_features(
+        self,
+        horizon_hours: int,
+        since_iso: str,
+        limit: int = 2000,
+    ) -> list[dict[str, Any]]:
+        with get_connection(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    h.id AS horizon_id,
+                    h.alert_id,
+                    h.horizon_hours,
+                    h.entry_price,
+                    h.exit_price,
+                    h.return_pct,
+                    h.mfe_pct,
+                    h.mae_pct,
+                    h.outcome_label,
+                    h.status,
+                    h.evaluated_at,
+                    alerts.id AS alert_real_id,
+                    alerts.alert_type,
+                    alerts.category,
+                    alerts.chain,
+                    alerts.token_address,
+                    alerts.symbol,
+                    alerts.score,
+                    alerts.risk_level,
+                    alerts.reasons,
+                    alerts.security_summary,
+                    alerts.estimated_gain_pct,
+                    alerts.estimate_confidence,
+                    alerts.estimate_summary,
+                    alerts.created_at
+                FROM alert_outcome_horizons AS h
+                JOIN alerts ON alerts.id = h.alert_id
+                WHERE h.horizon_hours = ?
+                  AND h.status = 'final'
+                  AND alerts.created_at >= ?
+                ORDER BY alerts.created_at DESC
+                LIMIT ?
+                """,
+                (horizon_hours, since_iso, limit),
+            ).fetchall()
+        return [dict(row) for row in rows]

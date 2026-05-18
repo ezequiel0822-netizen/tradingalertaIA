@@ -155,6 +155,39 @@ def init_db(db_path: Path) -> None:
                 created_at TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS price_snapshots (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                token_id INTEGER NOT NULL,
+                chain TEXT NOT NULL,
+                token_address TEXT NOT NULL,
+                category TEXT,
+                price REAL NOT NULL,
+                liquidity_usd REAL,
+                volume_5m REAL,
+                volume_1h REAL,
+                volume_24h REAL,
+                captured_at TEXT NOT NULL,
+                source TEXT,
+                FOREIGN KEY(token_id) REFERENCES tokens(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS alert_outcome_horizons (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                alert_id INTEGER NOT NULL,
+                horizon_hours INTEGER NOT NULL,
+                entry_price REAL NOT NULL,
+                exit_price REAL,
+                return_pct REAL,
+                mfe_pct REAL,
+                mae_pct REAL,
+                snapshots_used INTEGER,
+                outcome_label TEXT,
+                status TEXT,
+                evaluated_at TEXT NOT NULL,
+                UNIQUE(alert_id, horizon_hours),
+                FOREIGN KEY(alert_id) REFERENCES alerts(id)
+            );
+
             CREATE INDEX IF NOT EXISTS idx_alerts_token_type_time
                 ON alerts(chain, token_address, alert_type, created_at);
             CREATE INDEX IF NOT EXISTS idx_alerts_created_at
@@ -165,6 +198,14 @@ def init_db(db_path: Path) -> None:
                 ON signal_outcomes(outcome_label);
             CREATE INDEX IF NOT EXISTS idx_paper_trades_status
                 ON paper_trades(status);
+            CREATE INDEX IF NOT EXISTS idx_price_snapshots_token_time
+                ON price_snapshots(chain, token_address, captured_at);
+            CREATE INDEX IF NOT EXISTS idx_price_snapshots_captured
+                ON price_snapshots(captured_at);
+            CREATE INDEX IF NOT EXISTS idx_outcome_horizons_alert
+                ON alert_outcome_horizons(alert_id);
+            CREATE INDEX IF NOT EXISTS idx_outcome_horizons_status
+                ON alert_outcome_horizons(status);
             """
         )
         _ensure_column(connection, "tokens", "latest_estimated_gain_pct", "REAL")

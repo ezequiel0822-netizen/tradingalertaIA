@@ -8,7 +8,14 @@ from app.collectors.sec_collector import SECFilingsCollector
 from app.collectors.stock_collector import StockCollector
 from app.database.models import SecuritySummary, TokenSnapshot
 from app.database.repository import Repository
+from app.learning.backtester import (
+    BacktestResult,
+    backtest_strategy,
+    rank_top_strategies,
+)
+from app.learning.horizon_evaluator import HORIZONS
 from app.learning.training_engine import run_learning_cycle
+from app.utils.time_utils import parse_iso_datetime, utc_now
 
 
 DISCLAIMER = "No es recomendacion financiera. Revisar manualmente."
@@ -90,6 +97,16 @@ class BasicTelegramAssistant:
             query = raw.split(" ", 1)[1]
             return self.pro_message(query)
 
+        if normalized.startswith("/horizontes") or normalized.startswith("horizontes") or normalized.startswith("/horizons"):
+            parts = raw.split(" ", 1)
+            query = parts[1] if len(parts) > 1 else ""
+            return self.horizons_message(query)
+
+        if normalized.startswith("/backtest") or normalized.startswith("backtest") or normalized.startswith("/bt"):
+            parts = raw.split(" ", 1)
+            args = parts[1] if len(parts) > 1 else ""
+            return self.backtest_message(args)
+
         if "por que" in normalized or "porque" in normalized:
             return self.recent_alerts_message(limit=3)
 
@@ -117,6 +134,8 @@ Comandos:
 /filings SIMBOLO - filings SEC recientes para acciones
 /patron SIMBOLO - patron tecnico basico para acciones
 /pro SIMBOLO - lectura profesional: grafico, noticias, filings, riesgos
+/horizontes SIMBOLO - retornos por horizonte (1h/6h/24h/7d) y MFE/MAE
+/backtest [Nh] [filtros] - top reglas o test de una combinacion (ej: /backtest 24h ia_pro,score:80-90)
 /pausar - pausa alertas automaticas
 /reanudar - reactiva alertas automaticas
 /config - ver configuracion sin secretos
@@ -494,3 +513,135 @@ Ahora puedes usar /aprendizaje y /paper.
             return float(value)
         except (TypeError, ValueError):
             return None
+
+    def horizons_message(self, query: str) -> str:
+        symbol_or_addr = query.strip()
+        if not symbol_or_addr:
+            return "Dime un simbolo o address. Ejemplo: /horizontes NVDA"
+
+        token = self.repository.find_token(symbol_or_addr)
+        if not token:
+            return f"No encontre datos guardados para: {symbol_or_addr}."
+
+        chain = str(token.get("chain") or "")
+        token_address = str(token.get("token_address") or "")
+        alert = self.repository.latest_alert_for_token(chain, token_address)
+        if not alert:
+            return (
+                f"No encontre alertas guardadas para {symbol_or_addr}. "
+                "Espera a que el monitor genere alguna."
+            )
+
+        horizons = self.repository.fetch_alert_outcome_horizons(
+            alert_id=int(alert["id"]),
+            limit=len(HORIZONS) + 2,
+        )
+        horizons_by_h = {int(row["horizon_hours"]): row for row in horizons}
+
+        symbol = alert.get("symbol") or token.get("symbol") or "unknown"
+        lines = [f"Horizontes para {symbol} (alert #{alert['id']}):"]
+        created_at = parse_iso_datetime(str(alert.get("created_at") or ""))
+
+        for horizon in HORIZONS:
+            row = horizons_by_h.get(horizon)
+            label = self._horizon_label(horizon)
+            if row and row.get("status") == "final":
+                lines.append(
+                    f"{label}: return {self._fmt_pct(row.get('return_pct'))} | "
+                    f"MFE {self._fmt_pct(row.get('mfe_pct'))} | "
+                    f"MAE {self._fmt_pct(row.get('mae_pct'))} | "
+                    f"snapshots {row.get('snapshots_used')} | {row.get('outcome_label')}"
+                )
+            elif row and row.get("status") == "pending":
+                lines.append(
+                    f"{label}: pendiente (datos insuficientes, snapshots {row.get('snapshots_used')})"
+                )
+            elif created_at is not None:
+                remaining_hours = max(
+                    horizon - (utc_now() - created_at).total_seconds() / 3600,
+                    0,
+                )
+                lines.append(
+                    f"{label}: pendiente (faltan {remaining_hours:.1f}h para evaluar)"
+                )
+            else:
+                lines.append(f"{label}: sin datos")
+
+        lines.append(DISCLAIMER)
+        return "\n".join(lines)
+
+    def backtest_message(self, args: str) -> str:
+        horizon, filters = self._parse_backtest_args(args)
+        if filters:
+            result = backtest_strategy(
+                self.repository,
+                filter_features=filters,
+                horizon_hours=horizon,
+            )
+            return self._format_single_backtest(result)
+        top = rank_top_strategies(
+            self.repository,
+            horizon_hours=horizon,
+            min_samples=self.settings.backtest_min_samples,
+        )
+        if not top:
+            return (
+                f"Aun no hay outcomes finales suficientes para horizonte {horizon}h. "
+                f"Necesitas {self.settings.backtest_min_samples}+ casos por regla."
+            )
+        lines = [f"Top reglas (horizonte {horizon}h, ultimos 30 dias):"]
+        for index, row in enumerate(top, start=1):
+            lines.append(self._format_backtest_row(index, row))
+        lines.append(DISCLAIMER)
+        return "\n".join(lines)
+
+    def _parse_backtest_args(self, args: str) -> tuple[int, list[str]]:
+        horizon = self.settings.backtest_default_horizon_hours
+        filters: list[str] = []
+        for piece in args.split():
+            stripped = piece.strip().lower()
+            if not stripped:
+                continue
+            if stripped.endswith("h") and stripped[:-1].isdigit():
+                horizon = int(stripped[:-1])
+                continue
+            if stripped.isdigit():
+                horizon = int(stripped)
+                continue
+            filters.extend(part for part in stripped.split(",") if part)
+        if horizon not in HORIZONS:
+            horizon = self.settings.backtest_default_horizon_hours
+        return horizon, filters
+
+    def _format_single_backtest(self, result: BacktestResult) -> str:
+        if result.sample_count == 0:
+            return (
+                f"Sin casos para regla '{result.rule_label}' "
+                f"(horizonte {result.horizon_hours}h)."
+            )
+        win_rate = self._fmt_pct(result.win_rate * 100)
+        return (
+            f"Backtest {result.rule_label} (horizonte {result.horizon_hours}h)\n"
+            f"Casos: {result.sample_count}\n"
+            f"Win rate: {win_rate}\n"
+            f"Avg return: {self._fmt_pct(result.avg_return_pct)}\n"
+            f"Median: {self._fmt_pct(result.median_return_pct)}\n"
+            f"MFE prom: {self._fmt_pct(result.avg_mfe_pct)} | "
+            f"MAE prom: {self._fmt_pct(result.avg_mae_pct)}\n"
+            f"Drawdown peor: {self._fmt_pct(result.max_drawdown_pct)}\n"
+            f"Sharpe aprox: {result.sharpe_approx}\n"
+            f"{DISCLAIMER}"
+        )
+
+    def _format_backtest_row(self, index: int, row: BacktestResult) -> str:
+        win_rate = self._fmt_pct(row.win_rate * 100)
+        return (
+            f"{index}. {row.rule_label} | n={row.sample_count} | "
+            f"win {win_rate} | avg {self._fmt_pct(row.avg_return_pct)} | "
+            f"MFE {self._fmt_pct(row.avg_mfe_pct)} | "
+            f"MAE {self._fmt_pct(row.avg_mae_pct)} | sharpe {row.sharpe_approx}"
+        )
+
+    def _horizon_label(self, hours: int) -> str:
+        labels = {1: "1h", 6: "6h", 24: "24h", 168: "7d"}
+        return labels.get(hours, f"{hours}h")

@@ -100,6 +100,13 @@ class Settings:
     chains_to_monitor: list[str]
     sqlite_path: Path
     request_timeout_seconds: int
+    enable_price_snapshots: bool
+    snapshot_retention_days: int
+    horizon_min_snapshots: int
+    enable_horizon_evaluator: bool
+    backtest_min_samples: int
+    backtest_default_horizon_hours: int
+    enable_weekly_obsidian_report: bool
 
     @property
     def geckoterminal_networks(self) -> dict[str, str]:
@@ -137,7 +144,7 @@ def load_settings() -> Settings:
         obsidian_vault_path = PROJECT_ROOT / obsidian_vault_path
 
     return Settings(
-        app_version=os.getenv("APP_VERSION", "v1.5.2"),
+        app_version=os.getenv("APP_VERSION", "v1.6.0"),
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
         telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID"),
         dexscreener_base_url=os.getenv(
@@ -224,4 +231,15 @@ def load_settings() -> Settings:
         ),
         sqlite_path=sqlite_path,
         request_timeout_seconds=_get_int("REQUEST_TIMEOUT_SECONDS", 15),
+        enable_price_snapshots=_get_bool("ENABLE_PRICE_SNAPSHOTS", True),
+        snapshot_retention_days=_get_int("SNAPSHOT_RETENTION_DAYS", 30),
+        horizon_min_snapshots=_get_int("HORIZON_MIN_SNAPSHOTS", 2),
+        enable_horizon_evaluator=_get_bool("ENABLE_HORIZON_EVALUATOR", True),
+        backtest_min_samples=_get_int("BACKTEST_MIN_SAMPLES", 5),
+        backtest_default_horizon_hours=_get_int(
+            "BACKTEST_DEFAULT_HORIZON_HOURS", 24
+        ),
+        enable_weekly_obsidian_report=_get_bool(
+            "ENABLE_WEEKLY_OBSIDIAN_REPORT", True
+        ),
     )

@@ -32,7 +32,11 @@ from app.database.models import AlertRecord, SecuritySummary, TokenSnapshot
 from app.database.repository import Repository
 from app.learning.training_engine import run_learning_cycle
 from app.utils.dedup import should_send_deduped_alert
-from app.utils.obsidian_memory import write_daily_memory_if_needed
+from app.utils.obsidian_memory import (
+    write_daily_memory_if_needed,
+    write_weekly_report_if_needed,
+)
+from app.utils.time_utils import minutes_ago
 
 
 logger = logging.getLogger(__name__)
@@ -151,6 +155,11 @@ class TradingAlertJob:
                 score_result.risk_level,
                 estimate,
             )
+            if self.settings.enable_price_snapshots and snapshot.price:
+                try:
+                    self.repository.insert_price_snapshot(snapshot, token_id)
+                except Exception:
+                    logger.exception("Failed to insert price snapshot")
             self.repository.save_security_check(
                 snapshot.chain, snapshot.token_address, security
             )
@@ -211,6 +220,28 @@ class TradingAlertJob:
         if self.settings.enable_learning_engine:
             learning = run_learning_cycle(self.settings, self.repository)
             logger.info("Learning cycle complete. %s", learning.summary)
+
+        if self.settings.enable_price_snapshots:
+            last_purge = self.repository.get_state("snapshots_last_purge")
+            cutoff = minutes_ago(24 * 60)
+            if last_purge is None or last_purge < cutoff:
+                try:
+                    deleted = self.repository.purge_old_snapshots(
+                        self.settings.snapshot_retention_days
+                    )
+                    self.repository.set_state(
+                        "snapshots_last_purge",
+                        minutes_ago(0),
+                    )
+                    logger.info("Purged %s old price snapshots", deleted)
+                except Exception:
+                    logger.exception("Failed to purge old price snapshots")
+
+        if self.settings.enable_weekly_obsidian_report:
+            try:
+                write_weekly_report_if_needed(self.settings, self.repository)
+            except Exception:
+                logger.exception("Failed to write weekly Obsidian report")
 
         logger.info("Monitoring cycle complete. Telegram alerts sent: %s", sent_count)
 

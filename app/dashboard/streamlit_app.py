@@ -6,6 +6,9 @@ import pandas as pd
 import streamlit as st
 
 from app.config.settings import load_settings
+from app.database.repository import Repository
+from app.learning.backtester import backtest_strategy, rank_top_strategies
+from app.learning.horizon_evaluator import HORIZONS
 
 
 settings = load_settings()
@@ -56,6 +59,8 @@ alerts = _load_table("alerts")
 outcomes = _load_table("signal_outcomes")
 lessons = _load_table("strategy_lessons")
 paper_trades = _load_table("paper_trades")
+horizons_df = _load_table("alert_outcome_horizons")
+snapshots_df = _load_table("price_snapshots")
 
 st.title(f"Trading Alert AI {settings.app_version}")
 
@@ -183,6 +188,116 @@ else:
         ],
     )
     st.dataframe(critical_alerts[critical_columns].head(50), use_container_width=True, hide_index=True)
+
+st.subheader("Rendimiento por horizonte")
+st.caption(
+    "Outcomes 1h/6h/24h/7d con MFE/MAE. Solo simulacion local. "
+    "Los horizontes finales requieren snapshots historicos suficientes."
+)
+
+horizon_metric_cols = st.columns(3)
+final_count = 0
+pending_count = 0
+if not horizons_df.empty and "status" in horizons_df.columns:
+    final_count = int((horizons_df["status"] == "final").sum())
+    pending_count = int((horizons_df["status"] == "pending").sum())
+horizon_metric_cols[0].metric("Snapshots historicos", len(snapshots_df))
+horizon_metric_cols[1].metric("Horizontes finales", final_count)
+horizon_metric_cols[2].metric("Horizontes pendientes", pending_count)
+
+if horizons_df.empty or "horizon_hours" not in horizons_df.columns:
+    st.caption(
+        "Aun no hay outcomes por horizonte. Deja correr el monitor "
+        "para acumular snapshots historicos."
+    )
+else:
+    finals = horizons_df[horizons_df["status"] == "final"].copy()
+    if finals.empty:
+        st.caption("Sin horizontes finales todavia. Necesitas snapshots dentro de cada ventana.")
+    else:
+        merged = finals.merge(
+            alerts[_columns(alerts, ["id", "category", "symbol"])].rename(
+                columns={"id": "alert_id"}
+            ),
+            on="alert_id",
+            how="left",
+        )
+        merged["category"] = merged["category"].fillna("unknown")
+        summary = (
+            merged.groupby(["category", "horizon_hours"])
+            .agg(
+                count=("return_pct", "size"),
+                avg_return=("return_pct", "mean"),
+                avg_mfe=("mfe_pct", "mean"),
+                avg_mae=("mae_pct", "mean"),
+            )
+            .reset_index()
+            .sort_values(["category", "horizon_hours"])
+        )
+        summary["avg_return"] = summary["avg_return"].round(2)
+        summary["avg_mfe"] = summary["avg_mfe"].round(2)
+        summary["avg_mae"] = summary["avg_mae"].round(2)
+        st.markdown("**Promedios por categoria x horizonte**")
+        st.dataframe(summary, use_container_width=True, hide_index=True)
+
+        horizon_choice = st.selectbox(
+            "Horizonte para equity curve y ranking",
+            options=list(HORIZONS),
+            index=list(HORIZONS).index(settings.backtest_default_horizon_hours)
+            if settings.backtest_default_horizon_hours in HORIZONS
+            else 2,
+            format_func=lambda h: f"{h}h" if h < 24 else f"{h // 24}d",
+        )
+        repo_for_dashboard = Repository(settings.sqlite_path)
+        equity_result = backtest_strategy(
+            repo_for_dashboard,
+            filter_features=[],
+            horizon_hours=int(horizon_choice),
+        )
+        st.markdown(
+            f"**Equity curve simulada — todas las alertas ({horizon_choice}h, "
+            f"n={equity_result.sample_count})**"
+        )
+        if equity_result.equity_curve:
+            curve_df = pd.DataFrame(
+                {"equity": equity_result.equity_curve},
+                index=range(1, len(equity_result.equity_curve) + 1),
+            )
+            st.line_chart(curve_df)
+            stats_cols = st.columns(4)
+            stats_cols[0].metric("Win rate", f"{equity_result.win_rate * 100:.1f}%")
+            stats_cols[1].metric("Avg return", f"{equity_result.avg_return_pct:.2f}%")
+            stats_cols[2].metric("Avg MFE", f"{equity_result.avg_mfe_pct:.2f}%")
+            stats_cols[3].metric("Avg MAE", f"{equity_result.avg_mae_pct:.2f}%")
+        else:
+            st.caption("Sin trades simulados para esta ventana.")
+
+        ranking = rank_top_strategies(
+            repo_for_dashboard,
+            horizon_hours=int(horizon_choice),
+            min_samples=settings.backtest_min_samples,
+            top_n=10,
+        )
+        st.markdown("**Ranking top reglas (sharpe descendiente)**")
+        if ranking:
+            ranking_rows = []
+            for rule in ranking:
+                ranking_rows.append(
+                    {
+                        "rule": rule.rule_label,
+                        "n": rule.sample_count,
+                        "win_rate": f"{rule.win_rate * 100:.1f}%",
+                        "avg_return": f"{rule.avg_return_pct:.2f}%",
+                        "avg_mfe": f"{rule.avg_mfe_pct:.2f}%",
+                        "avg_mae": f"{rule.avg_mae_pct:.2f}%",
+                        "sharpe": rule.sharpe_approx,
+                    }
+                )
+            st.dataframe(pd.DataFrame(ranking_rows), use_container_width=True, hide_index=True)
+        else:
+            st.caption(
+                f"Sin reglas con al menos {settings.backtest_min_samples} casos en este horizonte."
+            )
 
 st.subheader("Tokens detectados")
 if tokens.empty:

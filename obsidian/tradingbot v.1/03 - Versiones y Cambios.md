@@ -95,3 +95,21 @@ Learning Engine:
 - comandos `/aprendizaje`, `/paper`, `/entrenar`
 
 Regla: paper trading no es trading real. No se envian ordenes.
+
+## v1.6.0
+
+Aprendizaje por horizonte (Fase 1 - Fundamentos):
+
+- guarda snapshots historicos de precio en `price_snapshots` (purga 30 dias por defecto)
+- evalua cada alerta a horizontes fijos 1h, 6h, 24h y 7d
+- guarda outcomes en `alert_outcome_horizons` con `return_pct`, `mfe_pct`, `mae_pct` y `snapshots_used`
+- nuevo modulo `app/learning/horizon_evaluator.py` integrado en `run_learning_cycle`
+- nuevo modulo `app/learning/backtester.py` con `backtest_strategy()` y `rank_top_strategies()`
+- comandos Telegram nuevos: `/horizontes SIMBOLO` y `/backtest [Nh] [features...]`
+- dashboard Streamlit nueva seccion "Rendimiento por horizonte" con tabla MFE/MAE, equity curve simulada y ranking de reglas
+- reporte semanal automatico en `11 - Reporte Semanal.md` cada 7 dias
+- 16 tests nuevos en `tests/test_price_snapshots.py`, `test_horizon_evaluator.py`, `test_backtester.py`, `test_telegram_horizons_backtest.py`, `test_weekly_obsidian_report.py`
+
+Nota: las alertas anteriores a v1.6.0 no tienen snapshots historicos, sus outcomes por horizonte aparecen como `insufficient_data` hasta que se acumulen snapshots.
+
+Regla: sigue siendo read-only. No compra, no vende, no firma transacciones.

@@ -1,19 +1,22 @@
-# Trading Alert AI v1.5.2
+# Trading Alert AI v1.6.0
 
-Sistema local read-only para monitorear cripto, memecoins y bolsa. Observa datos publicos, guarda historial en SQLite, estima posible subida/caida, revisa riesgo, analiza patrones/noticias/filings SEC, aprende de resultados historicos y simula setups en papel.
+Sistema local read-only para monitorear cripto, memecoins y bolsa. Observa datos publicos, guarda historial en SQLite, estima posible subida/caida, revisa riesgo, analiza patrones/noticias/filings SEC, aprende de resultados historicos por horizonte y simula setups en papel.
 
 ## Que hace
 
 - Detecta tokens nuevos, boosted y pools trending.
 - Analiza volumen, liquidez, precio, patrones, noticias y filings SEC.
 - Calcula una lectura IA Pro con setup, sesgo, confianza, riesgos y checklist.
-- Aprende de sus señales pasadas con `signal_outcomes` y `strategy_lessons`.
+- Guarda snapshots historicos de precio para medir resultado por horizonte (1h, 6h, 24h, 7d).
+- Calcula MFE (max favorable excursion) y MAE (max adverse excursion) por alerta.
+- Aprende de sus señales pasadas con `signal_outcomes`, `strategy_lessons` y `alert_outcome_horizons`.
+- Backtest local de reglas (combinaciones de features) con win rate, retorno medio y sharpe aproximado.
 - Crea paper trades simulados para medir preparacion sin operar real.
 - Estima subida, caida y confianza.
 - Guarda tokens, alertas y seguridad en SQLite.
 - Envia Telegram solo con los mejores candidatos.
 - Responde comandos basicos por Telegram.
-- Escribe memoria diaria en Obsidian.
+- Escribe memoria diaria y reporte semanal automatico en Obsidian.
 
 ## Que NO hace
 
@@ -36,13 +39,17 @@ Copia `.env.example` como referencia y pon los valores reales solo en `.env`.
 ```env
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_CHAT_ID=
-APP_VERSION=v1.5.2
+APP_VERSION=v1.6.0
 ENABLE_TELEGRAM_ASSISTANT=true
 ENABLE_PRO_INTELLIGENCE=true
 ENABLE_SEC_FILINGS_INTEL=true
 ENABLE_LEARNING_ENGINE=true
 ENABLE_PAPER_TRADING=true
 ENABLE_OBSIDIAN_MEMORY=true
+ENABLE_PRICE_SNAPSHOTS=true
+ENABLE_HORIZON_EVALUATOR=true
+ENABLE_WEEKLY_OBSIDIAN_REPORT=true
+SNAPSHOT_RETENTION_DAYS=30
 OBSIDIAN_VAULT_PATH=obsidian/tradingbot v.1
 ```
 
@@ -82,6 +89,9 @@ streamlit run app/dashboard/streamlit_app.py
 /aprendizaje
 /paper
 /entrenar
+/horizontes NVDA
+/backtest
+/backtest 6h ia_pro,score:80-90
 /analiza NVDA
 /noticias NVDA
 /filings NVDA
@@ -116,6 +126,25 @@ streamlit run app/dashboard/streamlit_app.py
 - Genera lecciones locales por feature y categoria.
 - Abre paper trades simulados solo para setups A/B.
 - Nunca envia ordenes reales.
+
+## Aprendizaje por horizonte v1.6.0
+
+- Captura `price_snapshots` historicos en cada ciclo (chain + token + precio + volumen + liquidez + timestamp).
+- Evalua cada alerta a horizontes fijos: 1h, 6h, 24h y 7d. Una fila por alerta x horizonte en `alert_outcome_horizons`.
+- Calcula `return_pct`, MFE (max favorable excursion) y MAE (max adverse excursion) por ventana.
+- Backtester local con dos modos:
+  - `rank_top_strategies(horizon)` enumera combinaciones (features individuales + pares predefinidos) y devuelve top reglas por sharpe aproximado.
+  - `backtest_strategy(features, horizon)` mide una combinacion AND de features.
+- Dashboard Streamlit muestra promedios MFE/MAE por categoria x horizonte, equity curve simulada y ranking de reglas.
+- Reporte semanal automatico en Obsidian (`11 - Reporte Semanal.md`).
+- Comandos Telegram nuevos: `/horizontes SYMBOL` y `/backtest [Nh] [features...]`.
+
+Notas importantes:
+
+- Las alertas anteriores a v1.6.0 no tienen snapshots historicos. Sus outcomes por horizonte quedaran como `insufficient_data` hasta que se acumulen snapshots.
+- El horizonte 7d necesita 7 dias reales de datos para entregar resultados finales.
+- Retencion por defecto: 30 dias de snapshots. Ajustable con `SNAPSHOT_RETENTION_DAYS`.
+- Sigue siendo simulacion: NO compra, NO vende, NO conecta brokers.
 
 ## Carpetas
 

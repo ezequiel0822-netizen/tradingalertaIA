@@ -18,6 +18,8 @@ class LearningRunResult:
     lessons_updated: int
     paper_trades_created: int
     summary: str
+    horizons_created: int = 0
+    horizons_updated: int = 0
 
 
 def run_learning_cycle(settings: Settings, repository: Repository) -> LearningRunResult:
@@ -31,6 +33,16 @@ def run_learning_cycle(settings: Settings, repository: Repository) -> LearningRu
         if outcome and repository.upsert_signal_outcome(outcome):
             outcomes_created += 1
 
+    horizons_created = 0
+    horizons_updated = 0
+    if settings.enable_horizon_evaluator:
+        # Import local para evitar ciclo: horizon_evaluator importa _outcome_label de este modulo.
+        from app.learning.horizon_evaluator import evaluate_horizons
+
+        horizon_counts = evaluate_horizons(settings, repository)
+        horizons_created = horizon_counts.get("horizons_created", 0)
+        horizons_updated = horizon_counts.get("horizons_updated", 0)
+
     lessons = _build_lessons(repository.fetch_signal_outcomes(limit=2000))
     for lesson in lessons:
         repository.upsert_strategy_lesson(lesson)
@@ -42,7 +54,8 @@ def run_learning_cycle(settings: Settings, repository: Repository) -> LearningRu
 
     summary = (
         f"Evaluadas {len(alerts)} señales; outcomes nuevos {outcomes_created}; "
-        f"lecciones {len(lessons)}; paper trades nuevos {paper_trades_created}."
+        f"lecciones {len(lessons)}; paper trades nuevos {paper_trades_created}; "
+        f"horizontes nuevos {horizons_created} (refrescados {horizons_updated})."
     )
     repository.insert_training_run(
         {
@@ -61,6 +74,8 @@ def run_learning_cycle(settings: Settings, repository: Repository) -> LearningRu
         lessons_updated=len(lessons),
         paper_trades_created=paper_trades_created,
         summary=summary,
+        horizons_created=horizons_created,
+        horizons_updated=horizons_updated,
     )
 
 
