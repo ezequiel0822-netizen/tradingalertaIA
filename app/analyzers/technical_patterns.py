@@ -232,6 +232,25 @@ def _macd(values: list[float]) -> tuple[float | None, float | None]:
     return macd_series[-1], signal[-1]
 
 
+def atr_pct_from_candles(
+    candles: list[dict[str, float]], period: int = 14
+) -> float | None:
+    closes = [candle["close"] for candle in candles if candle.get("close") is not None]
+    if len(closes) <= period:
+        return None
+    highs = [
+        candle.get("high", candle["close"])
+        for candle in candles
+        if candle.get("close") is not None
+    ]
+    lows = [
+        candle.get("low", candle["close"])
+        for candle in candles
+        if candle.get("close") is not None
+    ]
+    return _atr_pct(highs, lows, closes, period)
+
+
 def _atr_pct(
     highs: list[float],
     lows: list[float],

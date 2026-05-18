@@ -107,6 +107,27 @@ class Settings:
     backtest_min_samples: int
     backtest_default_horizon_hours: int
     enable_weekly_obsidian_report: bool
+    enable_atr_based_sltp: bool
+    atr_stop_multiplier: float
+    atr_tp1_multiplier: float
+    atr_tp2_multiplier: float
+    enable_trailing_stop: bool
+    trailing_activation_pct_stock: float
+    trailing_activation_pct_memecoin: float
+    trailing_distance_pct_stock: float
+    trailing_distance_pct_memecoin: float
+    enable_learned_weights: bool
+    learned_weights_min_samples: int
+    learned_weights_min_confidence: int
+    learned_weights_per_feature_max: float
+    learned_weights_max_adjustment: float
+    enable_learning_gate: bool
+    learning_gate_min_win_rate: float
+    learning_gate_min_samples: int
+    learning_gate_horizon_hours: int
+    learning_gate_since_days: int
+    enable_forex_collector: bool
+    forex_symbols: list[str]
 
     @property
     def geckoterminal_networks(self) -> dict[str, str]:
@@ -144,7 +165,7 @@ def load_settings() -> Settings:
         obsidian_vault_path = PROJECT_ROOT / obsidian_vault_path
 
     return Settings(
-        app_version=os.getenv("APP_VERSION", "v1.6.0"),
+        app_version=os.getenv("APP_VERSION", "v1.7.0"),
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
         telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID"),
         dexscreener_base_url=os.getenv(
@@ -241,5 +262,50 @@ def load_settings() -> Settings:
         ),
         enable_weekly_obsidian_report=_get_bool(
             "ENABLE_WEEKLY_OBSIDIAN_REPORT", True
+        ),
+        enable_atr_based_sltp=_get_bool("ENABLE_ATR_BASED_SLTP", True),
+        atr_stop_multiplier=_get_float("ATR_STOP_MULTIPLIER", 2.0),
+        atr_tp1_multiplier=_get_float("ATR_TP1_MULTIPLIER", 2.0),
+        atr_tp2_multiplier=_get_float("ATR_TP2_MULTIPLIER", 4.0),
+        enable_trailing_stop=_get_bool("ENABLE_TRAILING_STOP", True),
+        trailing_activation_pct_stock=_get_float(
+            "TRAILING_ACTIVATION_PCT_STOCK", 5.0
+        ),
+        trailing_activation_pct_memecoin=_get_float(
+            "TRAILING_ACTIVATION_PCT_MEMECOIN", 50.0
+        ),
+        trailing_distance_pct_stock=_get_float("TRAILING_DISTANCE_PCT_STOCK", 3.0),
+        trailing_distance_pct_memecoin=_get_float(
+            "TRAILING_DISTANCE_PCT_MEMECOIN", 25.0
+        ),
+        enable_learned_weights=_get_bool("ENABLE_LEARNED_WEIGHTS", False),
+        learned_weights_min_samples=_get_int("LEARNED_WEIGHTS_MIN_SAMPLES", 5),
+        learned_weights_min_confidence=_get_int(
+            "LEARNED_WEIGHTS_MIN_CONFIDENCE", 40
+        ),
+        learned_weights_per_feature_max=_get_float(
+            "LEARNED_WEIGHTS_PER_FEATURE_MAX", 3.0
+        ),
+        learned_weights_max_adjustment=_get_float(
+            "LEARNED_WEIGHTS_MAX_ADJUSTMENT", 10.0
+        ),
+        enable_learning_gate=_get_bool("ENABLE_LEARNING_GATE", False),
+        learning_gate_min_win_rate=_get_float("LEARNING_GATE_MIN_WIN_RATE", 0.45),
+        learning_gate_min_samples=_get_int("LEARNING_GATE_MIN_SAMPLES", 10),
+        learning_gate_horizon_hours=_get_int("LEARNING_GATE_HORIZON_HOURS", 24),
+        learning_gate_since_days=_get_int("LEARNING_GATE_SINCE_DAYS", 30),
+        enable_forex_collector=_get_bool("ENABLE_FOREX_COLLECTOR", True),
+        forex_symbols=_get_list(
+            "FOREX_SYMBOLS",
+            [
+                "EURUSD=X",
+                "GBPUSD=X",
+                "USDJPY=X",
+                "USDCHF=X",
+                "AUDUSD=X",
+                "USDCAD=X",
+                "NZDUSD=X",
+                "GC=F",
+            ],
         ),
     )

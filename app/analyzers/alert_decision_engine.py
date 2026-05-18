@@ -39,6 +39,10 @@ def should_send_alert(
     settings: Settings,
     category: str = "memecoin",
 ) -> bool:
+    # Forex/oro acumulan snapshots para aprendizaje pero no alertan en Fase 2.
+    # Fase 3 construye el modulo de analisis especifico (price action, sesiones, calendario).
+    if category in {"forex", "gold"}:
+        return False
     if category == "stock":
         return estimate.eligible_for_gain_alert
     if estimate.eligible_for_gain_alert:
@@ -53,7 +57,7 @@ def should_send_alert(
 
 
 def candidate_for_security_check(snapshot: TokenSnapshot, settings: Settings) -> bool:
-    if snapshot.category == "stock":
+    if snapshot.category in {"stock", "forex", "gold"}:
         return False
     if snapshot.event_type in {"BOOSTED_TOKEN", "TRENDING_POOL", "NEW_TOKEN"}:
         return True

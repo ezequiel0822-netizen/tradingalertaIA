@@ -524,9 +524,10 @@ class Repository:
                     alert_id, token_id, category, chain, token_address, symbol,
                     thesis, readiness_grade, entry_price, latest_price, stop_loss,
                     take_profit_1, take_profit_2, invalidation, status,
-                    unrealized_return_pct, opened_at, updated_at, closed_at
+                    unrealized_return_pct, opened_at, updated_at, closed_at,
+                    mfe_pct, mae_pct, original_stop_loss, trailing_active
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     trade["alert_id"],
@@ -548,6 +549,10 @@ class Repository:
                     trade["opened_at"],
                     trade["updated_at"],
                     trade.get("closed_at"),
+                    trade.get("mfe_pct", 0),
+                    trade.get("mae_pct", 0),
+                    trade.get("original_stop_loss", trade["stop_loss"]),
+                    trade.get("trailing_active", 0),
                 ),
             )
         return True
@@ -588,6 +593,10 @@ class Repository:
             "unrealized_return_pct",
             "updated_at",
             "closed_at",
+            "mfe_pct",
+            "mae_pct",
+            "stop_loss",
+            "trailing_active",
         }
         fields = [key for key in updates if key in allowed]
         if not fields:

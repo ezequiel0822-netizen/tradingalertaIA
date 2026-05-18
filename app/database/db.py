@@ -218,6 +218,10 @@ def init_db(db_path: Path) -> None:
         _ensure_column(connection, "alerts", "estimate_summary", "TEXT")
         _ensure_column(connection, "alerts", "app_version", "TEXT")
         _ensure_column(connection, "alerts", "category", "TEXT DEFAULT 'memecoin'")
+        _ensure_column(connection, "paper_trades", "mfe_pct", "REAL DEFAULT 0")
+        _ensure_column(connection, "paper_trades", "mae_pct", "REAL DEFAULT 0")
+        _ensure_column(connection, "paper_trades", "original_stop_loss", "REAL")
+        _ensure_column(connection, "paper_trades", "trailing_active", "INTEGER DEFAULT 0")
 
 
 def _ensure_column(

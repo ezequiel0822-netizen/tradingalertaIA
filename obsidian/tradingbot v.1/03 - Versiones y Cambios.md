@@ -113,3 +113,17 @@ Aprendizaje por horizonte (Fase 1 - Fundamentos):
 Nota: las alertas anteriores a v1.6.0 no tienen snapshots historicos, sus outcomes por horizonte aparecen como `insufficient_data` hasta que se acumulen snapshots.
 
 Regla: sigue siendo read-only. No compra, no vende, no firma transacciones.
+
+## v1.7.0
+
+Fase 2 - paper trading++, pesos aprendidos, learning gate, foundation forex/oro:
+
+- Paper trades guardan MFE y MAE durante toda la vida del trade (`paper_trades.mfe_pct`, `paper_trades.mae_pct`).
+- Trailing stops simulados: cuando la posicion sube por encima del umbral (5% stock, 50% memecoin), el stop sigue al precio. Nunca baja. Se preserva el stop original en `original_stop_loss`.
+- SL/TP por ATR opcional en `build_trade_readiness`. Si hay OHLCV, calcula ATR del activo y arma stop/targets con multiplicadores (2x stop, 2x/4x targets), clampeados al rango seguro por categoria.
+- Pesos aprendidos en `app/analyzers/learned_weights.py`: ajusta score base con `strategy_lessons` aprendidas. Bonus/malus por feature con clamp duro ±10. OFF por default; activar con `ENABLE_LEARNED_WEIGHTS=true` despues de revisar `/aprendizaje`.
+- Learning gate en `app/analyzers/learning_gate.py`: antes de mandar Telegram, consulta backtester historico de la combinacion (`category + alert + score buckets`, horizonte 24h, ultimos 30 dias). Si win_rate < 45% y hay >= 10 muestras, bloquea envio. La alerta queda con `sent_to_telegram=0`, visible en `/descartes`. OFF por default; activar con `ENABLE_LEARNING_GATE=true`.
+- Nuevo collector `app/collectors/forex_collector.py` para FX majors (EURUSD, GBPUSD, USDJPY, USDCHF, AUDUSD, USDCAD, NZDUSD) y oro (GC=F) via Yahoo Finance. Solo acumula snapshots y outcomes por horizonte; NO genera alertas Telegram. Fase 3 traera el analisis price-action especifico para forex/oro.
+- 21 settings nuevos. 26 tests nuevos (64 verdes en total).
+
+Regla: sigue siendo read-only. No compra, no vende, no firma transacciones. Demo MT5 trading autorizado para Fase 5; real sigue prohibido sin nueva autorizacion.

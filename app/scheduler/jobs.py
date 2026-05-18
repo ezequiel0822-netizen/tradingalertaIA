@@ -1,3 +1,4 @@
+import json
 import logging
 import time
 
@@ -10,6 +11,8 @@ from app.analyzers.alert_decision_engine import (
     security_event_types,
     should_send_alert,
 )
+from app.analyzers.learned_weights import apply_learned_weights
+from app.analyzers.learning_gate import evaluate_learning_gate
 from app.analyzers.liquidity_analyzer import detect_liquidity_spike, detect_price_spike
 from app.analyzers.move_estimator import estimate_move
 from app.analyzers.filing_analyzer import analyze_filings
@@ -21,12 +24,14 @@ from app.analyzers.token_score import score_token
 from app.analyzers.volume_spike_detector import detect_volume_spike
 from app.assistant.telegram_assistant import TelegramAssistantPoller
 from app.collectors.dexscreener_collector import DexScreenerCollector
+from app.collectors.forex_collector import ForexCollector
 from app.collectors.geckoterminal_collector import GeckoTerminalCollector
 from app.collectors.goplus_collector import GoPlusCollector
 from app.collectors.news_collector import NewsCollector
 from app.collectors.sec_collector import SECFilingsCollector
 from app.collectors.stock_collector import StockCollector
 from app.config.settings import Settings
+from app.learning.feature_extractor import extract_features
 from app.database.db import init_db
 from app.database.models import AlertRecord, SecuritySummary, TokenSnapshot
 from app.database.repository import Repository
@@ -50,6 +55,7 @@ class TradingAlertJob:
         self.dexscreener = DexScreenerCollector(settings)
         self.geckoterminal = GeckoTerminalCollector(settings)
         self.stocks = StockCollector(settings)
+        self.forex = ForexCollector(settings)
         self.news = NewsCollector(settings)
         self.sec = SECFilingsCollector(settings)
         self.goplus = GoPlusCollector(settings)
@@ -149,9 +155,31 @@ class TradingAlertJob:
                 + score_result.reasons
             )
 
+            features_dict = {
+                "category": snapshot.category,
+                "alert_type": alert_type,
+                "risk_level": score_result.risk_level,
+                "reasons": json.dumps(reasons, ensure_ascii=False),
+                "estimate_summary": json.dumps(estimate.reasons, ensure_ascii=False),
+                "security_summary": security.raw_summary or "unknown",
+                "score": score_result.score,
+                "estimate_confidence": estimate.confidence,
+                "estimated_gain_pct": estimate.estimated_gain_pct,
+            }
+            features = extract_features(features_dict)
+            adjusted_score, weight_reasons = apply_learned_weights(
+                score_result.score,
+                features,
+                snapshot.category,
+                self.settings,
+                self.repository,
+            )
+            if weight_reasons:
+                reasons = self._unique_reasons(reasons + weight_reasons)
+
             token_id = self.repository.upsert_token(
                 snapshot,
-                score_result.score,
+                adjusted_score,
                 score_result.risk_level,
                 estimate,
             )
@@ -165,12 +193,31 @@ class TradingAlertJob:
             )
 
             should_send = should_send_alert(
-                score_result.score,
+                adjusted_score,
                 score_result.critical_risk,
                 estimate,
                 self.settings,
                 snapshot.category,
             )
+
+            if should_send and self.settings.enable_learning_gate:
+                gate_ok, gate_reason = evaluate_learning_gate(
+                    features,
+                    snapshot.category,
+                    self.settings,
+                    self.repository,
+                )
+                if not gate_ok:
+                    should_send = False
+                    reasons = self._unique_reasons(
+                        reasons + [f"Bloqueada por learning gate: {gate_reason}"]
+                    )
+                    logger.info(
+                        "Alert blocked by learning gate: chain=%s symbol=%s reason=%s",
+                        snapshot.chain,
+                        snapshot.symbol,
+                        gate_reason,
+                    )
 
             alert_record = AlertRecord(
                 token_id=token_id,
@@ -178,7 +225,7 @@ class TradingAlertJob:
                 snapshot=snapshot,
                 app_version=self.settings.app_version,
                 category=snapshot.category,
-                score=score_result.score,
+                score=adjusted_score,
                 risk_level=score_result.risk_level,
                 reasons=reasons,
                 security=security,
@@ -198,7 +245,7 @@ class TradingAlertJob:
                 dedup_ok, dedup_reason = should_send_deduped_alert(
                     recent,
                     alert_type,
-                    score_result.score,
+                    adjusted_score,
                     score_result.risk_level,
                     snapshot,
                     estimate.estimated_gain_pct,
@@ -251,6 +298,7 @@ class TradingAlertJob:
             ("DEX Screener", self.dexscreener),
             ("GeckoTerminal", self.geckoterminal),
             ("Stocks", self.stocks),
+            ("Forex", self.forex),
         ):
             try:
                 snapshots.extend(collector.collect())
@@ -432,6 +480,12 @@ class TradingAlertJob:
         stocks = [
             snapshot for snapshot in unique.values() if snapshot.category == "stock"
         ]
+        # Forex y oro entran al pipeline para snapshots/horizons; no van a Telegram.
+        forex_and_gold = [
+            snapshot
+            for snapshot in unique.values()
+            if snapshot.category in {"forex", "gold"}
+        ]
         ordered_memecoins = sorted(memecoins, key=self._snapshot_priority, reverse=True)
         ordered_stocks = sorted(stocks, key=self._snapshot_priority, reverse=True)
         limit = max(self.settings.max_snapshots_per_run, 1)
@@ -441,7 +495,7 @@ class TradingAlertJob:
                 len(ordered_memecoins),
                 limit,
             )
-        return ordered_memecoins[:limit] + ordered_stocks
+        return ordered_memecoins[:limit] + ordered_stocks + forex_and_gold
 
     def _snapshot_priority(self, snapshot: TokenSnapshot) -> float:
         event_score = ALERT_PRIORITY.get(snapshot.event_type, 0)

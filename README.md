@@ -1,4 +1,4 @@
-# Trading Alert AI v1.6.0
+# Trading Alert AI v1.7.0
 
 Sistema local read-only para monitorear cripto, memecoins y bolsa. Observa datos publicos, guarda historial en SQLite, estima posible subida/caida, revisa riesgo, analiza patrones/noticias/filings SEC, aprende de resultados historicos por horizonte y simula setups en papel.
 
@@ -39,7 +39,7 @@ Copia `.env.example` como referencia y pon los valores reales solo en `.env`.
 ```env
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_CHAT_ID=
-APP_VERSION=v1.6.0
+APP_VERSION=v1.7.0
 ENABLE_TELEGRAM_ASSISTANT=true
 ENABLE_PRO_INTELLIGENCE=true
 ENABLE_SEC_FILINGS_INTEL=true
@@ -145,6 +145,27 @@ Notas importantes:
 - El horizonte 7d necesita 7 dias reales de datos para entregar resultados finales.
 - Retencion por defecto: 30 dias de snapshots. Ajustable con `SNAPSHOT_RETENTION_DAYS`.
 - Sigue siendo simulacion: NO compra, NO vende, NO conecta brokers.
+
+## Paper trading mejorado v1.7.0
+
+- Cada paper trade ahora trackea **MFE/MAE durante toda la vida del trade** (no solo al cerrar).
+- **Trailing stops simulados**: cuando una posicion supera el umbral de activacion (5% stock, 50% memecoin por default), el stop se eleva siguiendo el precio. Nunca baja.
+- **SL/TP por ATR**: cuando hay OHLCV disponible, los stop y targets se calculan con el ATR del activo en lugar de % fijos (multiplicador 2x stop, 2x/4x targets), clampeados al rango seguro por categoria.
+
+## Pesos aprendidos y learning gate v1.7.0 (OFF por default, opt-in)
+
+- **Pesos aprendidos** (`ENABLE_LEARNED_WEIGHTS=true`): el score base se ajusta con las `strategy_lessons`. Cada feature ganadora con suficiente confianza suma puntos al score; cada feature perdedora resta. Clamp duro a ±10 puntos para evitar dominio. Las razones del ajuste se muestran en las reasons de la alerta.
+- **Learning gate** (`ENABLE_LEARNING_GATE=true`): antes de mandar una alerta a Telegram, el bot consulta al backtester historico (`category + alert + score buckets`, horizonte 24h, ultimos 30 dias). Si el win_rate esta por debajo del umbral (45% por default) y hay al menos 10 muestras, la alerta se descarta y queda registrada con `sent_to_telegram=0` (visible en `/descartes`).
+
+Ambos features estan **OFF por default**. Activar despues de revisar `/aprendizaje` y `/backtest` con varios dias de data acumulada.
+
+## Forex y oro v1.7.0 (acumula data, no genera alertas todavia)
+
+- Nuevo collector `app/collectors/forex_collector.py` que trae OHLCV via Yahoo Finance para:
+  - Forex majors: `EURUSD=X, GBPUSD=X, USDJPY=X, USDCHF=X, AUDUSD=X, USDCAD=X, NZDUSD=X`.
+  - Oro: `GC=F` (futuros) y `XAUUSD=X` (spot).
+- Las categorias `forex` y `gold` fluyen por `price_snapshots` y `alert_outcome_horizons` para que el motor acumule patrones, pero **no generan alertas Telegram en Fase 2**.
+- Fase 3 construira el modulo de analisis forex-especifico (price action, S/R, sesiones Londres/NY, calendario economico).
 
 ## Carpetas
 
