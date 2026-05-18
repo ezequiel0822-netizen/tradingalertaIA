@@ -1,9 +1,14 @@
+from app.analyzers.filing_analyzer import analyze_filings
 from app.analyzers.news_analyzer import analyze_news
+from app.analyzers.pro_intelligence import analyze_professional_setup
 from app.analyzers.technical_patterns import analyze_ohlcv
 from app.config.settings import Settings
 from app.collectors.news_collector import NewsCollector
+from app.collectors.sec_collector import SECFilingsCollector
 from app.collectors.stock_collector import StockCollector
+from app.database.models import SecuritySummary, TokenSnapshot
 from app.database.repository import Repository
+from app.learning.training_engine import run_learning_cycle
 
 
 DISCLAIMER = "No es recomendacion financiera. Revisar manualmente."
@@ -45,6 +50,15 @@ class BasicTelegramAssistant:
         if normalized in {"/descartes", "descartes", "descartados"}:
             return self.discards_message()
 
+        if normalized in {"/aprendizaje", "aprendizaje", "que aprendiste", "/learning"}:
+            return self.learning_message()
+
+        if normalized in {"/paper", "paper", "simulacion", "/paper_trades"}:
+            return self.paper_message()
+
+        if normalized in {"/entrenar", "entrenar", "train", "/train"}:
+            return self.train_message()
+
         if normalized in {"/config", "config", "configuracion"}:
             return self.config_message()
 
@@ -64,9 +78,17 @@ class BasicTelegramAssistant:
             query = raw.split(" ", 1)[1]
             return self.news_message(query)
 
+        if normalized.startswith("/filings ") or normalized.startswith("filings "):
+            query = raw.split(" ", 1)[1]
+            return self.filings_message(query)
+
         if normalized.startswith("/patron ") or normalized.startswith("patron ") or normalized.startswith("grafico "):
             query = raw.split(" ", 1)[1]
             return self.pattern_message(query)
+
+        if normalized.startswith("/pro ") or normalized.startswith("pro ") or normalized.startswith("/tesis "):
+            query = raw.split(" ", 1)[1]
+            return self.pro_message(query)
 
         if "por que" in normalized or "porque" in normalized:
             return self.recent_alerts_message(limit=3)
@@ -87,9 +109,14 @@ Comandos:
 /top_stocks - mejores acciones guardadas
 /alertas - ultimas alertas guardadas
 /descartes - mejores candidatos no enviados
+/aprendizaje - lecciones que la IA aprendio del historial
+/paper - setups simulados en papel
+/entrenar - correr aprendizaje local ahora
 /analiza SIMBOLO_O_ADDRESS - resumen de un activo
 /noticias SIMBOLO - titulares/eventos recientes
+/filings SIMBOLO - filings SEC recientes para acciones
 /patron SIMBOLO - patron tecnico basico para acciones
+/pro SIMBOLO - lectura profesional: grafico, noticias, filings, riesgos
 /pausar - pausa alertas automaticas
 /reanudar - reactiva alertas automaticas
 /config - ver configuracion sin secretos
@@ -226,6 +253,10 @@ Lectura: {'candidato fuerte para revisar' if self._as_float(row.get('latest_esti
 
 Version: {self.settings.app_version}
 Assistant Telegram: {"activo" if self.settings.enable_telegram_assistant else "apagado"}
+IA Pro: {"activa" if self.settings.enable_pro_intelligence else "apagada"}
+SEC filings: {"activo" if self.settings.enable_sec_filings_intel else "apagado"}
+Learning engine: {"activo" if self.settings.enable_learning_engine else "apagado"}
+Paper trading simulado: {"activo" if self.settings.enable_paper_trading else "apagado"}
 Memecoin min subida: {self.settings.min_estimated_gain_pct}%
 Stock min subida: {self.settings.min_stock_estimated_gain_pct}%
 Cupo memecoins: {self.settings.memecoin_max_alerts_per_24h}/{self.settings.alert_cap_window_hours}h
@@ -242,6 +273,70 @@ Chains: {", ".join(self.settings.chains_to_monitor)}
         items = NewsCollector(self.settings).collect_for_symbol(symbol)
         label, score, reasons = analyze_news(items)
         lines = [f"Noticias/eventos para {symbol}", f"Lectura: {label} | score {score}"]
+        lines.extend(f"- {reason}" for reason in reasons[:6])
+        lines.append(DISCLAIMER)
+        return "\n".join(lines)
+
+    def learning_message(self, limit: int = 8) -> str:
+        lessons = self.repository.fetch_strategy_lessons(limit=limit)
+        runs = self.repository.latest_training_runs(limit=1)
+        if not lessons:
+            return "Todavia no hay suficientes outcomes para aprender. Deja correr el monitor mas tiempo o usa /entrenar."
+
+        lines = ["Aprendizaje local de Trading Alert AI"]
+        if runs:
+            lines.append(f"Ultimo entrenamiento: {runs[0].get('summary')}")
+        for index, lesson in enumerate(lessons, start=1):
+            win_rate = self._fmt_pct((self._as_float(lesson.get("win_rate")) or 0) * 100)
+            avg_return = self._fmt_pct(lesson.get("avg_return_pct"))
+            sample_count = lesson.get("sample_count") or 0
+            feature = lesson.get("feature") or "unknown"
+            category = lesson.get("category") or "unknown"
+            lines.append(
+                f"{index}. {feature} ({category}) | casos {sample_count} | win {win_rate} | retorno medio {avg_return}"
+            )
+            lines.append(f"   {lesson.get('lesson')}")
+        lines.append(DISCLAIMER)
+        return "\n".join(lines)
+
+    def paper_message(self, limit: int = 8) -> str:
+        trades = self.repository.fetch_paper_trades(status="open", limit=limit)
+        if not trades:
+            return "No hay paper trades abiertos. El sistema solo simula setups A/B, nunca opera real."
+
+        lines = ["Paper trades abiertos (simulados, no reales):"]
+        for index, trade in enumerate(trades, start=1):
+            symbol = trade.get("symbol") or "unknown"
+            grade = trade.get("readiness_grade") or "unknown"
+            entry = self._fmt_money(trade.get("entry_price"))
+            latest = self._fmt_money(trade.get("latest_price"))
+            ret = self._fmt_pct(trade.get("unrealized_return_pct"))
+            status = trade.get("status") or "open"
+            lines.append(
+                f"{index}. {symbol} grade {grade} | entry {entry} | latest {latest} | PnL sim {ret} | {status}"
+            )
+        lines.append("Esto es simulacion educativa local, no orden real.")
+        return "\n".join(lines)
+
+    def train_message(self) -> str:
+        if not self.settings.enable_learning_engine:
+            return "Learning engine esta apagado en config."
+        result = run_learning_cycle(self.settings, self.repository)
+        return f"""Entrenamiento local completado.
+
+{result.summary}
+
+Ahora puedes usar /aprendizaje y /paper.
+{DISCLAIMER}"""
+
+    def filings_message(self, query: str) -> str:
+        symbol = query.strip().upper()
+        if not symbol:
+            return "Dime un simbolo. Ejemplo: /filings NVDA"
+
+        filings = SECFilingsCollector(self.settings).collect_for_symbol(symbol)
+        label, score, reasons = analyze_filings(filings)
+        lines = [f"Filings SEC para {symbol}", f"Lectura: {label} | score {score}"]
         lines.extend(f"- {reason}" for reason in reasons[:6])
         lines.append(DISCLAIMER)
         return "\n".join(lines)
@@ -268,6 +363,70 @@ Chains: {", ".join(self.settings.chains_to_monitor)}
         lines.append(DISCLAIMER)
         return "\n".join(lines)
 
+    def pro_message(self, query: str) -> str:
+        symbol = query.strip().upper()
+        if not symbol:
+            return "Dime un simbolo. Ejemplo: /pro NVDA"
+
+        snapshot = StockCollector(self.settings)._fetch_symbol(symbol)
+        pattern = None
+        news_label = "no_recent_news"
+        news_score = 0
+        filing_label = "no_recent_filings"
+        filing_score = 0
+        news_reasons: list[str] = []
+        filing_reasons: list[str] = []
+
+        if snapshot:
+            candles = snapshot.raw.get("candles") or []
+            pattern = analyze_ohlcv(candles)
+            news_items = NewsCollector(self.settings).collect_for_symbol(symbol)
+            news_label, news_score, news_reasons = analyze_news(news_items)
+            filings = SECFilingsCollector(self.settings).collect_for_symbol(symbol)
+            filing_label, filing_score, filing_reasons = analyze_filings(filings)
+        else:
+            row = self.repository.find_token(symbol)
+            if not row:
+                return f"No encontre datos para {symbol}. Prueba con una accion configurada, por ejemplo /pro NVDA."
+            snapshot = self._snapshot_from_row(row)
+
+        pro = analyze_professional_setup(
+            snapshot,
+            SecuritySummary(raw_summary="unknown"),
+            pattern,
+            news_label,
+            news_score,
+            filing_label,
+            filing_score,
+        )
+
+        lines = [
+            f"IA Pro para {symbol}",
+            f"Lectura: {pro.label} | sesgo {pro.bias} | score {pro.score}",
+            f"Confianza: {pro.confidence}/100",
+            f"Setup: {pro.setup}",
+        ]
+        if pattern and pattern.sparkline:
+            lines.append(f"Grafico: {pattern.sparkline}")
+        if pattern:
+            lines.append(
+                f"RSI {pattern.rsi if pattern.rsi is not None else 'unknown'} | "
+                f"Volumen rel. {pattern.relative_volume if pattern.relative_volume is not None else 'unknown'}x | "
+                f"ATR {pattern.atr_pct if pattern.atr_pct is not None else 'unknown'}%"
+            )
+        lines.append("Razones:")
+        lines.extend(f"- {reason}" for reason in pro.reasons[:5])
+        if news_reasons:
+            lines.append("Noticias:")
+            lines.extend(f"- {reason}" for reason in news_reasons[:3])
+        if filing_reasons:
+            lines.append("SEC:")
+            lines.extend(f"- {reason}" for reason in filing_reasons[:3])
+        lines.append("Riesgos:")
+        lines.extend(f"- {risk}" for risk in pro.risks[:4])
+        lines.append(DISCLAIMER)
+        return "\n".join(lines)
+
     def _format_token_row(self, index: int, row: dict) -> str:
         symbol = row.get("symbol") or "unknown"
         chain = row.get("chain") or "unknown"
@@ -278,6 +437,21 @@ Chains: {", ".join(self.settings.chains_to_monitor)}
         return (
             f"{index}. {symbol} [{chain}] | subida {gain} | caida {loss} | "
             f"confianza {confidence}/100 | score {score}/100"
+        )
+
+    def _snapshot_from_row(self, row: dict) -> TokenSnapshot:
+        return TokenSnapshot(
+            chain=row.get("chain") or "unknown",
+            token_address=row.get("token_address") or "",
+            category=row.get("category") or "memecoin",
+            symbol=row.get("symbol") or "unknown",
+            name=row.get("name") or "unknown",
+            source=row.get("source") or "SQLite",
+            price=self._as_float(row.get("latest_price")),
+            liquidity_usd=self._as_float(row.get("latest_liquidity_usd")),
+            volume_5m=self._as_float(row.get("latest_volume_5m")),
+            volume_1h=self._as_float(row.get("latest_volume_1h")),
+            volume_24h=self._as_float(row.get("latest_volume_24h")),
         )
 
     def _discard_reason(self, row: dict) -> str:

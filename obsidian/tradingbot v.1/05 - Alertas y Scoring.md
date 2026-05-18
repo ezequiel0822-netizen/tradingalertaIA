@@ -37,3 +37,23 @@ Aunque no se mande Telegram, el sistema guarda:
 ## Lectura correcta
 
 Una alerta no significa comprar. Significa: revisar manualmente.
+
+## IA Pro v1.5.1
+
+La lectura profesional suma contexto antes de rankear:
+
+- grafico: tendencia, RSI, MACD, Bollinger, ATR, soporte/resistencia
+- volumen: volumen relativo y actividad reciente
+- catalizadores: noticias, earnings, revenue, guidance, conferencias
+- SEC: filings recientes para acciones
+- riesgo: extension, volatilidad, liquidez baja, seguridad unknown o critica
+
+Resultado:
+
+- `pro_high_conviction`
+- `pro_watchlist`
+- `pro_neutral`
+- `pro_risk_off`
+- `pro_security_block`
+
+Esto sube o baja el ranking, pero no ejecuta ninguna operacion.

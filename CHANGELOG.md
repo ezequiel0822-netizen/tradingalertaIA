@@ -1,5 +1,26 @@
 # Changelog
 
+## Trading Alert AI v1.5.2
+
+- Agrega Learning Engine local.
+- Crea tabla `signal_outcomes` para evaluar señales pasadas contra precios actuales.
+- Crea tabla `strategy_lessons` para aprender que features ayudan o perjudican.
+- Crea paper trading simulado en `paper_trades`, sin ordenes reales.
+- Agrega readiness A/B/C/D/BLOCKED para preparar setups manuales.
+- Agrega comandos `/aprendizaje`, `/paper` y `/entrenar`.
+- Dashboard muestra outcomes, lecciones y paper trades.
+- Mantiene el sistema read-only: no compra, no vende y no ejecuta ordenes.
+
+## Trading Alert AI v1.5.1
+
+- Agrega IA Pro read-only antes de MT5.
+- Mejora analisis tecnico con MACD, Bollinger, ATR, volumen relativo, soporte/resistencia y sparkline.
+- Agrega analisis de filings SEC recientes para acciones.
+- Agrega comando `/pro SIMBOLO` con lectura profesional.
+- Agrega comando `/filings SIMBOLO`.
+- Mejora ranking con setup profesional, catalizadores, riesgos y checklist.
+- Mantiene prohibido operar: sin compras, ventas, wallets, brokers ni ordenes.
+
 ## Trading Alert AI v1.5
 
 - Agrega alertas agrupadas por categoria para reducir mensajes.

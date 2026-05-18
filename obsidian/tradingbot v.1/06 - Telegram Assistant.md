@@ -2,7 +2,7 @@
 
 ## Version
 
-Activo desde `v1.3`; mejorado en `v1.5` con cupos, descartes y menos ruido.
+Activo desde `v1.3`; mejorado en `v1.5` con cupos/descartes y en `v1.5.1` con IA Pro.
 
 ## Tipo
 
@@ -21,9 +21,14 @@ No usa OpenAI API.
 /top_stocks
 /alertas
 /descartes
+/aprendizaje
+/paper
+/entrenar
 /analiza NVDA
 /noticias NVDA
+/filings NVDA
 /patron NVDA
+/pro NVDA
 /analiza 0x...
 /pausar
 /reanudar
@@ -39,6 +44,10 @@ No usa OpenAI API.
 - No puede operar mercados.
 - Puede consultar titulares/eventos publicos por simbolo.
 - Puede analizar patron tecnico basico para acciones.
+- Puede generar lectura IA Pro con grafico, noticias, filings, riesgos y checklist.
+- Puede mostrar lo que aprendio del historial.
+- Puede mostrar paper trades simulados.
+- Puede ejecutar entrenamiento local manual con `/entrenar`.
 
 ## Pendientes
 

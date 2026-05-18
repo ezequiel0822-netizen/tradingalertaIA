@@ -9,10 +9,20 @@ class TechnicalPattern:
     rsi: float | None
     trend: str
     reasons: list[str]
+    macd: float | None = None
+    macd_signal: float | None = None
+    atr_pct: float | None = None
+    relative_volume: float | None = None
+    support: float | None = None
+    resistance: float | None = None
+    volatility_label: str = "unknown"
+    sparkline: str = ""
 
 
 def analyze_ohlcv(candles: list[dict[str, float]]) -> TechnicalPattern:
     closes = [candle["close"] for candle in candles if candle.get("close") is not None]
+    highs = [candle.get("high", candle["close"]) for candle in candles if candle.get("close") is not None]
+    lows = [candle.get("low", candle["close"]) for candle in candles if candle.get("close") is not None]
     volumes = [candle.get("volume", 0.0) for candle in candles if candle.get("volume") is not None]
     if len(closes) < 20:
         return TechnicalPattern(
@@ -21,6 +31,7 @@ def analyze_ohlcv(candles: list[dict[str, float]]) -> TechnicalPattern:
             rsi=None,
             trend="unknown",
             reasons=["No hay suficientes velas para analisis tecnico confiable."],
+            sparkline=_sparkline(closes),
         )
 
     reasons: list[str] = []
@@ -28,6 +39,7 @@ def analyze_ohlcv(candles: list[dict[str, float]]) -> TechnicalPattern:
     sma_9 = _sma(closes, 9)
     sma_20 = _sma(closes, 20)
     sma_50 = _sma(closes, 50) if len(closes) >= 50 else None
+    macd, macd_signal = _macd(closes)
     rsi = _rsi(closes, 14)
     current = closes[-1]
     previous = closes[-2]
@@ -35,6 +47,11 @@ def analyze_ohlcv(candles: list[dict[str, float]]) -> TechnicalPattern:
     low_20 = min(closes[-20:-1])
     avg_volume = sum(volumes[-20:-1]) / max(len(volumes[-20:-1]), 1)
     current_volume = volumes[-1] if volumes else 0
+    relative_volume = current_volume / avg_volume if avg_volume else None
+    atr_pct = _atr_pct(highs, lows, closes, 14)
+    support = min(lows[-20:]) if lows else None
+    resistance = max(highs[-20:]) if highs else None
+    upper_band, lower_band, band_width = _bollinger(closes, 20)
 
     trend = "neutral"
     if sma_9 and sma_20 and sma_9 > sma_20 and current > sma_20:
@@ -65,6 +82,24 @@ def analyze_ohlcv(candles: list[dict[str, float]]) -> TechnicalPattern:
     if current_volume > avg_volume * 2 and current < previous:
         score -= 14
         reasons.append("Volumen actual supera 2x el promedio con vela bajista.")
+    if relative_volume and relative_volume >= 3 and current > previous:
+        score += 10
+        reasons.append(f"Volumen relativo fuerte: {relative_volume:.1f}x promedio.")
+
+    if macd is not None and macd_signal is not None:
+        if macd > macd_signal and macd > 0:
+            score += 12
+            reasons.append("MACD alcista y por encima de senal.")
+        elif macd < macd_signal and macd < 0:
+            score -= 12
+            reasons.append("MACD bajista y por debajo de senal.")
+
+    if upper_band and lower_band and current > upper_band:
+        score += 8
+        reasons.append("Precio rompe banda superior de Bollinger.")
+    elif upper_band and lower_band and current < lower_band:
+        score -= 10
+        reasons.append("Precio pierde banda inferior de Bollinger.")
 
     if rsi is not None:
         if 52 <= rsi <= 68:
@@ -76,6 +111,24 @@ def analyze_ohlcv(candles: list[dict[str, float]]) -> TechnicalPattern:
         elif rsi < 32:
             score -= 6
             reasons.append(f"RSI debil/sobrevendido: {rsi:.1f}.")
+
+    volatility_label = "normal"
+    if atr_pct is not None:
+        if atr_pct >= 8:
+            volatility_label = "extreme"
+            score -= 8
+            reasons.append(f"Volatilidad extrema: ATR {atr_pct:.1f}% del precio.")
+        elif atr_pct >= 4:
+            volatility_label = "high"
+            reasons.append(f"Volatilidad alta: ATR {atr_pct:.1f}% del precio.")
+        elif atr_pct <= 1:
+            volatility_label = "compressed"
+            score += 4
+            reasons.append("Volatilidad comprimida: posible preparacion de ruptura.")
+
+    if band_width is not None and band_width <= 0.06:
+        score += 6
+        reasons.append("Bollinger comprimido: energia acumulada para movimiento.")
 
     label = "neutral"
     if score >= 35:
@@ -93,6 +146,14 @@ def analyze_ohlcv(candles: list[dict[str, float]]) -> TechnicalPattern:
         rsi=round(rsi, 2) if rsi is not None else None,
         trend=trend,
         reasons=reasons[:6] or ["Grafico sin patron fuerte."],
+        macd=round(macd, 6) if macd is not None else None,
+        macd_signal=round(macd_signal, 6) if macd_signal is not None else None,
+        atr_pct=round(atr_pct, 2) if atr_pct is not None else None,
+        relative_volume=round(relative_volume, 2) if relative_volume is not None else None,
+        support=round(support, 8) if support is not None else None,
+        resistance=round(resistance, 8) if resistance is not None else None,
+        volatility_label=volatility_label,
+        sparkline=_sparkline(closes),
     )
 
 
@@ -146,6 +207,65 @@ def _sma(values: list[float], period: int) -> float | None:
     return sum(values[-period:]) / period
 
 
+def _ema_series(values: list[float], period: int) -> list[float]:
+    if not values:
+        return []
+    multiplier = 2 / (period + 1)
+    output = [values[0]]
+    for value in values[1:]:
+        output.append((value - output[-1]) * multiplier + output[-1])
+    return output
+
+
+def _macd(values: list[float]) -> tuple[float | None, float | None]:
+    if len(values) < 35:
+        return None, None
+    ema_12 = _ema_series(values, 12)
+    ema_26 = _ema_series(values, 26)
+    macd_series = [
+        fast - slow
+        for fast, slow in zip(ema_12[-len(ema_26):], ema_26)
+    ]
+    signal = _ema_series(macd_series, 9)
+    if not macd_series or not signal:
+        return None, None
+    return macd_series[-1], signal[-1]
+
+
+def _atr_pct(
+    highs: list[float],
+    lows: list[float],
+    closes: list[float],
+    period: int,
+) -> float | None:
+    if len(closes) <= period or len(highs) != len(closes) or len(lows) != len(closes):
+        return None
+    ranges: list[float] = []
+    for index in range(1, len(closes)):
+        high = highs[index]
+        low = lows[index]
+        previous_close = closes[index - 1]
+        ranges.append(max(high - low, abs(high - previous_close), abs(low - previous_close)))
+    atr = sum(ranges[-period:]) / period
+    current = closes[-1]
+    if current == 0:
+        return None
+    return (atr / current) * 100
+
+
+def _bollinger(values: list[float], period: int) -> tuple[float | None, float | None, float | None]:
+    if len(values) < period:
+        return None, None, None
+    window = values[-period:]
+    mean = sum(window) / period
+    variance = sum((value - mean) ** 2 for value in window) / period
+    deviation = variance ** 0.5
+    upper = mean + 2 * deviation
+    lower = mean - 2 * deviation
+    width = (upper - lower) / mean if mean else None
+    return upper, lower, width
+
+
 def _rsi(values: list[float], period: int) -> float | None:
     if len(values) <= period:
         return None
@@ -172,3 +292,19 @@ def _safe_float(value: Any) -> float:
         return float(value)
     except (TypeError, ValueError):
         return 0.0
+
+
+def _sparkline(values: list[float], points: int = 24) -> str:
+    if not values:
+        return ""
+    sample = values[-points:]
+    low = min(sample)
+    high = max(sample)
+    blocks = "▁▂▃▄▅▆▇█"
+    if high == low:
+        return blocks[0] * len(sample)
+    output = []
+    for value in sample:
+        index = round((value - low) / (high - low) * (len(blocks) - 1))
+        output.append(blocks[index])
+    return "".join(output)

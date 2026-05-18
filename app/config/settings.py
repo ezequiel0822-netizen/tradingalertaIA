@@ -76,10 +76,27 @@ class Settings:
     telegram_assistant_max_updates: int
     enable_advanced_market_intel: bool
     enable_news_intel: bool
+    enable_pro_intelligence: bool
+    enable_sec_filings_intel: bool
     max_chart_analyses_per_run: int
     max_news_per_symbol: int
+    max_sec_filings_per_run: int
+    max_sec_filings_per_symbol: int
+    sec_recent_days: int
+    sec_user_agent: str
     enable_obsidian_memory: bool
     obsidian_vault_path: Path
+    enable_learning_engine: bool
+    learning_min_alert_age_minutes: int
+    learning_max_alerts_per_run: int
+    enable_paper_trading: bool
+    paper_trade_max_active: int
+    readiness_min_score: int
+    readiness_min_confidence: int
+    outcome_win_return_memecoin_pct: float
+    outcome_win_return_stock_pct: float
+    outcome_loss_return_memecoin_pct: float
+    outcome_loss_return_stock_pct: float
     chains_to_monitor: list[str]
     sqlite_path: Path
     request_timeout_seconds: int
@@ -120,7 +137,7 @@ def load_settings() -> Settings:
         obsidian_vault_path = PROJECT_ROOT / obsidian_vault_path
 
     return Settings(
-        app_version=os.getenv("APP_VERSION", "v1.5"),
+        app_version=os.getenv("APP_VERSION", "v1.5.2"),
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
         telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID"),
         dexscreener_base_url=os.getenv(
@@ -178,10 +195,30 @@ def load_settings() -> Settings:
         telegram_assistant_max_updates=_get_int("TELEGRAM_ASSISTANT_MAX_UPDATES", 10),
         enable_advanced_market_intel=_get_bool("ENABLE_ADVANCED_MARKET_INTEL", True),
         enable_news_intel=_get_bool("ENABLE_NEWS_INTEL", True),
+        enable_pro_intelligence=_get_bool("ENABLE_PRO_INTELLIGENCE", True),
+        enable_sec_filings_intel=_get_bool("ENABLE_SEC_FILINGS_INTEL", True),
         max_chart_analyses_per_run=_get_int("MAX_CHART_ANALYSES_PER_RUN", 6),
         max_news_per_symbol=_get_int("MAX_NEWS_PER_SYMBOL", 5),
+        max_sec_filings_per_run=_get_int("MAX_SEC_FILINGS_PER_RUN", 6),
+        max_sec_filings_per_symbol=_get_int("MAX_SEC_FILINGS_PER_SYMBOL", 5),
+        sec_recent_days=_get_int("SEC_RECENT_DAYS", 14),
+        sec_user_agent=os.getenv(
+            "SEC_USER_AGENT",
+            "TradingAlertAI/1.5.1 local-read-only contact@example.com",
+        ),
         enable_obsidian_memory=_get_bool("ENABLE_OBSIDIAN_MEMORY", True),
         obsidian_vault_path=obsidian_vault_path,
+        enable_learning_engine=_get_bool("ENABLE_LEARNING_ENGINE", True),
+        learning_min_alert_age_minutes=_get_int("LEARNING_MIN_ALERT_AGE_MINUTES", 60),
+        learning_max_alerts_per_run=_get_int("LEARNING_MAX_ALERTS_PER_RUN", 300),
+        enable_paper_trading=_get_bool("ENABLE_PAPER_TRADING", True),
+        paper_trade_max_active=_get_int("PAPER_TRADE_MAX_ACTIVE", 20),
+        readiness_min_score=_get_int("READINESS_MIN_SCORE", 75),
+        readiness_min_confidence=_get_int("READINESS_MIN_CONFIDENCE", 65),
+        outcome_win_return_memecoin_pct=_get_float("OUTCOME_WIN_RETURN_MEMECOIN_PCT", 100),
+        outcome_win_return_stock_pct=_get_float("OUTCOME_WIN_RETURN_STOCK_PCT", 5),
+        outcome_loss_return_memecoin_pct=_get_float("OUTCOME_LOSS_RETURN_MEMECOIN_PCT", -40),
+        outcome_loss_return_stock_pct=_get_float("OUTCOME_LOSS_RETURN_STOCK_PCT", -3),
         chains_to_monitor=_get_list(
             "CHAINS_TO_MONITOR", ["solana", "ethereum", "base", "bsc"]
         ),

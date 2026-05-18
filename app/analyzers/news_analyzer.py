@@ -16,6 +16,13 @@ POSITIVE_KEYWORDS = {
     "contract",
     "approval",
     "launch",
+    "outperform",
+    "strong demand",
+    "accelerates",
+    "expands",
+    "wins",
+    "approved",
+    "raises price target",
 }
 
 NEGATIVE_KEYWORDS = {
@@ -32,6 +39,12 @@ NEGATIVE_KEYWORDS = {
     "recall",
     "loss",
     "slump",
+    "investigation",
+    "fraud",
+    "delays",
+    "weak demand",
+    "missed",
+    "cuts price target",
 }
 
 EVENT_KEYWORDS = {
@@ -44,6 +57,35 @@ EVENT_KEYWORDS = {
     "presentation",
     "deliveries",
     "forecast",
+    "earnings call",
+    "investor day",
+    "shareholder meeting",
+    "sec filing",
+    "8-k",
+    "10-q",
+    "10-k",
+    "fda",
+    "merger",
+    "acquisition",
+    "buyback",
+    "dividend",
+}
+
+PROFESSIONAL_CATALYSTS = {
+    "earnings": "earnings",
+    "revenue": "sales",
+    "sales": "sales",
+    "guidance": "guidance",
+    "conference": "conference",
+    "call": "conference",
+    "upgrade": "analyst",
+    "downgrade": "analyst",
+    "contract": "business",
+    "partnership": "business",
+    "approval": "regulatory",
+    "lawsuit": "legal",
+    "probe": "legal",
+    "investigation": "legal",
 }
 
 
@@ -54,6 +96,7 @@ def analyze_news(items: list[NewsItem]) -> tuple[str, int, list[str]]:
     score = 0
     reasons: list[str] = []
     event_hits: set[str] = set()
+    catalyst_hits: set[str] = set()
     positive_hits = 0
     negative_hits = 0
 
@@ -66,6 +109,9 @@ def analyze_news(items: list[NewsItem]) -> tuple[str, int, list[str]]:
         for keyword in EVENT_KEYWORDS:
             if keyword in title:
                 event_hits.add(keyword)
+        for keyword, catalyst_type in PROFESSIONAL_CATALYSTS.items():
+            if keyword in title:
+                catalyst_hits.add(catalyst_type)
 
     score += positive_hits * 12
     score -= negative_hits * 14
@@ -77,6 +123,8 @@ def analyze_news(items: list[NewsItem]) -> tuple[str, int, list[str]]:
         reasons.append(f"{negative_hits} titular(es) con sesgo negativo/riesgo.")
     if event_hits:
         reasons.append("Eventos detectados: " + ", ".join(sorted(event_hits)) + ".")
+    if catalyst_hits:
+        reasons.append("Catalizadores: " + ", ".join(sorted(catalyst_hits)) + ".")
 
     top_titles = [item.title for item in items[:3]]
     for title in top_titles:

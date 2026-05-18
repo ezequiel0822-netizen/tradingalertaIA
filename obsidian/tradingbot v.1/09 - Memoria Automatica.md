@@ -47,3 +47,21 @@ La memoria sirve para recordar patrones, decisiones y comportamiento del bot. No
 ### Nota de seguridad
 - No se guardan tokens, chat IDs reales ni credenciales en esta memoria.
 - Las señales son para revision manual, no recomendacion financiera.
+
+## 2026-05-18 - Resumen automatico v1.5
+
+- Registros analizados en ciclo: 94
+- Memecoins analizadas: 80
+- Acciones analizadas: 14
+- Mensajes Telegram enviados en ciclo: 0
+
+### Top candidatos guardados
+- 1. MeaslesVirus (memecoin) | subida est. 1240.73% | confianza 59/100 | score 77/100 | enviado: no
+- 2. DWXRP (memecoin) | subida est. 1229.14% | confianza 69/100 | score 65/100 | enviado: no
+- 3. WYNNDEX (memecoin) | subida est. 1195.98% | confianza 61/100 | score 73/100 | enviado: no
+- 4. ALIEN (memecoin) | subida est. 1191.46% | confianza 59/100 | score 73/100 | enviado: no
+- 5. OPG (memecoin) | subida est. 1019.65% | confianza 95/100 | score 87/100 | enviado: no
+
+### Nota de seguridad
+- No se guardan tokens, chat IDs reales ni credenciales en esta memoria.
+- Las señales son para revision manual, no recomendacion financiera.

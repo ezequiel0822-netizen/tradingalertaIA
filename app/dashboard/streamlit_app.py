@@ -8,11 +8,11 @@ import streamlit as st
 from app.config.settings import load_settings
 
 
-st.set_page_config(page_title="Trading Alert AI v1.2", layout="wide")
+settings = load_settings()
+st.set_page_config(page_title=f"Trading Alert AI {settings.app_version}", layout="wide")
 
 
 def _load_table(table_name: str) -> pd.DataFrame:
-    settings = load_settings()
     if not settings.sqlite_path.exists():
         return pd.DataFrame()
     with sqlite3.connect(settings.sqlite_path) as connection:
@@ -53,8 +53,11 @@ def _columns(df: pd.DataFrame, names: list[str]) -> list[str]:
 
 tokens = _load_table("tokens")
 alerts = _load_table("alerts")
+outcomes = _load_table("signal_outcomes")
+lessons = _load_table("strategy_lessons")
+paper_trades = _load_table("paper_trades")
 
-st.title("Trading Alert AI v1.2")
+st.title(f"Trading Alert AI {settings.app_version}")
 
 if tokens.empty and alerts.empty:
     st.info("Todavia no hay datos. Ejecuta `python main.py` para iniciar el monitoreo.")
@@ -100,6 +103,24 @@ sent_count = int(alerts.get("sent_to_telegram", pd.Series(dtype=int)).fillna(0).
 metric_cols[3].metric("Telegram enviadas", sent_count)
 critical_count = int((alerts.get("risk_level", pd.Series(dtype=str)) == "critical").sum())
 metric_cols[4].metric("Criticas", critical_count)
+
+if not alerts.empty and "reasons" in alerts.columns:
+    reason_text = alerts["reasons"].fillna("").astype(str)
+    pro_count = int(reason_text.str.contains("IA Pro", case=False, regex=False).sum())
+    pattern_count = int(reason_text.str.contains("Patron grafico", case=False, regex=False).sum())
+    catalyst_count = int(reason_text.str.contains("Noticias/eventos", case=False, regex=False).sum())
+    intel_cols = st.columns(3)
+    intel_cols[0].metric("Lecturas IA Pro", pro_count)
+    intel_cols[1].metric("Patrones detectados", pattern_count)
+    intel_cols[2].metric("Catalizadores", catalyst_count)
+
+learning_cols = st.columns(3)
+learning_cols[0].metric("Outcomes evaluados", len(outcomes))
+learning_cols[1].metric("Lecciones IA", len(lessons))
+open_paper = 0
+if not paper_trades.empty and "status" in paper_trades.columns:
+    open_paper = int((paper_trades["status"] == "open").sum())
+learning_cols[2].metric("Paper trades abiertos", open_paper)
 
 st.subheader("Ultimas alertas")
 if filtered_alerts.empty:
@@ -220,3 +241,46 @@ else:
         ],
     )
     st.dataframe(history[history_columns].head(200), use_container_width=True, hide_index=True)
+
+st.subheader("Aprendizaje IA")
+if lessons.empty:
+    st.caption("Sin lecciones suficientes todavia.")
+else:
+    lesson_columns = _columns(
+        lessons,
+        [
+            "feature",
+            "category",
+            "sample_count",
+            "win_rate",
+            "avg_return_pct",
+            "confidence",
+            "lesson",
+            "updated_at",
+        ],
+    )
+    st.dataframe(lessons[lesson_columns].head(80), use_container_width=True, hide_index=True)
+
+st.subheader("Paper trading simulado")
+if paper_trades.empty:
+    st.caption("Sin simulaciones abiertas o cerradas.")
+else:
+    paper_columns = _columns(
+        paper_trades,
+        [
+            "status",
+            "symbol",
+            "category",
+            "readiness_grade",
+            "entry_price",
+            "latest_price",
+            "unrealized_return_pct",
+            "stop_loss",
+            "take_profit_1",
+            "take_profit_2",
+            "thesis",
+            "opened_at",
+            "updated_at",
+        ],
+    )
+    st.dataframe(paper_trades[paper_columns].head(100), use_container_width=True, hide_index=True)

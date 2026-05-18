@@ -13,6 +13,7 @@ Esta es la memoria principal del proyecto. Aqui guardamos decisiones, reglas, ve
 - [[07 - Ideas y Proximos Pasos]]
 - [[08 - Bitacora de Aprendizaje]]
 - [[09 - Memoria Automatica]]
+- [[10 - Learning Engine]]
 
 ## Regla de oro
 

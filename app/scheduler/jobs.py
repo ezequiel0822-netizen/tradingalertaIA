@@ -12,7 +12,9 @@ from app.analyzers.alert_decision_engine import (
 )
 from app.analyzers.liquidity_analyzer import detect_liquidity_spike, detect_price_spike
 from app.analyzers.move_estimator import estimate_move
+from app.analyzers.filing_analyzer import analyze_filings
 from app.analyzers.news_analyzer import analyze_news
+from app.analyzers.pro_intelligence import analyze_professional_setup
 from app.analyzers.risk_analyzer import security_reasons
 from app.analyzers.technical_patterns import analyze_ohlcv, candles_from_gecko
 from app.analyzers.token_score import score_token
@@ -22,11 +24,13 @@ from app.collectors.dexscreener_collector import DexScreenerCollector
 from app.collectors.geckoterminal_collector import GeckoTerminalCollector
 from app.collectors.goplus_collector import GoPlusCollector
 from app.collectors.news_collector import NewsCollector
+from app.collectors.sec_collector import SECFilingsCollector
 from app.collectors.stock_collector import StockCollector
 from app.config.settings import Settings
 from app.database.db import init_db
 from app.database.models import AlertRecord, SecuritySummary, TokenSnapshot
 from app.database.repository import Repository
+from app.learning.training_engine import run_learning_cycle
 from app.utils.dedup import should_send_deduped_alert
 from app.utils.obsidian_memory import write_daily_memory_if_needed
 
@@ -43,6 +47,7 @@ class TradingAlertJob:
         self.geckoterminal = GeckoTerminalCollector(settings)
         self.stocks = StockCollector(settings)
         self.news = NewsCollector(settings)
+        self.sec = SECFilingsCollector(settings)
         self.goplus = GoPlusCollector(settings)
         self.notifier = TelegramNotifier(settings)
         self.assistant = TelegramAssistantPoller(
@@ -77,6 +82,7 @@ class TradingAlertJob:
         send_candidates: list[AlertRecord] = []
         security_checks = 0
         chart_analyses = 0
+        sec_analyses = 0
         processed_keys: set[tuple[str, str, str, str]] = set()
         for snapshot in snapshots:
             if not snapshot.token_address:
@@ -115,12 +121,20 @@ class TradingAlertJob:
                     or estimate.estimated_gain_pct >= self.settings.min_estimated_gain_pct * 0.5
                 )
             )
-            intel_reasons, intel_rank_bonus, used_chart = self._market_intelligence(
+            allow_sec = (
+                snapshot.category == "stock"
+                and sec_analyses < self.settings.max_sec_filings_per_run
+            )
+            intel_reasons, intel_rank_bonus, used_chart, used_sec = self._market_intelligence(
                 snapshot,
                 allow_chart,
+                allow_sec,
+                security,
             )
             if used_chart:
                 chart_analyses += 1
+            if used_sec:
+                sec_analyses += 1
             events, event_reasons = self._detect_events(snapshot, previous, security)
             alert_type = choose_primary_alert(events)
             reasons = self._unique_reasons(
@@ -194,6 +208,9 @@ class TradingAlertJob:
             records,
             sent_count,
         )
+        if self.settings.enable_learning_engine:
+            learning = run_learning_cycle(self.settings, self.repository)
+            logger.info("Learning cycle complete. %s", learning.summary)
 
         logger.info("Monitoring cycle complete. Telegram alerts sent: %s", sent_count)
 
@@ -284,13 +301,21 @@ class TradingAlertJob:
         self,
         snapshot: TokenSnapshot,
         allow_chart: bool,
-    ) -> tuple[list[str], float, bool]:
+        allow_sec: bool,
+        security: SecuritySummary,
+    ) -> tuple[list[str], float, bool, bool]:
         if not self.settings.enable_advanced_market_intel:
-            return [], 0, False
+            return [], 0, False, False
 
         reasons: list[str] = []
         rank_bonus = 0.0
         used_chart = False
+        used_sec = False
+        pattern = None
+        news_label = "no_recent_news"
+        news_score = 0
+        filing_label = "no_recent_filings"
+        filing_score = 0
 
         candles = []
         if allow_chart:
@@ -312,17 +337,48 @@ class TradingAlertJob:
         if candles:
             pattern = analyze_ohlcv(candles)
             rank_bonus += pattern.score * 1.4
-            reasons.append(f"Patron grafico: {pattern.label} ({pattern.trend}, score {pattern.score}).")
+            reasons.append(
+                f"Patron grafico: {pattern.label} ({pattern.trend}, score {pattern.score})."
+            )
+            if pattern.sparkline:
+                reasons.append(f"Visual: {pattern.sparkline}")
             reasons.extend(pattern.reasons[:3])
 
         if snapshot.category == "stock" and self.settings.enable_news_intel:
             news_items = self.news.collect_for_symbol(snapshot.symbol)
-            label, news_score, news_reasons = analyze_news(news_items)
+            news_label, news_score, news_reasons = analyze_news(news_items)
             rank_bonus += news_score
-            reasons.append(f"Noticias/eventos: {label} (score {news_score}).")
+            reasons.append(f"Noticias/eventos: {news_label} (score {news_score}).")
             reasons.extend(news_reasons[:4])
 
-        return reasons[:8], rank_bonus, used_chart
+        if allow_sec and self.settings.enable_sec_filings_intel:
+            used_sec = True
+            filings = self.sec.collect_for_symbol(snapshot.symbol)
+            filing_label, filing_score, filing_reasons = analyze_filings(filings)
+            rank_bonus += filing_score
+            if filings:
+                reasons.append(f"SEC filings: {filing_label} (score {filing_score}).")
+                reasons.extend(filing_reasons[:3])
+
+        if self.settings.enable_pro_intelligence:
+            pro = analyze_professional_setup(
+                snapshot,
+                security,
+                pattern,
+                news_label,
+                news_score,
+                filing_label,
+                filing_score,
+            )
+            rank_bonus += pro.score * 1.2
+            reasons.append(
+                f"IA Pro: {pro.label}, sesgo {pro.bias}, confianza {pro.confidence}/100."
+            )
+            reasons.append(f"Setup: {pro.setup}.")
+            reasons.extend(pro.reasons[:3])
+            reasons.extend([f"Riesgo pro: {risk}" for risk in pro.risks[:2]])
+
+        return reasons[:12], rank_bonus, used_chart, used_sec
 
     def _limit_snapshots(self, snapshots: list[TokenSnapshot]) -> list[TokenSnapshot]:
         unique: dict[tuple[str, str, str, str], TokenSnapshot] = {}

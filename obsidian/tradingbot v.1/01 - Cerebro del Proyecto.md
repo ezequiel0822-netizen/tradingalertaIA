@@ -23,10 +23,13 @@ El sistema no debe actuar en mercados. Solo observa, analiza, guarda y avisa.
 7. Rankear candidatos.
 8. Enviar solo lo mejor segun cupos.
 9. Responder preguntas basicas por Telegram.
+10. Evaluar resultados historicos.
+11. Aprender que features ayudan o perjudican.
+12. Simular setups en papel sin operar real.
 
 ## Estado actual
 
-Version activa: `v1.5`
+Version activa: `v1.5.2`
 
 Capacidades:
 
@@ -39,5 +42,9 @@ Capacidades:
 - Asistente basico por Telegram.
 - Analisis tecnico de graficos OHLCV.
 - Noticias/eventos publicos para bolsa.
+- IA Pro: setup, sesgo, confianza, riesgos y checklist.
+- Indicadores avanzados: MACD, Bollinger, ATR, volumen relativo, soporte/resistencia.
+- Filings SEC recientes para acciones.
+- Learning Engine: outcomes, lecciones y paper trades simulados.
 - Alertas agrupadas por categoria.
 - Memoria automatica en Obsidian.

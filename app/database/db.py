@@ -84,12 +84,87 @@ def init_db(db_path: Path) -> None:
                 updated_at TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS signal_outcomes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                alert_id INTEGER NOT NULL UNIQUE,
+                token_id INTEGER NOT NULL,
+                category TEXT,
+                chain TEXT,
+                token_address TEXT,
+                symbol TEXT,
+                entry_price REAL,
+                latest_price REAL,
+                observed_return_pct REAL,
+                score INTEGER,
+                confidence INTEGER,
+                outcome_label TEXT,
+                age_minutes INTEGER,
+                features TEXT,
+                evaluated_at TEXT NOT NULL,
+                FOREIGN KEY(alert_id) REFERENCES alerts(id),
+                FOREIGN KEY(token_id) REFERENCES tokens(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS strategy_lessons (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                feature TEXT NOT NULL,
+                category TEXT,
+                sample_count INTEGER,
+                win_rate REAL,
+                avg_return_pct REAL,
+                avg_score REAL,
+                confidence INTEGER,
+                lesson TEXT,
+                updated_at TEXT NOT NULL,
+                UNIQUE(feature, category)
+            );
+
+            CREATE TABLE IF NOT EXISTS paper_trades (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                alert_id INTEGER NOT NULL UNIQUE,
+                token_id INTEGER NOT NULL,
+                category TEXT,
+                chain TEXT,
+                token_address TEXT,
+                symbol TEXT,
+                thesis TEXT,
+                readiness_grade TEXT,
+                entry_price REAL,
+                latest_price REAL,
+                stop_loss REAL,
+                take_profit_1 REAL,
+                take_profit_2 REAL,
+                invalidation TEXT,
+                status TEXT,
+                unrealized_return_pct REAL,
+                opened_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                closed_at TEXT,
+                FOREIGN KEY(alert_id) REFERENCES alerts(id),
+                FOREIGN KEY(token_id) REFERENCES tokens(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS training_runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                app_version TEXT,
+                alerts_evaluated INTEGER,
+                outcomes_created INTEGER,
+                lessons_updated INTEGER,
+                paper_trades_created INTEGER,
+                summary TEXT,
+                created_at TEXT NOT NULL
+            );
+
             CREATE INDEX IF NOT EXISTS idx_alerts_token_type_time
                 ON alerts(chain, token_address, alert_type, created_at);
             CREATE INDEX IF NOT EXISTS idx_alerts_created_at
                 ON alerts(created_at);
             CREATE INDEX IF NOT EXISTS idx_tokens_score
                 ON tokens(latest_score);
+            CREATE INDEX IF NOT EXISTS idx_signal_outcomes_label
+                ON signal_outcomes(outcome_label);
+            CREATE INDEX IF NOT EXISTS idx_paper_trades_status
+                ON paper_trades(status);
             """
         )
         _ensure_column(connection, "tokens", "latest_estimated_gain_pct", "REAL")
