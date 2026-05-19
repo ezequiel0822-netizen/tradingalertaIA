@@ -1,14 +1,17 @@
 # Ideas y Proximos Pasos
 
-## Estado actual (v2.1.0)
+## Estado actual (v2.2.0)
 
-Fase 2.6 cerrada. 135 tests verdes. El bot ya tiene:
-- Strategy router con 4 estrategias
+Phase 3 + 3.5 cerrada. 163 tests verdes. El bot ya tiene:
+- Strategy router con 5 estrategias (breakout + mean_reversion + momentum + news_catalyst + forex_session_breakout)
 - Portfolio manager + risk manager + position sizer
 - Lifecycle manager con MFE/MAE/trailing/time exit/partial close
 - MT5 reader read-only (soft-fail)
-- Forex/oro collector
+- Forex/oro collector con alertas Telegram activadas (caps separados)
+- Macro context completo: sesiones FX + regime (VIX/DXY/SPY) + calendario economico (ForexFactory)
+- Multi-timeframe analysis (M15 + H1) con confluence score
 - Learning engine con horizons + backtester + learned weights + learning gate
+- Claude API integration (Haiku 4.5) soft-fail para razonamiento sobre noticias + preguntas naturales en Telegram
 - Security hardening (settings repr mascarado, safe_path, log redactor, safe_json, deps pinneadas)
 
 ## Roadmap pendiente

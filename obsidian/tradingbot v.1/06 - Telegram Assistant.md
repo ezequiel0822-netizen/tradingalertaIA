@@ -9,12 +9,15 @@ Activo desde `v1.3`; mejorado iteradamente:
 - `v1.6.0` horizons + backtest
 - `v2.0.0` trader engine (portfolio, halt, strategies)
 - `v2.1.0` security hardening
+- `v2.2.0` forex price-action + Claude API integration (fallback "no entendi" interpreta preguntas naturales)
 
 ## Tipo
 
-Asistente local basado en reglas + SQLite. Sin OpenAI API. Sin LLM externo.
+Asistente local basado en reglas + SQLite. Desde v2.2.0 soporta integracion opcional con Claude API (Haiku 4.5) — soft-fail si no esta configurado.
 
-Pendiente Phase 3.5: integrar Claude API para razonamiento sobre noticias/catalizadores.
+Cuando `ENABLE_CLAUDE_INTEGRATION=true` y `ANTHROPIC_API_KEY` esta presente:
+- Pregunta natural en Telegram (sin slash) → Claude interpreta y mapea a comando o responde directo.
+- En `/pro SIMBOLO` y alertas, las reasons se enriquecen con sintesis Claude.
 
 ## Comandos
 

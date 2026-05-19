@@ -346,7 +346,7 @@ def load_settings() -> Settings:
         sec_recent_days=_get_int("SEC_RECENT_DAYS", 14),
         sec_user_agent=os.getenv(
             "SEC_USER_AGENT",
-            "TradingAlertAI/1.5.1 local-read-only contact@example.com",
+            "TradingAlertAI/2.2.0 local-read-only contact@example.com",
         ),
         enable_obsidian_memory=_get_bool("ENABLE_OBSIDIAN_MEMORY", True),
         obsidian_vault_path=obsidian_vault_path,

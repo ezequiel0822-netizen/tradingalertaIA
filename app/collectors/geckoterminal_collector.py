@@ -35,7 +35,7 @@ class GeckoTerminalCollector:
         self.settings = settings
         self.rate_limiter = RateLimiter(max_calls=10, period_seconds=60)
         self.session = requests.Session()
-        self.session.headers.update({"User-Agent": "TradingAlertAI/0.1"})
+        self.session.headers.update({"User-Agent": "TradingAlertAI/2.2"})
         self.ohlcv_cooldown_until = 0.0
 
     def collect(self) -> list[TokenSnapshot]:

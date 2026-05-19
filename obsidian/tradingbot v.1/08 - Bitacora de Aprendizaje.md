@@ -25,6 +25,8 @@ Se aclaro que:
 - v2.1.0 shipped: Phase 2.6 security hardening. Audit del repo encontro 14 hallazgos (0 criticos, 2 altos, 6 medios, 6 bajos). Fixes aplicados: `Settings.__repr__` mascarado, `safe_path` helper, `LogRedactor`, `safe_json`, `init_db` resiliente, `/halt` clamp, position sizer cap, score sanitize negatives, deps pinneadas. 135 tests verdes.
 - **Decision proximas fases**: el usuario pidio hacer Phase 3 (forex price-action) **y** Phase 3.5 (LLM integration con Claude API) **juntas**.
 - **Concepto Phase 6**: el usuario propuso "evolucion natural" — si una estrategia pierde, muere; si gana, sobrevive. Aceptado conceptualmente, con protecciones contra overfitting/curve-fitting/regime change (no all-or-nothing, sample size minimo, periodos largos).
+- v2.2.0 shipped: Phase 3 (forex price-action + macro/calendar/multi-tf + dashboard avanzado + alertas forex/gold) **y** Phase 3.5 (Claude API integration soft-fail con throttle/cache/cost-cap) ejecutadas juntas. Audit del worktree antes de empezar: 7 commits limpios, 129 archivos, 12 notas Obsidian sincronizadas. Decisiones del usuario: ForexFactory para calendario, Haiku 4.5 como modelo Claude, alertas forex/gold con learning gate forzado. 28 tests nuevos. Total 163 verdes.
+- Pivot conceptual reforzado: el "AI" del nombre ahora es real cuando se enchufa la Claude API key — el bot razona sobre noticias y entiende preguntas naturales en Telegram. Sin la key, sigue siendo bot algoritmico con feedback estadistico (soft-fail completo).
 
 ## Lecciones importantes
 

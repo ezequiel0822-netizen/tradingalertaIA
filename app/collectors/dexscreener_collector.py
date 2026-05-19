@@ -51,7 +51,7 @@ class DexScreenerCollector:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self.session = requests.Session()
-        self.session.headers.update({"User-Agent": "TradingAlertAI/0.1"})
+        self.session.headers.update({"User-Agent": "TradingAlertAI/2.2"})
 
     def collect(self) -> list[TokenSnapshot]:
         seeds: list[dict[str, Any]] = []
