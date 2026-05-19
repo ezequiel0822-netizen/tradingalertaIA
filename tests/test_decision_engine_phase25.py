@@ -45,7 +45,8 @@ def test_trader_engine_wires_up_without_errors() -> None:
     # smoke: si todo se inicializa, los limites por categoria responden
     assert pm.account_balance() == settings.account_starting_balance
     assert rm.is_kill_switch_active() == (False, None)
-    assert len(router.strategies) == 4
+    # Phase 3 v2.2.0: ahora son 5 (suma forex_session_breakout)
+    assert len(router.strategies) == 5
 
     # Smoke: con repo vacio, check_can_open_trade pasa
     ok, _ = rm.check_can_open_trade("stock", 1.0)

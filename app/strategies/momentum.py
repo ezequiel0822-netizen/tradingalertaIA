@@ -46,6 +46,10 @@ class MomentumStrategy:
         tp2 = entry * (1 + (atr_effective * 4.0) / 100.0)
 
         confidence = 60 + min(25, int(pattern.score / 4)) + (5 if pro else 0)
+        # Phase 3 v2.2.0: bonus risk_on
+        macro = ctx.macro or {}
+        if macro.get("regime") == "risk_on":
+            confidence = min(95, confidence + 10)
         reasoning = [
             f"MACD alcista ({macd:.4f} > {macd_signal:.4f})",
             f"RSI {rsi:.1f} (mid-range)",

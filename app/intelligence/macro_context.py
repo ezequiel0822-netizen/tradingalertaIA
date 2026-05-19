@@ -36,3 +36,31 @@ def current_session(now_utc: datetime | None = None) -> dict:
 def is_in_session(session_name: str, now_utc: datetime | None = None) -> bool:
     ctx = current_session(now_utc)
     return bool(ctx.get(session_name, False))
+
+
+# Phase 3 v2.2.0 — regime detection
+def current_regime(repository) -> dict:
+    """Lee el ultimo macro_snapshot y retorna regime + valores."""
+    snap = repository.fetch_latest_macro_snapshot()
+    if not snap:
+        return {
+            "regime": "neutral",
+            "vix": None,
+            "dxy": None,
+            "spy": None,
+            "captured_at": None,
+        }
+    return {
+        "regime": snap.get("regime") or "neutral",
+        "vix": snap.get("vix_value"),
+        "dxy": snap.get("dxy_value"),
+        "spy": snap.get("spy_value"),
+        "captured_at": snap.get("captured_at"),
+    }
+
+
+def full_macro_context(repository, now_utc: datetime | None = None) -> dict:
+    """Combina sesion + regime en un solo dict para pasar a strategies."""
+    ctx = current_session(now_utc)
+    ctx.update(current_regime(repository))
+    return ctx

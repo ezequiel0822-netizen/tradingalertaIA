@@ -136,9 +136,10 @@ class Repository:
                     score, risk_level, reasons, security_summary, price,
                     liquidity_usd, volume_5m, volume_1h, source,
                     estimated_gain_pct, estimated_loss_pct, estimate_confidence,
-                    estimate_summary, app_version, created_at, sent_to_telegram
+                    estimate_summary, app_version, created_at, sent_to_telegram,
+                    strategy_name
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     record.token_id,
@@ -164,6 +165,7 @@ class Repository:
                     record.app_version,
                     utc_now_iso(),
                     1 if record.sent_to_telegram else 0,
+                    getattr(record, "strategy_name", None),
                 ),
             )
             return int(cursor.lastrowid)
@@ -720,6 +722,127 @@ class Repository:
                 (days,),
             ).fetchall()
         return [dict(row) for row in rows]
+
+    # Phase 3 v2.2.0 - macro snapshots
+    def insert_macro_snapshot(self, snapshot: dict[str, Any]) -> bool:
+        with get_connection(self.db_path) as connection:
+            try:
+                connection.execute(
+                    """
+                    INSERT INTO macro_snapshots (
+                        captured_at, vix_value, dxy_value, spy_value, regime
+                    )
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        snapshot["captured_at"],
+                        snapshot.get("vix_value"),
+                        snapshot.get("dxy_value"),
+                        snapshot.get("spy_value"),
+                        snapshot.get("regime"),
+                    ),
+                )
+                return True
+            except Exception:
+                return False
+
+    def fetch_latest_macro_snapshot(self) -> dict[str, Any] | None:
+        with get_connection(self.db_path) as connection:
+            row = connection.execute(
+                """
+                SELECT * FROM macro_snapshots
+                ORDER BY captured_at DESC
+                LIMIT 1
+                """
+            ).fetchone()
+        return dict(row) if row else None
+
+    # Phase 3 v2.2.0 - economic events
+    def upsert_economic_event(self, event: dict[str, Any]) -> bool:
+        with get_connection(self.db_path) as connection:
+            try:
+                connection.execute(
+                    """
+                    INSERT INTO economic_events (
+                        event_time, country, impact, title, captured_at
+                    )
+                    VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT(event_time, country, title) DO UPDATE SET
+                        impact = excluded.impact,
+                        captured_at = excluded.captured_at
+                    """,
+                    (
+                        event["event_time"],
+                        event["country"],
+                        event.get("impact"),
+                        event.get("title"),
+                        event.get("captured_at", utc_now_iso()),
+                    ),
+                )
+                return True
+            except Exception:
+                return False
+
+    def fetch_economic_events_window(
+        self, start_iso: str, end_iso: str, countries: list[str] | None = None,
+        impact: str | None = None,
+    ) -> list[dict[str, Any]]:
+        with get_connection(self.db_path) as connection:
+            sql = "SELECT * FROM economic_events WHERE event_time BETWEEN ? AND ?"
+            params: list[Any] = [start_iso, end_iso]
+            if impact:
+                sql += " AND impact = ?"
+                params.append(impact)
+            if countries:
+                placeholders = ",".join(["?"] * len(countries))
+                sql += f" AND country IN ({placeholders})"
+                params.extend(countries)
+            sql += " ORDER BY event_time ASC"
+            rows = connection.execute(sql, params).fetchall()
+        return [dict(row) for row in rows]
+
+    # Phase 3 v2.2.0 - dashboard heatmap queries
+    def fetch_heatmap_horizon_hour(
+        self, category: str | None = None
+    ) -> list[dict[str, Any]]:
+        with get_connection(self.db_path) as connection:
+            sql = """
+                SELECT
+                    aoh.horizon_hours AS horizon_hours,
+                    strftime('%H', a.created_at) AS hour_of_day,
+                    AVG(aoh.return_pct) AS avg_return,
+                    COUNT(*) AS n
+                FROM alert_outcome_horizons aoh
+                JOIN alerts a ON a.id = aoh.alert_id
+                WHERE aoh.status = 'final'
+            """
+            params: list[Any] = []
+            if category:
+                sql += " AND a.category = ?"
+                params.append(category)
+            sql += " GROUP BY aoh.horizon_hours, hour_of_day"
+            rows = connection.execute(sql, params).fetchall()
+        return [dict(row) for row in rows]
+
+    def fetch_alert_full_detail(self, alert_id: int) -> dict[str, Any] | None:
+        with get_connection(self.db_path) as connection:
+            alert_row = connection.execute(
+                "SELECT * FROM alerts WHERE id = ?", (alert_id,)
+            ).fetchone()
+            if not alert_row:
+                return None
+            paper_row = connection.execute(
+                "SELECT * FROM paper_trades WHERE alert_id = ?", (alert_id,)
+            ).fetchone()
+            horizon_rows = connection.execute(
+                "SELECT * FROM alert_outcome_horizons WHERE alert_id = ?",
+                (alert_id,),
+            ).fetchall()
+        return {
+            "alert": dict(alert_row),
+            "paper_trade": dict(paper_row) if paper_row else None,
+            "horizons": [dict(r) for r in horizon_rows],
+        }
 
     def insert_training_run(self, run: dict[str, Any]) -> None:
         with get_connection(self.db_path) as connection:

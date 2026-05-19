@@ -44,11 +44,17 @@ class MeanReversionStrategy:
             return None
 
         confidence = 60 + min(25, int(abs(rsi - 50) * 0.7))
+        # Phase 3 v2.2.0: ajuste por regime
+        macro = ctx.macro or {}
+        if macro.get("regime") == "risk_off":
+            confidence = max(0, confidence - 15)
         reasoning = [
             f"RSI extremo ({rsi:.1f})",
             f"ATR {atr_pct:.2f}%",
             "Sin trend fuerte que pelear",
         ]
+        if macro.get("regime") == "risk_off":
+            reasoning.append("Regime risk_off (penaliza mean reversion)")
         return StrategySignal(
             strategy_name=self.name,
             direction=direction,

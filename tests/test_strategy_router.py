@@ -128,6 +128,7 @@ def test_router_skips_disabled_strategies_and_handles_exceptions() -> None:
             "enable_strategy_mean_reversion": False,
             "enable_strategy_momentum": False,
             "enable_strategy_news_catalyst": False,
+            "enable_strategy_forex_session_breakout": False,
         }
     )
     router = StrategyRouter(settings)

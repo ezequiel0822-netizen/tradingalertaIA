@@ -33,7 +33,8 @@ from app.collectors.news_collector import NewsCollector
 from app.collectors.sec_collector import SECFilingsCollector
 from app.collectors.stock_collector import StockCollector
 from app.config.settings import Settings
-from app.intelligence.macro_context import current_session
+from app.intelligence.claude_processor import ClaudeProcessor
+from app.intelligence.macro_context import current_session, full_macro_context
 from app.learning.feature_extractor import extract_features
 from app.learning.lifecycle_manager import manage_open_positions
 from app.portfolio.portfolio_manager import PortfolioManager
@@ -88,6 +89,8 @@ class TradingAlertJob:
             settings, self.repository, self.portfolio_manager
         )
         self.strategy_router = StrategyRouter(settings)
+        # Phase 3.5 v2.2.0: Claude processor (soft-fail si key no presente)
+        self.claude_processor = ClaudeProcessor(settings, self.repository)
 
     def run_forever(self) -> None:
         # Log solo el nombre del archivo (no path completo) para evitar filesystem leak.
@@ -105,6 +108,9 @@ class TradingAlertJob:
             time.sleep(sleep_for)
 
     def run_once(self) -> None:
+        # Phase 3.5: reset cycle counter para throttle de Claude
+        self.claude_processor.reset_cycle()
+
         handled = self.assistant.process_updates()
         if handled:
             logger.info("Telegram assistant handled %s message(s)", handled)
@@ -361,21 +367,26 @@ class TradingAlertJob:
             return 0
 
         sent_count = 0
-        # Fase 2.5: memecoins quedan como lab de aprendizaje. Telegram solo stock
-        # (forex/gold quedan en silencio hasta Fase 3). Si el usuario activa
-        # enable_memecoin_telegram, el filtro de should_send_alert deja pasar
-        # memecoins; aqui agregamos su categoria al iterado solo en ese caso.
+        # Phase 3 v2.2.0: forex/gold ahora pueden alertar segun flags.
+        cats: list[str] = ["stock"]
         if self.settings.enable_memecoin_telegram:
-            categories = ("memecoin", "stock")
-        else:
-            categories = ("stock",)
+            cats.insert(0, "memecoin")
+        if self.settings.enable_forex_alerts:
+            cats.append("forex")
+        if self.settings.enable_gold_alerts:
+            cats.append("gold")
+        categories = tuple(cats)
         daily_caps = {
             "memecoin": self.settings.memecoin_max_alerts_per_24h,
             "stock": self.settings.stock_max_alerts_per_24h,
+            "forex": self.settings.max_forex_alerts_per_24h,
+            "gold": self.settings.max_gold_alerts_per_24h,
         }
         run_caps = {
             "memecoin": self.settings.memecoin_max_alerts_per_run,
             "stock": self.settings.stock_max_alerts_per_run,
+            "forex": self.settings.max_forex_alerts_per_run,
+            "gold": self.settings.max_gold_alerts_per_run,
         }
 
         ranked = sorted(candidates, key=self._alert_rank, reverse=True)
@@ -510,6 +521,14 @@ class TradingAlertJob:
             reasons.append(f"Setup: {pro.setup}.")
             reasons.extend(pro.reasons[:3])
             reasons.extend([f"Riesgo pro: {risk}" for risk in pro.risks[:2]])
+
+            # Phase 3.5 v2.2.0: Claude expand
+            try:
+                claude_text = self.claude_processor.expand_pro_analysis(pro, snapshot)
+                if claude_text:
+                    reasons.append(f"🤖 IA: {claude_text}")
+            except Exception:
+                logger.exception("Claude expand_pro_analysis failed")
 
         return reasons[:12], rank_bonus, used_chart, used_sec
 
@@ -692,6 +711,8 @@ class TradingAlertJob:
 
             # Insertar alert primero (necesitamos alert_id)
             if id(alert_record) not in inserted_record_ids:
+                # Phase 3 v2.2.0: copiar strategy_name al alert_record
+                alert_record.strategy_name = signal.strategy_name
                 alert_id = self.repository.insert_alert(alert_record)
                 inserted_record_ids.add(id(alert_record))
             else:

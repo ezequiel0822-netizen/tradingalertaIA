@@ -232,6 +232,37 @@ def _macd(values: list[float]) -> tuple[float | None, float | None]:
     return macd_series[-1], signal[-1]
 
 
+def analyze_multitf(
+    candles_short: list[dict[str, float]],
+    candles_long: list[dict[str, float]] | None,
+) -> dict:
+    """Combina pattern de timeframe corto (M15) con largo (H1).
+
+    Retorna dict con `short_pattern`, `long_pattern`, `aligned`, `confluence_score`.
+    Si candles_long es None, aligned=None y confluence_score=0.
+    """
+    short_pattern = analyze_ohlcv(candles_short)
+    if not candles_long or len(candles_long) < 20:
+        return {
+            "short_pattern": short_pattern,
+            "long_pattern": None,
+            "aligned": None,
+            "confluence_score": 0,
+        }
+    long_pattern = analyze_ohlcv(candles_long)
+    aligned = (
+        short_pattern.trend == long_pattern.trend
+        and short_pattern.trend in {"bullish", "bearish"}
+    )
+    confluence_score = 10 if aligned else 0
+    return {
+        "short_pattern": short_pattern,
+        "long_pattern": long_pattern,
+        "aligned": aligned,
+        "confluence_score": confluence_score,
+    }
+
+
 def atr_pct_from_candles(
     candles: list[dict[str, float]], period: int = 14
 ) -> float | None:

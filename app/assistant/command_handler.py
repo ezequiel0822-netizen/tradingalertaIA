@@ -22,9 +22,15 @@ DISCLAIMER = "No es recomendacion financiera. Revisar manualmente."
 
 
 class BasicTelegramAssistant:
-    def __init__(self, settings: Settings, repository: Repository) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        repository: Repository,
+        claude_processor=None,
+    ) -> None:
         self.settings = settings
         self.repository = repository
+        self.claude_processor = claude_processor
 
     def handle(self, text: str) -> str:
         raw = text.strip()
@@ -126,6 +132,42 @@ class BasicTelegramAssistant:
 
         if "por que" in normalized or "porque" in normalized:
             return self.recent_alerts_message(limit=3)
+
+        # Phase 3.5 v2.2.0: fallback usando Claude si disponible
+        if self.claude_processor is not None and self.claude_processor.is_available():
+            available = [
+                "/help", "/status", "/cupos", "/top", "/alertas", "/descartes",
+                "/aprendizaje", "/paper", "/portfolio", "/posiciones",
+                "/strategies", "/horizontes SIMBOLO", "/backtest [Nh] [features]",
+                "/analiza SIMBOLO", "/noticias SIMBOLO", "/filings SIMBOLO",
+                "/patron SIMBOLO", "/pro SIMBOLO", "/halt [horas]", "/resume_trading",
+            ]
+            try:
+                claude_response = self.claude_processor.interpret_free_text(raw, available)
+            except Exception:
+                claude_response = None
+            if claude_response:
+                stripped = claude_response.strip()
+                # Si Claude devolvio un comando slash valido, ejecutarlo recursivamente
+                if stripped.startswith("/"):
+                    parts = stripped.split(" ", 1)
+                    cmd = parts[0].lower()
+                    known_prefixes = {
+                        "/help", "/status", "/cupos", "/top", "/top_memecoins",
+                        "/top_stocks", "/alertas", "/ultimas_alertas", "/descartes",
+                        "/aprendizaje", "/paper", "/paper_trades", "/entrenar",
+                        "/config", "/pausar", "/reanudar", "/analiza", "/noticias",
+                        "/filings", "/patron", "/pro", "/horizontes", "/horizons",
+                        "/backtest", "/portfolio", "/portafolio", "/posiciones",
+                        "/positions", "/halt", "/parar", "/resume_trading",
+                        "/strategies", "/estrategias",
+                    }
+                    if cmd in known_prefixes:
+                        # Re-ejecutar como comando real (recursion controlada por longitud)
+                        if len(stripped) < 200:
+                            return self.handle(stripped)
+                # Texto libre: devolverlo directo
+                return stripped + "\n\n🤖 Respuesta generada con IA."
 
         return (
             "No entendi ese mensaje. Prueba con /help, /status, /top, "

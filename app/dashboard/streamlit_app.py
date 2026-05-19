@@ -454,3 +454,74 @@ try:
         st.dataframe(daily_log, use_container_width=True, hide_index=True)
 except Exception as exc:
     st.caption(f"Portfolio no disponible: {exc}")
+
+st.subheader("Analisis profundo (Phase 3)")
+try:
+    repo_deep = Repository(settings.sqlite_path)
+
+    # Heatmap horizon x hour-of-day
+    st.markdown("**Retorno medio por horizonte × hora del dia (UTC)**")
+    rows = repo_deep.fetch_heatmap_horizon_hour()
+    if rows:
+        df = pd.DataFrame(rows)
+        try:
+            pivot = df.pivot_table(
+                index="horizon_hours",
+                columns="hour_of_day",
+                values="avg_return",
+                aggfunc="mean",
+            )
+            st.dataframe(pivot.style.format("{:+.2f}%"), use_container_width=True)
+        except Exception:
+            st.dataframe(df, use_container_width=True, hide_index=True)
+    else:
+        st.caption("Sin outcomes 'final' acumulados aun.")
+
+    # Macro snapshot
+    st.markdown("**Macro context actual**")
+    macro_row = repo_deep.fetch_latest_macro_snapshot()
+    if macro_row:
+        cm1, cm2, cm3, cm4 = st.columns(4)
+        cm1.metric("VIX", f"{macro_row.get('vix_value') or 0:.2f}")
+        cm2.metric("DXY", f"{macro_row.get('dxy_value') or 0:.2f}")
+        cm3.metric("SPY", f"{macro_row.get('spy_value') or 0:.2f}")
+        cm4.metric("Regime", str(macro_row.get("regime") or "neutral"))
+    else:
+        st.caption("Sin snapshot macro todavia (esperar ENABLE_MACRO_COLLECTOR=true).")
+
+    # Calendario economico proximos 24h
+    st.markdown("**Eventos economicos proximos (24h)**")
+    from datetime import datetime as _dt, timedelta as _td, timezone as _tz
+    now = _dt.now(_tz.utc)
+    events = repo_deep.fetch_economic_events_window(
+        start_iso=now.isoformat(),
+        end_iso=(now + _td(hours=24)).isoformat(),
+        impact="high",
+    )
+    if events:
+        df_events = pd.DataFrame(events)
+        st.dataframe(df_events, use_container_width=True, hide_index=True)
+    else:
+        st.caption("Sin eventos high-impact en proximas 24h (o calendar no refrescado).")
+
+    # Drilldown por alerta
+    st.markdown("**Drilldown por alerta**")
+    alert_ids = alerts["id"].head(50).tolist() if not alerts.empty else []
+    if alert_ids:
+        selected_id = st.selectbox("Alert ID", options=alert_ids, key="drilldown_alert")
+        if selected_id:
+            detail = repo_deep.fetch_alert_full_detail(int(selected_id))
+            if detail:
+                col_a, col_b = st.columns(2)
+                col_a.json(detail.get("alert"))
+                col_b.json(detail.get("paper_trade") or {"info": "Sin paper trade asociado"})
+                if detail.get("horizons"):
+                    st.markdown("Outcomes por horizonte:")
+                    st.dataframe(
+                        pd.DataFrame(detail["horizons"]),
+                        use_container_width=True, hide_index=True,
+                    )
+    else:
+        st.caption("Sin alertas guardadas todavia.")
+except Exception as exc:
+    st.caption(f"Analisis profundo no disponible: {exc}")

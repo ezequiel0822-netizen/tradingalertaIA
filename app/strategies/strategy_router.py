@@ -5,6 +5,7 @@ import logging
 from app.config.settings import Settings
 from app.strategies.base import Strategy, StrategyContext, StrategySignal
 from app.strategies.breakout import BreakoutStrategy
+from app.strategies.forex_session_breakout import ForexSessionBreakoutStrategy
 from app.strategies.mean_reversion import MeanReversionStrategy
 from app.strategies.momentum import MomentumStrategy
 from app.strategies.news_catalyst import NewsCatalystStrategy
@@ -22,6 +23,7 @@ class StrategyRouter:
             MeanReversionStrategy(),
             MomentumStrategy(),
             NewsCatalystStrategy(),
+            ForexSessionBreakoutStrategy(),
         ]
         for s in all_strategies:
             if getattr(settings, s.enabled_setting_key, False):

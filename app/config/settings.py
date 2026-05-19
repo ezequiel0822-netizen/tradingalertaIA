@@ -17,6 +17,7 @@ _SECRET_FIELDS = frozenset({
     "mt5_login",
     "mt5_password",
     "mt5_server",
+    "anthropic_api_key",
 })
 
 # Campos con paths que solo se muestran como nombre de archivo (no path absoluto).
@@ -189,6 +190,26 @@ class Settings:
     mt5_connection_timeout_ms: int
     enable_macro_context: bool
     enable_trade_action_reports: bool
+    # Phase 3 + 3.5 v2.2.0 — forex price-action + LLM integration
+    enable_macro_collector: bool
+    macro_collector_interval_minutes: int
+    enable_economic_calendar: bool
+    calendar_buffer_minutes: int
+    calendar_refresh_hours: int
+    enable_strategy_forex_session_breakout: bool
+    enable_forex_alerts: bool
+    enable_gold_alerts: bool
+    max_forex_alerts_per_24h: int
+    max_gold_alerts_per_24h: int
+    max_forex_alerts_per_run: int
+    max_gold_alerts_per_run: int
+    anthropic_api_key: str | None
+    enable_claude_integration: bool
+    claude_model: str
+    claude_max_tokens: int
+    claude_calls_per_cycle_cap: int
+    claude_cache_ttl_seconds: int
+    claude_max_cost_per_day_usd: float
 
     def __repr__(self) -> str:
         parts: list[str] = []
@@ -258,7 +279,7 @@ def load_settings() -> Settings:
         obsidian_vault_path = safe_obsidian
 
     return Settings(
-        app_version=os.getenv("APP_VERSION", "v2.1.0"),
+        app_version=os.getenv("APP_VERSION", "v2.2.0"),
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
         telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID"),
         dexscreener_base_url=os.getenv(
@@ -440,4 +461,28 @@ def load_settings() -> Settings:
         mt5_connection_timeout_ms=_get_int("MT5_CONNECTION_TIMEOUT_MS", 5000),
         enable_macro_context=_get_bool("ENABLE_MACRO_CONTEXT", True),
         enable_trade_action_reports=_get_bool("ENABLE_TRADE_ACTION_REPORTS", True),
+        # Phase 3 + 3.5 v2.2.0
+        enable_macro_collector=_get_bool("ENABLE_MACRO_COLLECTOR", True),
+        macro_collector_interval_minutes=_get_int(
+            "MACRO_COLLECTOR_INTERVAL_MINUTES", 60
+        ),
+        enable_economic_calendar=_get_bool("ENABLE_ECONOMIC_CALENDAR", True),
+        calendar_buffer_minutes=_get_int("CALENDAR_BUFFER_MINUTES", 30),
+        calendar_refresh_hours=_get_int("CALENDAR_REFRESH_HOURS", 12),
+        enable_strategy_forex_session_breakout=_get_bool(
+            "ENABLE_STRATEGY_FOREX_SESSION_BREAKOUT", True
+        ),
+        enable_forex_alerts=_get_bool("ENABLE_FOREX_ALERTS", True),
+        enable_gold_alerts=_get_bool("ENABLE_GOLD_ALERTS", True),
+        max_forex_alerts_per_24h=_get_int("MAX_FOREX_ALERTS_PER_24H", 3),
+        max_gold_alerts_per_24h=_get_int("MAX_GOLD_ALERTS_PER_24H", 2),
+        max_forex_alerts_per_run=_get_int("MAX_FOREX_ALERTS_PER_RUN", 1),
+        max_gold_alerts_per_run=_get_int("MAX_GOLD_ALERTS_PER_RUN", 1),
+        anthropic_api_key=os.getenv("ANTHROPIC_API_KEY") or None,
+        enable_claude_integration=_get_bool("ENABLE_CLAUDE_INTEGRATION", False),
+        claude_model=os.getenv("CLAUDE_MODEL", "claude-haiku-4-5"),
+        claude_max_tokens=_get_int("CLAUDE_MAX_TOKENS", 1024),
+        claude_calls_per_cycle_cap=_get_int("CLAUDE_CALLS_PER_CYCLE_CAP", 6),
+        claude_cache_ttl_seconds=_get_int("CLAUDE_CACHE_TTL_SECONDS", 3600),
+        claude_max_cost_per_day_usd=_get_float("CLAUDE_MAX_COST_PER_DAY_USD", 2.0),
     )

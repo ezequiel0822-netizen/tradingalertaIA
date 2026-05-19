@@ -167,3 +167,32 @@ Fase 2.6 - security & privacy hardening. Sin nuevas features funcionales. Cero b
 Hallazgos del audit confirmados como OK (no requirieron fix): .gitignore correcto, HTTPS-only, todos los `requests.get` con timeout, User-Agents genericos, no shell injection, no eval/exec/pickle, no logs a disco, Streamlit en localhost, `/config` no expone secretos.
 
 Regla: sigue siendo read-only. NO order_send a brokers reales ni demo MT5 (Fase 5).
+
+## v2.2.0
+
+Phase 3 + 3.5: forex price-action profesional + LLM integration con Claude API. Sigue read-only.
+
+**Phase 3:**
+- Macro collector: VIX, DXY, SPY via Yahoo. Regime `risk_on`/`risk_off`/`neutral` en nueva tabla `macro_snapshots`.
+- Economic calendar via ForexFactory XML. Eventos high-impact en USD/EUR/GBP/JPY/CHF/AUD/CAD/NZD en nueva tabla `economic_events`.
+- `calendar_filter.is_safe_window`: bloquea trades ± 30 min alrededor de NFP/FOMC/CPI.
+- `analyze_multitf`: combina pattern M15 + H1 con flag `aligned` + `confluence_score`.
+- Nueva strategy `forex_session_breakout`: solo durante London/NY overlap, breakout del Asian range.
+- 4 strategies existentes ahora **usan** `ctx.macro` (breakout penaliza low liquidity, mean_reversion penaliza risk_off, momentum bonifica risk_on, news_catalyst permite forex/gold).
+- Alertas Telegram activadas para forex/gold con caps separados.
+- Columna `alerts.strategy_name` para drilldown.
+- Dashboard Streamlit: heatmap horizonte × hora, macro panel, calendario económico, drilldown por alerta.
+
+**Phase 3.5:**
+- `claude_processor.py`: cliente Claude API con throttle, cache TTL, telemetria de costo, safety cap diario. Soft-fail completo si la key falta o `anthropic` no está instalado.
+- Modelo default Haiku 4.5 (~$1/M input, $5/M output).
+- `_market_intelligence` llama `expand_pro_analysis` → reasons gana "🤖 IA: ...".
+- Fallback "no entendi" en Telegram usa Claude para interpretar preguntas naturales.
+- `AlertRecord.ai_reasoning` para storage futuro.
+- `ANTHROPIC_API_KEY` enmascarado en `_SECRET_FIELDS` y `LogRedactor`.
+
+Schema: 2 tablas nuevas (`macro_snapshots`, `economic_events`) + columna `alerts.strategy_name`.
+Settings: 19 nuevos. Tests: 28 nuevos. Total **163 verdes** (135 → 163).
+APP_VERSION bump a v2.2.0.
+
+Regla: sigue siendo read-only. NO order_send a brokers reales ni demo MT5 (Fase 5).

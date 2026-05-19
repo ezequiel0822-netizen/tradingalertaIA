@@ -182,6 +182,31 @@ def _init_db_unsafe(db_path: Path) -> None:
                 FOREIGN KEY(token_id) REFERENCES tokens(id)
             );
 
+            CREATE TABLE IF NOT EXISTS macro_snapshots (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                captured_at TEXT NOT NULL UNIQUE,
+                vix_value REAL,
+                dxy_value REAL,
+                spy_value REAL,
+                regime TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS economic_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_time TEXT NOT NULL,
+                country TEXT NOT NULL,
+                impact TEXT,
+                title TEXT,
+                captured_at TEXT NOT NULL,
+                UNIQUE(event_time, country, title)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_events_time
+                ON economic_events(event_time);
+
+            CREATE INDEX IF NOT EXISTS idx_macro_captured
+                ON macro_snapshots(captured_at);
+
             CREATE TABLE IF NOT EXISTS daily_pnl_log (
                 date TEXT PRIMARY KEY,
                 realized_pnl_pct REAL DEFAULT 0,
@@ -257,6 +282,7 @@ def _init_db_unsafe(db_path: Path) -> None:
         _ensure_column(connection, "paper_trades", "risk_pct", "REAL")
         _ensure_column(connection, "paper_trades", "partial_closed", "INTEGER DEFAULT 0")
         _ensure_column(connection, "paper_trades", "account_balance_at_open", "REAL")
+        _ensure_column(connection, "alerts", "strategy_name", "TEXT")
 
 
 def _ensure_column(

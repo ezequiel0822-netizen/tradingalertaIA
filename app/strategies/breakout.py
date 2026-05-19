@@ -37,11 +37,17 @@ class BreakoutStrategy:
         tp2 = entry * (1 + (atr_pct * 4.0) / 100.0)
 
         confidence = min(95, 60 + int(rel_vol * 5) + int(pattern.score / 4))
+        # Phase 3 v2.2.0: ajuste por macro context
+        macro = ctx.macro or {}
+        if not macro.get("is_high_liquidity", False):
+            confidence = max(0, confidence - 10)
         reasoning = [
             f"Breakout pattern ({pattern.label})",
             f"Relative volume {rel_vol:.1f}x",
             f"ATR {atr_pct:.2f}%",
         ]
+        if not macro.get("is_high_liquidity", False):
+            reasoning.append("Sesion baja liquidez (penaliza)")
         if rsi is not None:
             reasoning.append(f"RSI {rsi:.1f}")
 

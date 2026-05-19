@@ -11,8 +11,9 @@ class NewsCatalystStrategy:
     def evaluate(
         self, ctx: StrategyContext, settings: Settings
     ) -> StrategySignal | None:
-        if ctx.snapshot.category != "stock":
-            return None  # noticias solo en stocks (memecoins no tienen news feed)
+        # Phase 3 v2.2.0: permitir tambien forex y gold (catalizadores macro)
+        if ctx.snapshot.category not in {"stock", "forex", "gold"}:
+            return None
         if ctx.news_score < 20:
             return None
         pattern = ctx.pattern
