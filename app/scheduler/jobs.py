@@ -90,7 +90,8 @@ class TradingAlertJob:
         self.strategy_router = StrategyRouter(settings)
 
     def run_forever(self) -> None:
-        logger.info("Trading Alert AI started. Database: %s", self.settings.sqlite_path)
+        # Log solo el nombre del archivo (no path completo) para evitar filesystem leak.
+        logger.info("Trading Alert AI started. Database: %s", self.settings.sqlite_path.name)
         while True:
             started = time.monotonic()
             try:

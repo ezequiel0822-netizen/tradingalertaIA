@@ -1,9 +1,10 @@
-python-dotenv
-requests
-streamlit
-pandas
-pytest
-# Windows-only para Fase 2.5 (MT5 read-only). Soft-fail si no instalado.
-# En macOS/Linux puede dar warning al pip install — ignorar; el bot
-# detecta el ImportError y sigue corriendo en modo degradado.
-MetaTrader5; sys_platform == 'win32'
+# Versiones pinneadas (Fase 2.6 v2.1.0 hardening).
+# Cambiar deliberadamente al actualizar; previene cadenas suministro maliciosas.
+python-dotenv==1.2.2
+requests==2.34.2
+streamlit==1.57.0
+pandas==3.0.3
+pytest==9.0.3
+# Windows-only (MT5 read-only). Soft-fail si no instalado.
+# Pin generoso porque la API de MetaTrader5 es estable.
+MetaTrader5>=5.0.45,<6.0.0; sys_platform == 'win32'

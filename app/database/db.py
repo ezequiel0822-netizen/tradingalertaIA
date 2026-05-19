@@ -10,6 +10,17 @@ def get_connection(db_path: Path) -> sqlite3.Connection:
 
 
 def init_db(db_path: Path) -> None:
+    try:
+        _init_db_unsafe(db_path)
+    except sqlite3.DatabaseError as exc:
+        # NO loguear el path completo (filesystem leak). Solo nombre.
+        raise RuntimeError(
+            f"DB initialization failed (possible corruption in '{db_path.name}'). "
+            f"Backup and remove the file to recreate the schema. Error: {exc}"
+        ) from exc
+
+
+def _init_db_unsafe(db_path: Path) -> None:
     with get_connection(db_path) as connection:
         connection.executescript(
             """

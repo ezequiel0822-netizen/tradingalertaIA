@@ -1,9 +1,31 @@
+import logging
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from app.config.settings import Settings
 from app.database.models import AlertRecord
 from app.database.repository import Repository
+from app.utils.safe_path import safe_resolve_within
 from app.utils.time_utils import parse_iso_datetime, utc_now
+
+
+_logger = logging.getLogger(__name__)
+
+
+def _safe_write(vault: Path, filename: str, content: str, append: bool = False) -> bool:
+    """Escribe filename dentro de vault. Bloquea path traversal.
+    Devuelve True si escribio, False si el path es invalido."""
+    target = vault / filename
+    safe = safe_resolve_within(target, vault)
+    if safe is None:
+        _logger.warning("Obsidian write rechazado por safe_path: %s", filename)
+        return False
+    if append and safe.exists():
+        previous = safe.read_text(encoding="utf-8")
+        safe.write_text(previous + content, encoding="utf-8")
+    else:
+        safe.write_text(content, encoding="utf-8")
+    return True
 
 
 def write_daily_memory_if_needed(

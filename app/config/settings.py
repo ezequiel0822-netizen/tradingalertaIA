@@ -1,11 +1,30 @@
+import logging
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from pathlib import Path
 
 from dotenv import load_dotenv
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+_logger = logging.getLogger(__name__)
+
+# Campos que jamas deben aparecer en repr/log.
+_SECRET_FIELDS = frozenset({
+    "telegram_bot_token",
+    "telegram_chat_id",
+    "mt5_login",
+    "mt5_password",
+    "mt5_server",
+})
+
+# Campos con paths que solo se muestran como nombre de archivo (no path absoluto).
+_PATH_FIELDS = frozenset({
+    "sqlite_path",
+    "obsidian_vault_path",
+    "mt5_path",
+})
 
 
 def _get_float(name: str, default: float) -> float:
@@ -171,6 +190,26 @@ class Settings:
     enable_macro_context: bool
     enable_trade_action_reports: bool
 
+    def __repr__(self) -> str:
+        parts: list[str] = []
+        for f in fields(self):
+            val = getattr(self, f.name)
+            if f.name in _SECRET_FIELDS:
+                shown = "<redacted>" if val not in (None, "") else "<unset>"
+            elif f.name in _PATH_FIELDS:
+                # Mostrar solo el basename para evitar filesystem leak
+                if val is None:
+                    shown = "None"
+                else:
+                    try:
+                        shown = repr(Path(val).name)
+                    except (TypeError, ValueError):
+                        shown = "<path>"
+            else:
+                shown = repr(val)
+            parts.append(f"{f.name}={shown}")
+        return f"Settings({', '.join(parts)})"
+
     @property
     def geckoterminal_networks(self) -> dict[str, str]:
         return {
@@ -201,13 +240,25 @@ def load_settings() -> Settings:
     if not sqlite_path.is_absolute():
         sqlite_path = PROJECT_ROOT / sqlite_path
 
+    # Import local para evitar ciclo en startup
+    from app.utils.safe_path import safe_optional_file, safe_resolve_within
+
     obsidian_value = os.getenv("OBSIDIAN_VAULT_PATH", "obsidian/tradingbot v.1")
     obsidian_vault_path = Path(obsidian_value)
     if not obsidian_vault_path.is_absolute():
         obsidian_vault_path = PROJECT_ROOT / obsidian_vault_path
+    # Bloquear path traversal (../../...) — fallback al default si OBSIDIAN_VAULT_PATH escapa PROJECT_ROOT
+    safe_obsidian = safe_resolve_within(obsidian_vault_path, PROJECT_ROOT)
+    if safe_obsidian is None:
+        _logger.warning(
+            "OBSIDIAN_VAULT_PATH escapa PROJECT_ROOT; usando default."
+        )
+        obsidian_vault_path = PROJECT_ROOT / "obsidian" / "tradingbot v.1"
+    else:
+        obsidian_vault_path = safe_obsidian
 
     return Settings(
-        app_version=os.getenv("APP_VERSION", "v2.0.0"),
+        app_version=os.getenv("APP_VERSION", "v2.1.0"),
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
         telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID"),
         dexscreener_base_url=os.getenv(
@@ -381,7 +432,8 @@ def load_settings() -> Settings:
         ),
         enable_memecoin_telegram=_get_bool("ENABLE_MEMECOIN_TELEGRAM", False),
         enable_mt5_reader=_get_bool("ENABLE_MT5_READER", False),
-        mt5_path=os.getenv("MT5_PATH") or None,
+        # mt5_path validado: solo paths absolutos a archivo existente (None si invalido)
+        mt5_path=str(safe_optional_file(os.getenv("MT5_PATH"))) if safe_optional_file(os.getenv("MT5_PATH")) else None,
         mt5_login=_get_optional_int("MT5_LOGIN"),
         mt5_password=os.getenv("MT5_PASSWORD") or None,
         mt5_server=os.getenv("MT5_SERVER") or None,

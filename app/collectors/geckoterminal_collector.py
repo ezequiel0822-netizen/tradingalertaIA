@@ -98,7 +98,8 @@ class GeckoTerminalCollector:
                 timeout=self.settings.request_timeout_seconds,
             )
             response.raise_for_status()
-            return response.json()
+            from app.utils.safe_http import safe_json
+            return safe_json(response, default=None)
         except requests.HTTPError as exc:
             status_code = exc.response.status_code if exc.response is not None else None
             if status_code == 429:

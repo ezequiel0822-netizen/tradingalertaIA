@@ -56,7 +56,7 @@ def _liquidity_points(
     snapshot: TokenSnapshot, settings: Settings
 ) -> tuple[int, list[str]]:
     liquidity = snapshot.liquidity_usd
-    if liquidity is None:
+    if liquidity is None or liquidity < 0:
         return 4, ["Liquidez no disponible."]
     if liquidity < 1_000:
         return 0, ["Liquidez extremadamente baja."]

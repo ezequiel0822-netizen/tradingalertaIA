@@ -725,6 +725,11 @@ Ahora puedes usar /aprendizaje y /paper.
             hours = int(arg) if arg else self.settings.kill_switch_cooldown_hours
         except ValueError:
             hours = self.settings.kill_switch_cooldown_hours
+        # Clamp a rango seguro [1, 168] (1 hora a 1 semana)
+        if hours < 1:
+            hours = 1
+        if hours > 168:
+            hours = 168
         pm = PortfolioManager(self.settings, self.repository)
         rm = RiskManager(self.settings, self.repository, pm)
         rm.trigger_kill_switch(reason="manual halt via Telegram", hours=hours)

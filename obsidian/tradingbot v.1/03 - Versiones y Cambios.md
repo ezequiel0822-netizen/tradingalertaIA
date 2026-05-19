@@ -148,3 +148,22 @@ Fase 2.5 - trader engine autonomo (simulado + MT5 read-only). El bot pasa de "al
 - 28 settings nuevos. 53 tests nuevos. **117 tests verdes en total**.
 
 Regla: sigue siendo read-only. NO compra, NO vende, NO `order_send` ni a brokers reales ni a demo MT5 (eso es Fase 5). MT5 demo trading sigue autorizado para Fase 5; real-money trading sigue prohibido sin nueva autorizacion explicita.
+
+## v2.1.0
+
+Fase 2.6 - security & privacy hardening. Sin nuevas features funcionales. Cero breaking changes en API publica.
+
+- `Settings.__repr__` enmascara `telegram_bot_token`, `telegram_chat_id`, `mt5_login`, `mt5_password`, `mt5_server` con `<redacted>` y paths solo como basename. Defensa contra logs accidentales de `repr(settings)`.
+- Nuevo `app/utils/safe_path.py`: bloquea path traversal en `OBSIDIAN_VAULT_PATH` (fallback al default) y rechaza `MT5_PATH` invalido.
+- Nuevo `app/utils/log_redactor.py`: filter del root logger que enmascara tokens estilo Telegram y valores conocidos del .env. Instalado al startup desde main.py.
+- Nuevo `app/utils/safe_http.py`: `safe_json` para parsing defensivo. Aplicado en dexscreener + geckoterminal collectors.
+- `init_db` ahora maneja DB corrupta con mensaje claro (sin filesystem leak).
+- `/halt` clampa a [1, 168] horas. `calculate_position_size` rechaza `risk_pct > 10` como safety cap. `score_token` trata liquidez negativa como None.
+- `requirements.txt`: versiones pinneadas exactas (python-dotenv, requests, streamlit, pandas, pytest, MetaTrader5). Defensa contra cadena suministro maliciosa.
+- Log de inicio loguea solo nombre de archivo de DB, no path absoluto del usuario.
+- 18 tests de seguridad nuevos. Total **135 tests verdes** (117 → 135).
+- Bump a v2.1.0.
+
+Hallazgos del audit confirmados como OK (no requirieron fix): .gitignore correcto, HTTPS-only, todos los `requests.get` con timeout, User-Agents genericos, no shell injection, no eval/exec/pickle, no logs a disco, Streamlit en localhost, `/config` no expone secretos.
+
+Regla: sigue siendo read-only. NO order_send a brokers reales ni demo MT5 (Fase 5).

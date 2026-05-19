@@ -26,6 +26,13 @@ def calculate_position_size(
         return PositionSizing(0, 0, 0, 0, invalid_reason="balance <= 0")
     if risk_pct <= 0:
         return PositionSizing(0, 0, 0, 0, invalid_reason="risk_pct <= 0")
+    # Safety cap defensivo: nunca mas de 10% del balance por trade.
+    # Filtra configs accidentales como RISK_PER_TRADE_PCT=100 que destruirian la cuenta.
+    if risk_pct > 10:
+        return PositionSizing(
+            0, 0, 0, 0,
+            invalid_reason=f"risk_pct {risk_pct} > 10 (safety cap)",
+        )
     if entry <= 0:
         return PositionSizing(0, 0, 0, 0, invalid_reason="entry <= 0")
 

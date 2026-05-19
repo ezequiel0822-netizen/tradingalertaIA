@@ -5,7 +5,7 @@
 Agregar al `.env` normal, no solo a `.env.example`:
 
 ```env
-APP_VERSION=v2.0.0
+APP_VERSION=v2.1.0
 ENABLE_TELEGRAM_ASSISTANT=true
 TELEGRAM_ASSISTANT_MAX_UPDATES=10
 ENABLE_ADVANCED_MARKET_INTEL=true
