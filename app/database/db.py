@@ -171,6 +171,22 @@ def init_db(db_path: Path) -> None:
                 FOREIGN KEY(token_id) REFERENCES tokens(id)
             );
 
+            CREATE TABLE IF NOT EXISTS daily_pnl_log (
+                date TEXT PRIMARY KEY,
+                realized_pnl_pct REAL DEFAULT 0,
+                realized_pnl_usd REAL DEFAULT 0,
+                trades_closed INTEGER DEFAULT 0,
+                trades_opened INTEGER DEFAULT 0,
+                kill_switch_triggered INTEGER DEFAULT 0,
+                kill_switch_reason TEXT,
+                starting_equity REAL,
+                ending_equity REAL,
+                updated_at TEXT NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_daily_pnl_log_date
+                ON daily_pnl_log(date);
+
             CREATE TABLE IF NOT EXISTS alert_outcome_horizons (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 alert_id INTEGER NOT NULL,
@@ -222,6 +238,14 @@ def init_db(db_path: Path) -> None:
         _ensure_column(connection, "paper_trades", "mae_pct", "REAL DEFAULT 0")
         _ensure_column(connection, "paper_trades", "original_stop_loss", "REAL")
         _ensure_column(connection, "paper_trades", "trailing_active", "INTEGER DEFAULT 0")
+        _ensure_column(connection, "paper_trades", "strategy_name", "TEXT")
+        _ensure_column(connection, "paper_trades", "direction", "TEXT DEFAULT 'long'")
+        _ensure_column(connection, "paper_trades", "time_horizon_hours", "INTEGER")
+        _ensure_column(connection, "paper_trades", "size_notional", "REAL")
+        _ensure_column(connection, "paper_trades", "size_units", "REAL")
+        _ensure_column(connection, "paper_trades", "risk_pct", "REAL")
+        _ensure_column(connection, "paper_trades", "partial_closed", "INTEGER DEFAULT 0")
+        _ensure_column(connection, "paper_trades", "account_balance_at_open", "REAL")
 
 
 def _ensure_column(

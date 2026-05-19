@@ -23,6 +23,8 @@ from app.analyzers.technical_patterns import analyze_ohlcv, candles_from_gecko
 from app.analyzers.token_score import score_token
 from app.analyzers.volume_spike_detector import detect_volume_spike
 from app.assistant.telegram_assistant import TelegramAssistantPoller
+from app.alerts.trade_reporter import format_trade_opened
+from app.brokers.mt5_reader import MT5Reader
 from app.collectors.dexscreener_collector import DexScreenerCollector
 from app.collectors.forex_collector import ForexCollector
 from app.collectors.geckoterminal_collector import GeckoTerminalCollector
@@ -31,7 +33,14 @@ from app.collectors.news_collector import NewsCollector
 from app.collectors.sec_collector import SECFilingsCollector
 from app.collectors.stock_collector import StockCollector
 from app.config.settings import Settings
+from app.intelligence.macro_context import current_session
 from app.learning.feature_extractor import extract_features
+from app.learning.lifecycle_manager import manage_open_positions
+from app.portfolio.portfolio_manager import PortfolioManager
+from app.risk.position_sizer import calculate_position_size
+from app.risk.risk_manager import RiskManager
+from app.strategies.base import StrategyContext
+from app.strategies.strategy_router import StrategyRouter
 from app.database.db import init_db
 from app.database.models import AlertRecord, SecuritySummary, TokenSnapshot
 from app.database.repository import Repository
@@ -65,6 +74,20 @@ class TradingAlertJob:
             self.repository,
             self.notifier,
         )
+        # Fase 2.5 trader engine
+        self.mt5_reader = MT5Reader(settings)
+        if settings.enable_mt5_reader:
+            try:
+                self.mt5_reader.connect()
+            except Exception:
+                logger.exception("MT5 connect failed; continuing without")
+        self.portfolio_manager = PortfolioManager(
+            settings, self.repository, self.mt5_reader
+        )
+        self.risk_manager = RiskManager(
+            settings, self.repository, self.portfolio_manager
+        )
+        self.strategy_router = StrategyRouter(settings)
 
     def run_forever(self) -> None:
         logger.info("Trading Alert AI started. Database: %s", self.settings.sqlite_path)
@@ -85,11 +108,23 @@ class TradingAlertJob:
         if handled:
             logger.info("Telegram assistant handled %s message(s)", handled)
 
+        # Fase 2.5: gestionar posiciones abiertas ANTES de buscar nuevas
+        if self.settings.enable_paper_trading:
+            try:
+                lifecycle_summary = manage_open_positions(
+                    self.settings, self.repository, self.mt5_reader
+                )
+                if lifecycle_summary.get("managed", 0):
+                    logger.info("Lifecycle: %s", lifecycle_summary)
+            except Exception:
+                logger.exception("Lifecycle management failed")
+
         snapshots = self._limit_snapshots(self._collect_snapshots())
         logger.info("Collected %s market snapshots", len(snapshots))
 
         records: list[AlertRecord] = []
         send_candidates: list[AlertRecord] = []
+        inserted_record_ids: set[int] = set()
         security_checks = 0
         chart_analyses = 0
         sec_analyses = 0
@@ -235,6 +270,15 @@ class TradingAlertJob:
             )
             records.append(alert_record)
 
+            # Fase 2.5: Strategy router → potencialmente abre paper trade
+            if (
+                self.settings.enable_strategy_router
+                and snapshot.category in {"stock", "forex", "gold"}
+            ):
+                self._try_open_paper_trades(
+                    snapshot, alert_record, inserted_record_ids
+                )
+
             if should_send:
                 recent = self.repository.latest_sent_alert(
                     snapshot.chain,
@@ -257,6 +301,8 @@ class TradingAlertJob:
 
         sent_count = self._send_ranked_candidates(send_candidates)
         for record in records:
+            if id(record) in inserted_record_ids:
+                continue
             self.repository.insert_alert(record)
         write_daily_memory_if_needed(
             self.settings,
@@ -314,7 +360,14 @@ class TradingAlertJob:
             return 0
 
         sent_count = 0
-        categories = ("memecoin", "stock")
+        # Fase 2.5: memecoins quedan como lab de aprendizaje. Telegram solo stock
+        # (forex/gold quedan en silencio hasta Fase 3). Si el usuario activa
+        # enable_memecoin_telegram, el filtro de should_send_alert deja pasar
+        # memecoins; aqui agregamos su categoria al iterado solo en ese caso.
+        if self.settings.enable_memecoin_telegram:
+            categories = ("memecoin", "stock")
+        else:
+            categories = ("stock",)
         daily_caps = {
             "memecoin": self.settings.memecoin_max_alerts_per_24h,
             "stock": self.settings.stock_max_alerts_per_24h,
@@ -559,3 +612,131 @@ class TradingAlertJob:
                 output.append(reason)
                 seen.add(reason)
         return output[:10] or ["Evento detectado y guardado para revisión manual."]
+
+    def _try_open_paper_trades(
+        self,
+        snapshot: TokenSnapshot,
+        alert_record: AlertRecord,
+        inserted_record_ids: set[int],
+    ) -> None:
+        """Pregunta al strategy router; abre paper trades si pasan risk + sizing."""
+        from app.utils.time_utils import utc_now_iso
+
+        candles = snapshot.raw.get("candles") if snapshot.raw else []
+        if not candles:
+            return  # sin OHLCV no podemos pattern → strategy
+        try:
+            from app.analyzers.technical_patterns import analyze_ohlcv
+            pattern = analyze_ohlcv(candles)
+        except Exception:
+            logger.exception("analyze_ohlcv failed for %s", snapshot.symbol)
+            return
+
+        ctx = StrategyContext(
+            snapshot=snapshot,
+            candles=candles,
+            pattern=pattern,
+            pro=None,  # pro analysis ya pasó al score; usar None aquí simplifica
+            news_label="no_recent_news",
+            news_score=0,
+            macro=current_session(),
+        )
+        try:
+            signals = self.strategy_router.route(ctx, self.settings)
+        except Exception:
+            logger.exception("Strategy router failed for %s", snapshot.symbol)
+            return
+
+        if not signals:
+            return
+
+        # Evitar duplicados: si ya hay un open trade para (chain, address), skip
+        existing_open = [
+            p
+            for p in self.portfolio_manager.get_open_positions()
+            if str(p.get("chain")) == snapshot.chain
+            and str(p.get("token_address")) == snapshot.token_address
+        ]
+        if existing_open:
+            return
+
+        balance = self.portfolio_manager.account_balance()
+
+        for signal in signals:
+            sizing = calculate_position_size(
+                entry=signal.entry,
+                stop=signal.stop,
+                account_balance=balance,
+                risk_pct=self.settings.risk_per_trade_pct,
+                direction=signal.direction,
+            )
+            if sizing.invalid_reason:
+                logger.info(
+                    "Signal sizing invalid: %s symbol=%s",
+                    sizing.invalid_reason,
+                    snapshot.symbol,
+                )
+                continue
+            ok, reason = self.risk_manager.check_can_open_trade(
+                snapshot.category, sizing.risk_pct_actual
+            )
+            if not ok:
+                logger.info(
+                    "Trade blocked by risk manager: %s strategy=%s symbol=%s",
+                    reason,
+                    signal.strategy_name,
+                    snapshot.symbol,
+                )
+                continue
+
+            # Insertar alert primero (necesitamos alert_id)
+            if id(alert_record) not in inserted_record_ids:
+                alert_id = self.repository.insert_alert(alert_record)
+                inserted_record_ids.add(id(alert_record))
+            else:
+                # ya insertado por una señal previa de este mismo snapshot.
+                # solo permitimos 1 trade por snapshot/alert para evitar UNIQUE constraint.
+                continue
+
+            now = utc_now_iso()
+            trade = {
+                "alert_id": int(alert_id),
+                "token_id": int(alert_record.token_id),
+                "category": snapshot.category,
+                "chain": snapshot.chain,
+                "token_address": snapshot.token_address,
+                "symbol": snapshot.symbol,
+                "thesis": f"{signal.strategy_name}: {'; '.join(signal.reasoning[:2])}",
+                "readiness_grade": "A" if signal.confidence >= 80 else "B",
+                "entry_price": signal.entry,
+                "latest_price": signal.entry,
+                "stop_loss": signal.stop,
+                "take_profit_1": signal.targets[0] if signal.targets else None,
+                "take_profit_2": signal.targets[1] if len(signal.targets) > 1 else None,
+                "invalidation": f"strategy {signal.strategy_name} signal pierde validez",
+                "status": "open",
+                "unrealized_return_pct": 0,
+                "opened_at": now,
+                "updated_at": now,
+                "closed_at": None,
+                "mfe_pct": 0,
+                "mae_pct": 0,
+                "original_stop_loss": signal.stop,
+                "trailing_active": 0,
+                "strategy_name": signal.strategy_name,
+                "direction": signal.direction,
+                "time_horizon_hours": signal.time_horizon_hours,
+                "size_notional": sizing.size_notional,
+                "size_units": sizing.size_units,
+                "risk_pct": sizing.risk_pct_actual,
+                "partial_closed": 0,
+                "account_balance_at_open": balance,
+            }
+            created = self.repository.create_paper_trade(trade)
+            if created and self.settings.enable_trade_action_reports:
+                try:
+                    msg = format_trade_opened(snapshot, signal, sizing)
+                    self.notifier.send_message(msg)
+                except Exception:
+                    logger.exception("Trade opened report failed")
+            return  # solo 1 trade por snapshot (la primera signal valida)

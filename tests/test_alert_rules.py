@@ -94,11 +94,45 @@ def _settings() -> Settings:
         learning_gate_since_days=30,
         enable_forex_collector=False,
         forex_symbols=["eurusd=x", "gc=f"],
+        account_starting_balance=10000.0,
+        max_open_trades_total=5,
+        max_open_trades_stock=3,
+        max_open_trades_forex=4,
+        max_open_trades_gold=2,
+        risk_per_trade_pct=1.0,
+        max_total_risk_pct=6.0,
+        max_daily_drawdown_pct=3.0,
+        kill_switch_cooldown_hours=24,
+        enable_kill_switch_auto=True,
+        enable_strategy_router=True,
+        strategy_min_confidence=60,
+        enable_strategy_breakout=True,
+        enable_strategy_mean_reversion=True,
+        enable_strategy_momentum=True,
+        enable_strategy_news_catalyst=True,
+        enable_partial_close_at_tp1=True,
+        partial_close_fraction=0.5,
+        enable_time_based_exit=True,
+        default_time_horizon_hours=48,
+        enable_invalidation_exit=True,
+        lifecycle_reeval_every_n_cycles=5,
+        enable_memecoin_telegram=False,
+        enable_mt5_reader=False,
+        mt5_path=None,
+        mt5_login=None,
+        mt5_password=None,
+        mt5_server=None,
+        mt5_connection_timeout_ms=5000,
+        enable_macro_context=True,
+        enable_trade_action_reports=True,
     )
 
 
 def test_alert_threshold_rules() -> None:
-    settings = _settings()
+    base = _settings()
+    # Desde Fase 2.5 memecoin Telegram esta bloqueado por default; los tests
+    # de threshold logic siguen siendo validos pero requieren el flag activo.
+    settings = type(base)(**{**base.__dict__, "enable_memecoin_telegram": True})
     watch_only = EstimateResult(
         estimated_gain_pct=499,
         estimated_loss_pct=40,

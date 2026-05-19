@@ -1,4 +1,4 @@
-# Trading Alert AI v1.7.0
+# Trading Alert AI v2.0.0
 
 Sistema local read-only para monitorear cripto, memecoins y bolsa. Observa datos publicos, guarda historial en SQLite, estima posible subida/caida, revisa riesgo, analiza patrones/noticias/filings SEC, aprende de resultados historicos por horizonte y simula setups en papel.
 
@@ -166,6 +166,22 @@ Ambos features estan **OFF por default**. Activar despues de revisar `/aprendiza
   - Oro: `GC=F` (futuros) y `XAUUSD=X` (spot).
 - Las categorias `forex` y `gold` fluyen por `price_snapshots` y `alert_outcome_horizons` para que el motor acumule patrones, pero **no generan alertas Telegram en Fase 2**.
 - Fase 3 construira el modulo de analisis forex-especifico (price action, S/R, sesiones Londres/NY, calendario economico).
+
+## Trader Engine v2.0.0 (Fase 2.5)
+
+El bot ahora opera como **trader engine autonomo simulado**. Sigue read-only: no manda ordenes a brokers reales ni a demo MT5 (eso es Fase 5). Lo que SI hace:
+
+- **Strategy router** con 4 estrategias nombradas (breakout, mean_reversion, momentum, news_catalyst). Cada una con sus reglas de entry/exit; la primera que firma con confidence >= `STRATEGY_MIN_CONFIDENCE` abre paper_trade.
+- **Portfolio Manager**: track de posiciones abiertas, exposicion por categoria, P&L diario, equity curve.
+- **Risk Manager**: kill-switch (manual con `/halt` o automatico por max drawdown diario), max trades concurrentes (5 total / 3 stock / 4 forex / 2 gold por default), max riesgo agregado de cuenta (6% por default).
+- **Position Sizer**: tamano calculado por `(balance × risk_pct) / |entry - stop|`. Risk per trade default 1%.
+- **Trade Lifecycle**: maneja posiciones vivas - actualiza MFE/MAE, mueve trailing stop, cierra por time horizon, hace partial close al TP1 con stop a breakeven.
+- **MT5 Reader** (read-only, opcional): si tenes MetaTrader 5 con cuenta demo y completas `MT5_LOGIN/PASSWORD/SERVER` en `.env`, el bot usa precios reales de MT5 para gestionar posiciones forex/oro. Si MT5 no esta instalado, el bot sigue corriendo con yfinance (soft-fail).
+- **Reportes Telegram automaticos**: el bot avisa cuando abre o cierra un trade ("🟢 Abri long EURUSD (breakout, conf 78)...").
+- **Comandos Telegram nuevos**: `/portfolio`, `/posiciones`, `/halt [horas]`, `/resume_trading`, `/strategies`.
+- **Memecoins en modo lab**: siguen alimentando `strategy_lessons` y outcomes por horizonte, pero NO van a Telegram ni se operan. Activar con `ENABLE_MEMECOIN_TELEGRAM=true` si queres recibir alertas memecoin como en v1.7.0.
+
+Restriccion absoluta de seguridad: **sin order_send a brokers reales ni demo todavia**. Real money trading sigue prohibido sin nueva autorizacion explicita.
 
 ## Carpetas
 

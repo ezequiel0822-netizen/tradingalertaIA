@@ -43,6 +43,11 @@ def should_send_alert(
     # Fase 3 construye el modulo de analisis especifico (price action, sesiones, calendario).
     if category in {"forex", "gold"}:
         return False
+    # Memecoins quedan como lab de aprendizaje desde Fase 2.5: alimentan
+    # strategy_lessons y outcomes por horizonte pero NO van a Telegram salvo
+    # que el usuario active explicitamente el flag.
+    if category == "memecoin" and not settings.enable_memecoin_telegram:
+        return False
     if category == "stock":
         return estimate.eligible_for_gain_alert
     if estimate.eligible_for_gain_alert:

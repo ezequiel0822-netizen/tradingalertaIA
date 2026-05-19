@@ -386,16 +386,71 @@ else:
             "status",
             "symbol",
             "category",
+            "strategy_name",
+            "direction",
             "readiness_grade",
             "entry_price",
             "latest_price",
             "unrealized_return_pct",
+            "mfe_pct",
+            "mae_pct",
             "stop_loss",
+            "original_stop_loss",
+            "trailing_active",
             "take_profit_1",
             "take_profit_2",
+            "size_notional",
+            "risk_pct",
+            "time_horizon_hours",
+            "partial_closed",
             "thesis",
             "opened_at",
             "updated_at",
         ],
     )
     st.dataframe(paper_trades[paper_columns].head(100), use_container_width=True, hide_index=True)
+
+st.subheader("Portfolio en vivo (Fase 2.5)")
+try:
+    repo_pm = Repository(settings.sqlite_path)
+    from app.portfolio.portfolio_manager import PortfolioManager
+    pm_dash = PortfolioManager(settings, repo_pm)
+    open_positions = pm_dash.get_open_positions()
+    counts = pm_dash.count_open_by_category()
+    exposure = pm_dash.total_exposure_by_category()
+    balance = pm_dash.account_balance()
+    risk_pct_total = pm_dash.total_risk_pct(balance)
+    daily_pnl_pct = pm_dash.realized_pnl_today()
+    kill_state = repo_pm.get_state("kill_switch_active_until") or ""
+    kill_reason = repo_pm.get_state("kill_switch_reason") or ""
+
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Balance", f"{balance:,.0f} USD")
+    col2.metric("Posiciones abiertas", f"{len(open_positions)}/{settings.max_open_trades_total}")
+    col3.metric("Riesgo agregado", f"{risk_pct_total:.2f}%")
+    col4.metric("P&L hoy", f"{daily_pnl_pct:+.2f}%")
+
+    if kill_state:
+        st.warning(f"Kill switch activo hasta {kill_state}. Motivo: {kill_reason or 'n/a'}")
+    else:
+        st.success("Kill switch inactivo (trader engine puede abrir trades).")
+
+    if counts:
+        cat_rows = []
+        for cat in sorted(counts.keys()):
+            cat_rows.append({
+                "category": cat,
+                "open_trades": counts[cat],
+                "exposure_usd": exposure.get(cat, 0.0),
+            })
+        st.dataframe(pd.DataFrame(cat_rows), use_container_width=True, hide_index=True)
+
+    daily_log = pd.read_sql_query(
+        "SELECT * FROM daily_pnl_log ORDER BY date DESC LIMIT 14",
+        sqlite3.connect(settings.sqlite_path),
+    ) if settings.sqlite_path.exists() else pd.DataFrame()
+    if not daily_log.empty:
+        st.caption("Historial P&L diario (ultimos 14d)")
+        st.dataframe(daily_log, use_container_width=True, hide_index=True)
+except Exception as exc:
+    st.caption(f"Portfolio no disponible: {exc}")

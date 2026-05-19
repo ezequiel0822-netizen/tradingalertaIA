@@ -3,3 +3,7 @@ requests
 streamlit
 pandas
 pytest
+# Windows-only para Fase 2.5 (MT5 read-only). Soft-fail si no instalado.
+# En macOS/Linux puede dar warning al pip install — ignorar; el bot
+# detecta el ImportError y sigue corriendo en modo degradado.
+MetaTrader5; sys_platform == 'win32'

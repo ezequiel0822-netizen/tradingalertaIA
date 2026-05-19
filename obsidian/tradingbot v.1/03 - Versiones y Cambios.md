@@ -127,3 +127,24 @@ Fase 2 - paper trading++, pesos aprendidos, learning gate, foundation forex/oro:
 - 21 settings nuevos. 26 tests nuevos (64 verdes en total).
 
 Regla: sigue siendo read-only. No compra, no vende, no firma transacciones. Demo MT5 trading autorizado para Fase 5; real sigue prohibido sin nueva autorizacion.
+
+## v2.0.0
+
+Fase 2.5 - trader engine autonomo (simulado + MT5 read-only). El bot pasa de "alerter" a "trader engine":
+
+- Nuevo `app/brokers/mt5_reader.py`: adapter MT5 read-only soft-fail. Lee tick, rates y account_info. Credenciales solo en .env real, nunca en logs. NUNCA `order_send`.
+- Nuevo `app/portfolio/portfolio_manager.py`: posiciones abiertas, exposicion por categoria, P&L diario, equity curve, riesgo total.
+- Nuevo `app/risk/risk_manager.py`: kill-switch persistente (manual con `/halt` o automatico por max drawdown diario), gates de max trades concurrentes y max riesgo agregado.
+- Nuevo `app/risk/position_sizer.py`: tamano calculado por % cuenta × distancia al stop. Soporta long y short.
+- Nuevo `app/strategies/`: 4 estrategias nombradas (breakout, mean_reversion, momentum, news_catalyst) + router que filtra por min_confidence.
+- Nuevo `app/intelligence/macro_context.py`: sesiones FX (asian/london/ny) con flag is_high_liquidity.
+- Nuevo `app/learning/lifecycle_manager.py`: gestiona posiciones vivas - MFE/MAE, trailing, time exit, partial close en TP1 con stop a breakeven. Soporta short.
+- Nuevo `app/alerts/trade_reporter.py`: mensajes Telegram al abrir/cerrar paper trades.
+- Schema: tabla `daily_pnl_log` nueva + 8 columnas nuevas en `paper_trades` (strategy_name, direction, time_horizon_hours, size_notional, size_units, risk_pct, partial_closed, account_balance_at_open).
+- Memecoins bloqueadas de Telegram por default (`enable_memecoin_telegram=false`); siguen alimentando `strategy_lessons` como lab de aprendizaje.
+- Decision Engine continuo en `app/scheduler/jobs.py`: gestiona posiciones abiertas al inicio del ciclo, pregunta al strategy router para nuevos snapshots, aplica position_sizer + risk_manager antes de abrir paper trades.
+- Dashboard Streamlit con seccion "Portfolio en vivo" (balance, posiciones, riesgo total, P&L hoy, kill-switch badge, exposicion por categoria, historial daily_pnl_log).
+- Telegram comandos nuevos: `/portfolio`, `/posiciones`, `/halt [horas]`, `/resume_trading`, `/strategies`.
+- 28 settings nuevos. 53 tests nuevos. **117 tests verdes en total**.
+
+Regla: sigue siendo read-only. NO compra, NO vende, NO `order_send` ni a brokers reales ni a demo MT5 (eso es Fase 5). MT5 demo trading sigue autorizado para Fase 5; real-money trading sigue prohibido sin nueva autorizacion explicita.

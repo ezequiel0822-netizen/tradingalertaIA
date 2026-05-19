@@ -29,7 +29,7 @@ El sistema no debe actuar en mercados. Solo observa, analiza, guarda y avisa.
 
 ## Estado actual
 
-Version activa: `v1.7.0`
+Version activa: `v2.0.0`
 
 Capacidades:
 

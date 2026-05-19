@@ -107,6 +107,23 @@ class BasicTelegramAssistant:
             args = parts[1] if len(parts) > 1 else ""
             return self.backtest_message(args)
 
+        if normalized in {"/portfolio", "portfolio", "/portafolio", "portafolio"}:
+            return self.portfolio_message()
+
+        if normalized in {"/posiciones", "posiciones", "/positions", "positions"}:
+            return self.positions_message()
+
+        if normalized.startswith("/halt") or normalized.startswith("halt") or normalized.startswith("/parar"):
+            parts = raw.split(" ", 1)
+            arg = parts[1].strip() if len(parts) > 1 else ""
+            return self.halt_message(arg)
+
+        if normalized in {"/resume_trading", "resume_trading", "/reanudar_trading", "reanudar trading"}:
+            return self.resume_trading_message()
+
+        if normalized in {"/strategies", "strategies", "/estrategias", "estrategias"}:
+            return self.strategies_message()
+
         if "por que" in normalized or "porque" in normalized:
             return self.recent_alerts_message(limit=3)
 
@@ -136,6 +153,11 @@ Comandos:
 /pro SIMBOLO - lectura profesional: grafico, noticias, filings, riesgos
 /horizontes SIMBOLO - retornos por horizonte (1h/6h/24h/7d) y MFE/MAE
 /backtest [Nh] [filtros] - top reglas o test de una combinacion (ej: /backtest 24h ia_pro,score:80-90)
+/portfolio - posiciones abiertas, exposicion, riesgo total, P&L diario
+/posiciones - detalle de paper trades abiertos
+/halt [horas] - activa kill-switch (default usa setting cooldown)
+/resume_trading - libera kill-switch del trader engine
+/strategies - estrategias habilitadas y senales recientes
 /pausar - pausa alertas automaticas
 /reanudar - reactiva alertas automaticas
 /config - ver configuracion sin secretos
@@ -645,3 +667,111 @@ Ahora puedes usar /aprendizaje y /paper.
     def _horizon_label(self, hours: int) -> str:
         labels = {1: "1h", 6: "6h", 24: "24h", 168: "7d"}
         return labels.get(hours, f"{hours}h")
+
+    # ---------- Fase 2.5 v2.0.0 trader engine commands ----------
+
+    def portfolio_message(self) -> str:
+        from app.portfolio.portfolio_manager import PortfolioManager
+        pm = PortfolioManager(self.settings, self.repository)
+        positions = pm.get_open_positions()
+        counts = pm.count_open_by_category()
+        exposure = pm.total_exposure_by_category()
+        balance = pm.account_balance()
+        risk_pct = pm.total_risk_pct(balance)
+        daily_pnl = pm.realized_pnl_today()
+        kill_state = self.repository.get_state("kill_switch_active_until") or ""
+        kill_str = f" (kill switch hasta {kill_state})" if kill_state else ""
+        lines = [
+            f"Portfolio Trading Alert AI {self.settings.app_version}",
+            f"Balance: {balance:,.0f} USD{kill_str}",
+            f"Posiciones abiertas: {len(positions)} (limite {self.settings.max_open_trades_total})",
+        ]
+        if counts:
+            for cat, n in sorted(counts.items()):
+                exp = exposure.get(cat, 0.0)
+                lines.append(f"  {cat}: {n} abierta(s), exposicion ~{exp:,.0f} USD")
+        lines.append(f"Riesgo agregado: {risk_pct:.2f}% (max {self.settings.max_total_risk_pct:.1f}%)")
+        lines.append(f"P&L hoy: {daily_pnl:+.2f}%")
+        lines.append(DISCLAIMER)
+        return "\n".join(lines)
+
+    def positions_message(self) -> str:
+        from app.portfolio.portfolio_manager import PortfolioManager
+        pm = PortfolioManager(self.settings, self.repository)
+        positions = pm.get_open_positions()
+        if not positions:
+            return "No hay paper trades abiertos."
+        lines = [f"Posiciones abiertas ({len(positions)}):"]
+        for pos in positions[:10]:
+            sym = pos.get("symbol") or "?"
+            direction = pos.get("direction") or "long"
+            entry = pos.get("entry_price") or 0
+            latest = pos.get("latest_price") or entry
+            mfe = pos.get("mfe_pct") or 0
+            mae = pos.get("mae_pct") or 0
+            ret = pos.get("unrealized_return_pct") or 0
+            strat = pos.get("strategy_name") or "?"
+            lines.append(
+                f"{sym} ({direction}, {strat}): entry {entry:g} → {latest:g} "
+                f"| ret {ret:+.2f}% | MFE {mfe:+.2f}% | MAE {mae:+.2f}%"
+            )
+        lines.append(DISCLAIMER)
+        return "\n".join(lines)
+
+    def halt_message(self, arg: str) -> str:
+        from app.portfolio.portfolio_manager import PortfolioManager
+        from app.risk.risk_manager import RiskManager
+        try:
+            hours = int(arg) if arg else self.settings.kill_switch_cooldown_hours
+        except ValueError:
+            hours = self.settings.kill_switch_cooldown_hours
+        pm = PortfolioManager(self.settings, self.repository)
+        rm = RiskManager(self.settings, self.repository, pm)
+        rm.trigger_kill_switch(reason="manual halt via Telegram", hours=hours)
+        return (
+            f"Kill switch activado por {hours}h. No abrire nuevos trades "
+            f"hasta /resume_trading o que pase el plazo."
+        )
+
+    def resume_trading_message(self) -> str:
+        from app.portfolio.portfolio_manager import PortfolioManager
+        from app.risk.risk_manager import RiskManager
+        pm = PortfolioManager(self.settings, self.repository)
+        rm = RiskManager(self.settings, self.repository, pm)
+        rm.release_kill_switch()
+        return "Kill switch liberado. Trader engine puede volver a abrir trades."
+
+    def strategies_message(self) -> str:
+        enabled = []
+        if self.settings.enable_strategy_breakout:
+            enabled.append("breakout")
+        if self.settings.enable_strategy_mean_reversion:
+            enabled.append("mean_reversion")
+        if self.settings.enable_strategy_momentum:
+            enabled.append("momentum")
+        if self.settings.enable_strategy_news_catalyst:
+            enabled.append("news_catalyst")
+        # Contar senales por strategy en las ultimas 24h via paper_trades
+        trades = self.repository.fetch_paper_trades(limit=200)
+        from collections import Counter
+        from datetime import datetime, timedelta, timezone
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+        recent_counts: Counter[str] = Counter()
+        for t in trades:
+            opened_at_str = t.get("opened_at") or ""
+            try:
+                opened = datetime.fromisoformat(str(opened_at_str).replace("Z", "+00:00"))
+            except ValueError:
+                continue
+            if opened.tzinfo is None:
+                opened = opened.replace(tzinfo=timezone.utc)
+            if opened >= cutoff:
+                name = str(t.get("strategy_name") or "unknown")
+                recent_counts[name] += 1
+        lines = [
+            f"Strategies habilitadas: {len(enabled)}",
+            *[f"  - {name} ({recent_counts.get(name, 0)} senal(es) en 24h)" for name in enabled],
+            f"Min confidence: {self.settings.strategy_min_confidence}",
+            DISCLAIMER,
+        ]
+        return "\n".join(lines)

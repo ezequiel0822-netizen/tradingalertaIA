@@ -525,9 +525,12 @@ class Repository:
                     thesis, readiness_grade, entry_price, latest_price, stop_loss,
                     take_profit_1, take_profit_2, invalidation, status,
                     unrealized_return_pct, opened_at, updated_at, closed_at,
-                    mfe_pct, mae_pct, original_stop_loss, trailing_active
+                    mfe_pct, mae_pct, original_stop_loss, trailing_active,
+                    strategy_name, direction, time_horizon_hours,
+                    size_notional, size_units, risk_pct, partial_closed,
+                    account_balance_at_open
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     trade["alert_id"],
@@ -553,6 +556,14 @@ class Repository:
                     trade.get("mae_pct", 0),
                     trade.get("original_stop_loss", trade["stop_loss"]),
                     trade.get("trailing_active", 0),
+                    trade.get("strategy_name"),
+                    trade.get("direction", "long"),
+                    trade.get("time_horizon_hours"),
+                    trade.get("size_notional"),
+                    trade.get("size_units"),
+                    trade.get("risk_pct"),
+                    trade.get("partial_closed", 0),
+                    trade.get("account_balance_at_open"),
                 ),
             )
         return True
@@ -597,6 +608,13 @@ class Repository:
             "mae_pct",
             "stop_loss",
             "trailing_active",
+            "partial_closed",
+            "size_notional",
+            "size_units",
+            "strategy_name",
+            "direction",
+            "time_horizon_hours",
+            "risk_pct",
         }
         fields = [key for key in updates if key in allowed]
         if not fields:
@@ -609,6 +627,99 @@ class Repository:
                 f"UPDATE paper_trades SET {assignments} WHERE id = ?",
                 values,
             )
+
+    def count_open_trades_by_category(self) -> dict[str, int]:
+        with get_connection(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT category, COUNT(*) AS count
+                FROM paper_trades
+                WHERE status = 'open'
+                GROUP BY category
+                """
+            ).fetchall()
+        return {str(row["category"] or "unknown"): int(row["count"]) for row in rows}
+
+    def fetch_open_positions_full(self) -> list[dict[str, Any]]:
+        with get_connection(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT *
+                FROM paper_trades
+                WHERE status = 'open'
+                ORDER BY opened_at DESC
+                """
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def fetch_closed_trades_since(self, since_iso: str) -> list[dict[str, Any]]:
+        with get_connection(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT *
+                FROM paper_trades
+                WHERE status != 'open' AND closed_at >= ?
+                ORDER BY closed_at DESC
+                """,
+                (since_iso,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def upsert_daily_pnl_row(self, row: dict[str, Any]) -> None:
+        with get_connection(self.db_path) as connection:
+            connection.execute(
+                """
+                INSERT INTO daily_pnl_log (
+                    date, realized_pnl_pct, realized_pnl_usd, trades_closed,
+                    trades_opened, kill_switch_triggered, kill_switch_reason,
+                    starting_equity, ending_equity, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(date) DO UPDATE SET
+                    realized_pnl_pct = excluded.realized_pnl_pct,
+                    realized_pnl_usd = excluded.realized_pnl_usd,
+                    trades_closed = excluded.trades_closed,
+                    trades_opened = excluded.trades_opened,
+                    kill_switch_triggered = excluded.kill_switch_triggered,
+                    kill_switch_reason = excluded.kill_switch_reason,
+                    starting_equity = excluded.starting_equity,
+                    ending_equity = excluded.ending_equity,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    row["date"],
+                    row.get("realized_pnl_pct", 0),
+                    row.get("realized_pnl_usd", 0),
+                    row.get("trades_closed", 0),
+                    row.get("trades_opened", 0),
+                    row.get("kill_switch_triggered", 0),
+                    row.get("kill_switch_reason"),
+                    row.get("starting_equity"),
+                    row.get("ending_equity"),
+                    row.get("updated_at", utc_now_iso()),
+                ),
+            )
+
+    def get_daily_pnl_row(self, date_str: str) -> dict[str, Any] | None:
+        with get_connection(self.db_path) as connection:
+            row = connection.execute(
+                "SELECT * FROM daily_pnl_log WHERE date = ?",
+                (date_str,),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def fetch_daily_pnl_log(self, days: int = 14) -> list[dict[str, Any]]:
+        with get_connection(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT *
+                FROM daily_pnl_log
+                ORDER BY date DESC
+                LIMIT ?
+                """,
+                (days,),
+            ).fetchall()
+        return [dict(row) for row in rows]
 
     def insert_training_run(self, run: dict[str, Any]) -> None:
         with get_connection(self.db_path) as connection:

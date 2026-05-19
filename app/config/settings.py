@@ -42,6 +42,16 @@ def _get_list(name: str, default: list[str]) -> list[str]:
     return [item.strip().lower() for item in value.split(",") if item.strip()]
 
 
+def _get_optional_int(name: str) -> int | None:
+    value = os.getenv(name)
+    if value is None or value.strip() == "":
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        return None
+
+
 @dataclass(frozen=True)
 class Settings:
     app_version: str
@@ -128,6 +138,38 @@ class Settings:
     learning_gate_since_days: int
     enable_forex_collector: bool
     forex_symbols: list[str]
+    # Fase 2.5 v2.0.0 - trader engine + MT5 reader
+    account_starting_balance: float
+    max_open_trades_total: int
+    max_open_trades_stock: int
+    max_open_trades_forex: int
+    max_open_trades_gold: int
+    risk_per_trade_pct: float
+    max_total_risk_pct: float
+    max_daily_drawdown_pct: float
+    kill_switch_cooldown_hours: int
+    enable_kill_switch_auto: bool
+    enable_strategy_router: bool
+    strategy_min_confidence: int
+    enable_strategy_breakout: bool
+    enable_strategy_mean_reversion: bool
+    enable_strategy_momentum: bool
+    enable_strategy_news_catalyst: bool
+    enable_partial_close_at_tp1: bool
+    partial_close_fraction: float
+    enable_time_based_exit: bool
+    default_time_horizon_hours: int
+    enable_invalidation_exit: bool
+    lifecycle_reeval_every_n_cycles: int
+    enable_memecoin_telegram: bool
+    enable_mt5_reader: bool
+    mt5_path: str | None
+    mt5_login: int | None
+    mt5_password: str | None
+    mt5_server: str | None
+    mt5_connection_timeout_ms: int
+    enable_macro_context: bool
+    enable_trade_action_reports: bool
 
     @property
     def geckoterminal_networks(self) -> dict[str, str]:
@@ -165,7 +207,7 @@ def load_settings() -> Settings:
         obsidian_vault_path = PROJECT_ROOT / obsidian_vault_path
 
     return Settings(
-        app_version=os.getenv("APP_VERSION", "v1.7.0"),
+        app_version=os.getenv("APP_VERSION", "v2.0.0"),
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
         telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID"),
         dexscreener_base_url=os.getenv(
@@ -308,4 +350,42 @@ def load_settings() -> Settings:
                 "GC=F",
             ],
         ),
+        # Fase 2.5 v2.0.0 - trader engine + MT5 reader
+        account_starting_balance=_get_float("ACCOUNT_STARTING_BALANCE", 10000.0),
+        max_open_trades_total=_get_int("MAX_OPEN_TRADES_TOTAL", 5),
+        max_open_trades_stock=_get_int("MAX_OPEN_TRADES_STOCK", 3),
+        max_open_trades_forex=_get_int("MAX_OPEN_TRADES_FOREX", 4),
+        max_open_trades_gold=_get_int("MAX_OPEN_TRADES_GOLD", 2),
+        risk_per_trade_pct=_get_float("RISK_PER_TRADE_PCT", 1.0),
+        max_total_risk_pct=_get_float("MAX_TOTAL_RISK_PCT", 6.0),
+        max_daily_drawdown_pct=_get_float("MAX_DAILY_DRAWDOWN_PCT", 3.0),
+        kill_switch_cooldown_hours=_get_int("KILL_SWITCH_COOLDOWN_HOURS", 24),
+        enable_kill_switch_auto=_get_bool("ENABLE_KILL_SWITCH_AUTO", True),
+        enable_strategy_router=_get_bool("ENABLE_STRATEGY_ROUTER", True),
+        strategy_min_confidence=_get_int("STRATEGY_MIN_CONFIDENCE", 60),
+        enable_strategy_breakout=_get_bool("ENABLE_STRATEGY_BREAKOUT", True),
+        enable_strategy_mean_reversion=_get_bool(
+            "ENABLE_STRATEGY_MEAN_REVERSION", True
+        ),
+        enable_strategy_momentum=_get_bool("ENABLE_STRATEGY_MOMENTUM", True),
+        enable_strategy_news_catalyst=_get_bool(
+            "ENABLE_STRATEGY_NEWS_CATALYST", True
+        ),
+        enable_partial_close_at_tp1=_get_bool("ENABLE_PARTIAL_CLOSE_AT_TP1", True),
+        partial_close_fraction=_get_float("PARTIAL_CLOSE_FRACTION", 0.5),
+        enable_time_based_exit=_get_bool("ENABLE_TIME_BASED_EXIT", True),
+        default_time_horizon_hours=_get_int("DEFAULT_TIME_HORIZON_HOURS", 48),
+        enable_invalidation_exit=_get_bool("ENABLE_INVALIDATION_EXIT", True),
+        lifecycle_reeval_every_n_cycles=_get_int(
+            "LIFECYCLE_REEVAL_EVERY_N_CYCLES", 5
+        ),
+        enable_memecoin_telegram=_get_bool("ENABLE_MEMECOIN_TELEGRAM", False),
+        enable_mt5_reader=_get_bool("ENABLE_MT5_READER", False),
+        mt5_path=os.getenv("MT5_PATH") or None,
+        mt5_login=_get_optional_int("MT5_LOGIN"),
+        mt5_password=os.getenv("MT5_PASSWORD") or None,
+        mt5_server=os.getenv("MT5_SERVER") or None,
+        mt5_connection_timeout_ms=_get_int("MT5_CONNECTION_TIMEOUT_MS", 5000),
+        enable_macro_context=_get_bool("ENABLE_MACRO_CONTEXT", True),
+        enable_trade_action_reports=_get_bool("ENABLE_TRADE_ACTION_REPORTS", True),
     )
