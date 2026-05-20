@@ -26,9 +26,11 @@ from app.assistant.telegram_assistant import TelegramAssistantPoller
 from app.alerts.trade_reporter import format_trade_opened
 from app.brokers.mt5_reader import MT5Reader
 from app.collectors.dexscreener_collector import DexScreenerCollector
+from app.collectors.economic_calendar_collector import EconomicCalendarCollector
 from app.collectors.forex_collector import ForexCollector
 from app.collectors.geckoterminal_collector import GeckoTerminalCollector
 from app.collectors.goplus_collector import GoPlusCollector
+from app.collectors.macro_collector import MacroCollector
 from app.collectors.news_collector import NewsCollector
 from app.collectors.sec_collector import SECFilingsCollector
 from app.collectors.stock_collector import StockCollector
@@ -91,6 +93,9 @@ class TradingAlertJob:
         self.strategy_router = StrategyRouter(settings)
         # Phase 3.5 v2.2.0: Claude processor (soft-fail si key no presente)
         self.claude_processor = ClaudeProcessor(settings, self.repository)
+        # Phase 3 v2.2.0: macro context + economic calendar collectors
+        self.macro_collector = MacroCollector(settings)
+        self.calendar_collector = EconomicCalendarCollector(settings)
 
     def run_forever(self) -> None:
         # Log solo el nombre del archivo (no path completo) para evitar filesystem leak.
@@ -114,6 +119,40 @@ class TradingAlertJob:
         handled = self.assistant.process_updates()
         if handled:
             logger.info("Telegram assistant handled %s message(s)", handled)
+
+        # Phase 3 v2.2.0: macro context refresh (gateado por interval)
+        try:
+            if self.macro_collector.should_run(self.repository):
+                macro_snapshot = self.macro_collector.collect()
+                if macro_snapshot:
+                    self.repository.insert_macro_snapshot(macro_snapshot)
+                    self.repository.set_state(
+                        "macro_last_capture_iso", macro_snapshot["captured_at"]
+                    )
+                    logger.info(
+                        "Macro snapshot: VIX=%s DXY=%s regime=%s",
+                        macro_snapshot.get("vix_value"),
+                        macro_snapshot.get("dxy_value"),
+                        macro_snapshot.get("regime"),
+                    )
+        except Exception:
+            logger.exception("Macro collector failed")
+
+        # Phase 3 v2.2.0: economic calendar refresh (gateado por interval)
+        try:
+            if self.calendar_collector.should_run(self.repository):
+                events = self.calendar_collector.collect()
+                created = 0
+                for ev in events:
+                    if self.repository.upsert_economic_event(ev):
+                        created += 1
+                self.repository.set_state(
+                    "calendar_last_refresh_iso",
+                    minutes_ago(0),
+                )
+                logger.info("Economic calendar refreshed: %s events", created)
+        except Exception:
+            logger.exception("Economic calendar fetch failed")
 
         # Fase 2.5: gestionar posiciones abiertas ANTES de buscar nuevas
         if self.settings.enable_paper_trading:
