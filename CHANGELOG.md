@@ -1,5 +1,39 @@
 # Changelog
 
+## Trading Alert AI v2.4.0
+
+Phase 4.5: Memecoin Hunter Pro (early detection + scoring refinado) + Bot Mode Toggle (alerts_only / trader / hybrid). Sigue read-only para órdenes reales.
+
+**Memecoin Hunter Pro:**
+- `app/collectors/geckoterminal_collector.py`: nuevo método `_collect_new_pools_for_network` que llama `/networks/{network}/new_pools`. Filtra pools con edad > `MAX_EARLY_POOL_AGE_HOURS=6`. Marca como `event_type="EARLY_MEMECOIN"`.
+- `app/analyzers/memecoin_hunter.py`: `MemecoinHunterResult` dataclass + `analyze_memecoin()`. Calcula `early_bonus` (0-20 pts), `volume_velocity_ratio` (aceleración 5m vs 1h), `anti_rug_multiplier` (0.5-1.0 que penaliza honeypot/risky/liquidity_unlocked/holder_concentration).
+- Integrado en `jobs.py` después de `score_token`. Para `category=memecoin and enable_memecoin_hunter`: `adjusted_score = int((base_score + early_bonus) * anti_rug_multiplier)`.
+- Holder concentration y liquidity_locked quedan `None` en v2.4.0 (requieren RPC blockchain). Phase 5+ agregará collector RPC dedicado.
+- ALERT_PRIORITY: `EARLY_MEMECOIN=90` (alta, justo bajo SECURITY_RISK).
+
+**Telegram memecoins re-activadas con filtros estrictos:**
+- **Default flip:** `ENABLE_MEMECOIN_TELEGRAM=true` (antes `false`). Quien quiera silencio: setear `false` en `.env`.
+- Caps separados: `MAX_EARLY_MEMECOIN_ALERTS_PER_24H=3`, `MAX_MATURE_MEMECOIN_ALERTS_PER_24H=2`, `MAX_EARLY_MEMECOIN_ALERTS_PER_RUN=1`.
+- `_send_ranked_candidates` distingue early vs mature por `alert_type` (`EARLY_MEMECOIN` vs `BOOSTED_TOKEN`/`TRENDING_POOL`).
+- **Learning gate FORZADO** para memecoins: `FORCE_LEARNING_GATE_FOR_MEMECOIN=true`. Aunque `ENABLE_LEARNING_GATE=false` globalmente, memecoins siempre pasan por gate (defensa anti-rug).
+
+**Bot Mode Toggle:**
+- `app/utils/bot_mode.py`: `resolve_bot_mode()` con prioridad CLI > bot_state > setting > default trader.
+- 3 modos: `trader` (default), `alerts_only` (skip strategy router, mantiene Telegram + lifecycle), `hybrid` (en v2.4.0 = trader; Phase 5+ agregará confirmación manual).
+- Setting `BOT_MODE=trader|alerts_only|hybrid` en `.env`.
+- Comando Telegram `/mode [trader|alerts_only|hybrid]` persiste en `bot_state.bot_mode_active`.
+- CLI flag `python main.py --mode alerts_only` override por sesión.
+- En `run_once`: log "Bot mode active: X". Si `alerts_only`, skip strategy router (no abre paper trades nuevos) pero mantiene Telegram alerts y lifecycle manager (no abandona posiciones).
+- Dashboard Streamlit: nueva metric "Bot mode" en sección Portfolio.
+
+**Settings nuevos (10):** `enable_early_memecoin_detection`, `max_early_pool_age_hours`, `enable_memecoin_hunter`, `memecoin_hunter_min_volume_velocity_ratio`, `max_early_memecoin_alerts_per_24h`, `max_mature_memecoin_alerts_per_24h`, `max_early_memecoin_alerts_per_run`, `force_learning_gate_for_memecoin`, `bot_mode`, + default flip de `enable_memecoin_telegram` → `true`.
+
+**Tests nuevos (32 en 7 archivos):** bot_mode_toggle (9), geckoterminal_new_pools (4), memecoin_hunter (7), memecoin_alerts_phase4_5 (5), telegram_mode_command (5), cli_mode_flag (2). Total **229 verdes** (197 → 229).
+
+- `APP_VERSION` bump a `v2.4.0`. SEC user agent a 2.4.0.
+
+Sigue read-only para órdenes. `order_send` recién en Phase 5 (cuenta demo ICMarkets autorizada).
+
 ## Trading Alert AI v2.3.0
 
 Phase 4: validación MT5 demo + walk-forward backtester + data quality monitor + CSV export. Sigue read-only para órdenes. Phase 5 (`order_send` a demo) ya es el siguiente paso autorizado.

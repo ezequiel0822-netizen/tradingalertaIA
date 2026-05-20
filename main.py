@@ -32,12 +32,21 @@ def main() -> int:
         action="store_true",
         help="Run one monitoring cycle and exit.",
     )
+    parser.add_argument(
+        "--mode",
+        default=None,
+        choices=["trader", "alerts_only", "hybrid"],
+        help=(
+            "Override bot mode for this run. Priority: CLI > Telegram /mode "
+            "persisted > .env BOT_MODE > default trader."
+        ),
+    )
     args = parser.parse_args()
 
     setup_logging()
     settings = load_settings()
     _install_log_redactor(settings)
-    job = TradingAlertJob(settings)
+    job = TradingAlertJob(settings, cli_mode_override=args.mode)
 
     if args.once:
         job.run_once()

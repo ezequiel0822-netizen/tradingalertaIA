@@ -17,7 +17,14 @@ def evaluate_learning_gate(
     settings: Settings,
     repository: Repository,
 ) -> tuple[bool, str]:
-    if not settings.enable_learning_gate:
+    # Phase 4.5 v2.4.0: memecoin SIEMPRE pasa por gate (defensa anti-rug).
+    # Aunque ENABLE_LEARNING_GATE=false a nivel global, para category=memecoin
+    # se fuerza ON si force_learning_gate_for_memecoin=true.
+    force_for_category = (
+        category == "memecoin"
+        and getattr(settings, "force_learning_gate_for_memecoin", False)
+    )
+    if not settings.enable_learning_gate and not force_for_category:
         return True, "gate disabled"
 
     subset = [

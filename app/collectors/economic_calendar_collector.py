@@ -93,7 +93,7 @@ class EconomicCalendarCollector:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self.session = requests.Session()
-        self.session.headers.update({"User-Agent": "TradingAlertAI/2.3"})
+        self.session.headers.update({"User-Agent": "TradingAlertAI/2.4"})
 
     def collect(self) -> list[dict[str, Any]]:
         if not self.settings.enable_economic_calendar:

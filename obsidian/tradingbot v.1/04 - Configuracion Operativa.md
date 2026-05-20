@@ -5,7 +5,7 @@
 Agregar al `.env` normal, no solo a `.env.example`:
 
 ```env
-APP_VERSION=v2.3.0
+APP_VERSION=v2.4.0
 ENABLE_TELEGRAM_ASSISTANT=true
 TELEGRAM_ASSISTANT_MAX_UPDATES=10
 ENABLE_ADVANCED_MARKET_INTEL=true
@@ -17,7 +17,7 @@ ENABLE_SEC_FILINGS_INTEL=true
 MAX_SEC_FILINGS_PER_RUN=6
 MAX_SEC_FILINGS_PER_SYMBOL=5
 SEC_RECENT_DAYS=14
-SEC_USER_AGENT=TradingAlertAI/2.3.0 local-read-only contact@example.com
+SEC_USER_AGENT=TradingAlertAI/2.4.0 local-read-only contact@example.com
 ENABLE_OBSIDIAN_MEMORY=true
 OBSIDIAN_VAULT_PATH=obsidian/tradingbot v.1
 ENABLE_LEARNING_ENGINE=true

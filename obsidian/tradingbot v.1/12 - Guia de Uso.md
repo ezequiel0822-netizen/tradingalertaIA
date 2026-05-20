@@ -1,4 +1,4 @@
-# Guia de Uso — Trading Alert AI v2.3.0
+# Guia de Uso — Trading Alert AI v2.4.0
 
 Manual practico para arrancar el bot, configurarlo y usar todos los comandos.
 
@@ -27,7 +27,7 @@ TELEGRAM_BOT_TOKEN=tu_token_real
 TELEGRAM_CHAT_ID=tu_chat_id
 
 # Version (no tocar usualmente)
-APP_VERSION=v2.3.0
+APP_VERSION=v2.4.0
 
 # MT5 demo ICMarkets (Phase 4+)
 ENABLE_MT5_READER=true
@@ -36,6 +36,18 @@ MT5_LOGIN=tu_login_demo
 MT5_PASSWORD=tu_password
 MT5_SERVER=ICMarketsSC-Demo
 MT5_PATH=
+
+# Bot mode (Phase 4.5+): trader (default) | alerts_only | hybrid
+BOT_MODE=trader
+
+# Memecoin Hunter (Phase 4.5+)
+ENABLE_EARLY_MEMECOIN_DETECTION=true
+MAX_EARLY_POOL_AGE_HOURS=6
+ENABLE_MEMECOIN_HUNTER=true
+ENABLE_MEMECOIN_TELEGRAM=true
+FORCE_LEARNING_GATE_FOR_MEMECOIN=true
+MAX_EARLY_MEMECOIN_ALERTS_PER_24H=3
+MAX_MATURE_MEMECOIN_ALERTS_PER_24H=2
 
 # Claude API (Phase 3.5, opcional)
 ENABLE_CLAUDE_INTEGRATION=true
@@ -187,6 +199,20 @@ Todos los comandos responden solo al `TELEGRAM_CHAT_ID` autorizado.
 | `/export_csv trades` | CSV de paper trades |
 | `/export_csv horizons` | CSV de horizons |
 | `/export_csv walk_forward` | CSV de resultados walk-forward |
+
+### Phase 4.5 (v2.4.0) — Bot Mode + Memecoin Hunter
+
+| Comando | Hace |
+|---|---|
+| `/mode` | Muestra modo activo del bot (trader / alerts_only / hybrid) |
+| `/mode alerts_only` | Bot solo alerta por Telegram, NO abre paper trades nuevos (lifecycle sigue) |
+| `/mode trader` | Default. Strategy router activo, abre paper trades. |
+| `/mode hybrid` | En v2.4.0 = trader. Phase 5+ requerirá confirmación manual. |
+
+Notas Phase 4.5:
+- **Memecoin Hunter Pro** ya está activo: detecta early pools (<6h) en GeckoTerminal `/new_pools`, agrega `early_bonus` al scoring y aplica `anti_rug_multiplier` que penaliza honeypot/risky contracts.
+- **Alertas Telegram memecoin re-activadas** con caps separados (3 early/día + 2 mature/día). Learning gate FORZADO para memecoin (defensa anti-rug).
+- **CLI flag `--mode`**: `python main.py --mode alerts_only` override por sesión. Prioridad: CLI > Telegram `/mode` persistido > `BOT_MODE` en `.env` > default `trader`.
 
 ### Preguntas naturales (Phase 3.5)
 

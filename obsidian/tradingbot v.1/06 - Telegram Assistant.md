@@ -11,6 +11,7 @@ Activo desde `v1.3`; mejorado iteradamente:
 - `v2.1.0` security hardening
 - `v2.2.0` forex price-action + Claude API integration (fallback "no entendi" interpreta preguntas naturales)
 - `v2.3.0` Phase 4: `/mt5_status`, `/data_quality`, `/walk_forward`, `/export_csv`
+- `v2.4.0` Phase 4.5: `/mode` (alerts_only|trader|hybrid). Memecoin hunter mejorado + alertas Telegram re-activadas.
 
 ## Tipo
 
@@ -63,6 +64,12 @@ Cuando `ENABLE_CLAUDE_INTEGRATION=true` y `ANTHROPIC_API_KEY` esta presente:
 /data_quality
 /walk_forward STRATEGY [dias] [categoria]
 /export_csv [outcomes|trades|horizons|walk_forward]
+
+# Phase 4.5 (v2.4.0)
+/mode                  # muestra modo activo
+/mode alerts_only      # solo alertas, sin auto-trading
+/mode trader           # default, decide y abre paper trades
+/mode hybrid           # phase 5+ requerirá confirmación; hoy = trader
 
 # Pausa global
 /pausar

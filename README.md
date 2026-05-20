@@ -1,4 +1,4 @@
-# Trading Alert AI v2.3.0
+# Trading Alert AI v2.4.0
 
 Sistema local read-only para monitorear cripto, memecoins y bolsa. Observa datos publicos, guarda historial en SQLite, estima posible subida/caida, revisa riesgo, analiza patrones/noticias/filings SEC, aprende de resultados historicos por horizonte y simula setups en papel.
 

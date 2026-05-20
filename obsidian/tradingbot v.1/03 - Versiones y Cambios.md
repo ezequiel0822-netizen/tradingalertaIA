@@ -233,3 +233,30 @@ Settings: 12 nuevos. Tests: 34 nuevos. Total **197 verdes** (163 → 197).
 APP_VERSION bump a v2.3.0.
 
 Regla: sigue read-only. `order_send` autorizado para Phase 5 (cuenta demo ICMarkets).
+
+## v2.4.0
+
+Phase 4.5: Memecoin Hunter Pro + Bot Mode Toggle. Sigue read-only.
+
+**Memecoin Hunter Pro:**
+- `geckoterminal_collector.py`: nuevo método para `/new_pools` con filtro de edad (default 6h). Marca event_type `EARLY_MEMECOIN` (peso 90 en ALERT_PRIORITY).
+- `app/analyzers/memecoin_hunter.py`: scoring refinado con `early_bonus` (0-20 pts), `volume_velocity_ratio` (aceleración 5m vs 1h), `anti_rug_multiplier` (0.3-1.0 penaliza honeypot/risky/etc).
+- Integrado en `jobs.py`: `adjusted_score = int((base + early_bonus) * anti_rug_multiplier)`.
+- Holder concentration / liquidity_locked quedan None (futuro Phase 5+: collector RPC).
+
+**Memecoin Telegram re-activado:**
+- Default flip `ENABLE_MEMECOIN_TELEGRAM=true`.
+- Caps separados early vs mature: 3/2 por 24h.
+- Learning gate FORZADO para memecoin (`FORCE_LEARNING_GATE_FOR_MEMECOIN=true`).
+
+**Bot Mode Toggle:**
+- 3 modos: `trader` (default), `alerts_only` (skip strategy router, mantiene Telegram + lifecycle), `hybrid` (= trader en v2.4.0).
+- Setting `BOT_MODE` + comando Telegram `/mode` + CLI flag `--mode`.
+- Prioridad: CLI > bot_state > setting > default.
+- Dashboard muestra metric "Bot mode".
+
+Schema: sin tablas nuevas (solo `bot_state.bot_mode_active` key).
+Settings: 10 nuevos + 1 default flip. Tests: 32 nuevos. Total **229 verdes** (197 → 229).
+APP_VERSION bump a v2.4.0.
+
+Regla: sigue read-only. `order_send` recién en Phase 5.

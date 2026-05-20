@@ -413,6 +413,11 @@ else:
 st.subheader("Portfolio en vivo (Fase 2.5)")
 try:
     repo_pm = Repository(settings.sqlite_path)
+    # Phase 4.5 v2.4.0: bot mode visible
+    from app.utils.bot_mode import resolve_bot_mode
+    active_mode = resolve_bot_mode(settings, repo_pm)
+    st.metric("Bot mode", active_mode)
+
     from app.portfolio.portfolio_manager import PortfolioManager
     pm_dash = PortfolioManager(settings, repo_pm)
     open_positions = pm_dash.get_open_positions()

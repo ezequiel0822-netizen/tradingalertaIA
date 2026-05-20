@@ -72,6 +72,23 @@ def _get_optional_int(name: str) -> int | None:
         return None
 
 
+_VALID_BOT_MODES = {"trader", "alerts_only", "hybrid"}
+
+
+def _get_bot_mode() -> str:
+    """Lee BOT_MODE del env. Default trader. Si invalido, log warning y fallback."""
+    raw = (os.getenv("BOT_MODE") or "").strip().lower()
+    if not raw:
+        return "trader"
+    if raw in _VALID_BOT_MODES:
+        return raw
+    _logger.warning(
+        "BOT_MODE='%s' invalido. Usando 'trader'. Validos: %s",
+        raw, sorted(_VALID_BOT_MODES),
+    )
+    return "trader"
+
+
 @dataclass(frozen=True)
 class Settings:
     app_version: str
@@ -223,6 +240,16 @@ class Settings:
     data_quality_gap_threshold_multiplier: float
     enable_csv_export: bool
     csv_export_path: str
+    # Phase 4.5 v2.4.0 — Memecoin Hunter Pro + Bot Mode Toggle
+    enable_early_memecoin_detection: bool
+    max_early_pool_age_hours: int
+    enable_memecoin_hunter: bool
+    memecoin_hunter_min_volume_velocity_ratio: float
+    max_early_memecoin_alerts_per_24h: int
+    max_mature_memecoin_alerts_per_24h: int
+    max_early_memecoin_alerts_per_run: int
+    force_learning_gate_for_memecoin: bool
+    bot_mode: str
 
     def __repr__(self) -> str:
         parts: list[str] = []
@@ -292,7 +319,7 @@ def load_settings() -> Settings:
         obsidian_vault_path = safe_obsidian
 
     return Settings(
-        app_version=os.getenv("APP_VERSION", "v2.3.0"),
+        app_version=os.getenv("APP_VERSION", "v2.4.0"),
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
         telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID"),
         dexscreener_base_url=os.getenv(
@@ -359,7 +386,7 @@ def load_settings() -> Settings:
         sec_recent_days=_get_int("SEC_RECENT_DAYS", 14),
         sec_user_agent=os.getenv(
             "SEC_USER_AGENT",
-            "TradingAlertAI/2.3.0 local-read-only contact@example.com",
+            "TradingAlertAI/2.4.0 local-read-only contact@example.com",
         ),
         enable_obsidian_memory=_get_bool("ENABLE_OBSIDIAN_MEMORY", True),
         obsidian_vault_path=obsidian_vault_path,
@@ -464,7 +491,10 @@ def load_settings() -> Settings:
         lifecycle_reeval_every_n_cycles=_get_int(
             "LIFECYCLE_REEVAL_EVERY_N_CYCLES", 5
         ),
-        enable_memecoin_telegram=_get_bool("ENABLE_MEMECOIN_TELEGRAM", False),
+        # Phase 4.5 v2.4.0: default cambia a True (memecoin hunter + learning gate
+        # forzado defienden contra ruido). Quien quiera silencio sigue con
+        # ENABLE_MEMECOIN_TELEGRAM=false en .env.
+        enable_memecoin_telegram=_get_bool("ENABLE_MEMECOIN_TELEGRAM", True),
         enable_mt5_reader=_get_bool("ENABLE_MT5_READER", False),
         # mt5_path validado: solo paths absolutos a archivo existente (None si invalido)
         mt5_path=str(safe_optional_file(os.getenv("MT5_PATH"))) if safe_optional_file(os.getenv("MT5_PATH")) else None,
@@ -517,4 +547,26 @@ def load_settings() -> Settings:
         ),
         enable_csv_export=_get_bool("ENABLE_CSV_EXPORT", True),
         csv_export_path=os.getenv("CSV_EXPORT_PATH", "exports"),
+        # Phase 4.5 v2.4.0
+        enable_early_memecoin_detection=_get_bool(
+            "ENABLE_EARLY_MEMECOIN_DETECTION", True
+        ),
+        max_early_pool_age_hours=_get_int("MAX_EARLY_POOL_AGE_HOURS", 6),
+        enable_memecoin_hunter=_get_bool("ENABLE_MEMECOIN_HUNTER", True),
+        memecoin_hunter_min_volume_velocity_ratio=_get_float(
+            "MEMECOIN_HUNTER_MIN_VOLUME_VELOCITY_RATIO", 2.0
+        ),
+        max_early_memecoin_alerts_per_24h=_get_int(
+            "MAX_EARLY_MEMECOIN_ALERTS_PER_24H", 3
+        ),
+        max_mature_memecoin_alerts_per_24h=_get_int(
+            "MAX_MATURE_MEMECOIN_ALERTS_PER_24H", 2
+        ),
+        max_early_memecoin_alerts_per_run=_get_int(
+            "MAX_EARLY_MEMECOIN_ALERTS_PER_RUN", 1
+        ),
+        force_learning_gate_for_memecoin=_get_bool(
+            "FORCE_LEARNING_GATE_FOR_MEMECOIN", True
+        ),
+        bot_mode=_get_bot_mode(),
     )

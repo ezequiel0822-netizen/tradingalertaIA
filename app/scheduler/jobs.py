@@ -61,8 +61,15 @@ logger = logging.getLogger(__name__)
 
 
 class TradingAlertJob:
-    def __init__(self, settings: Settings) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        cli_mode_override: str | None = None,
+    ) -> None:
         self.settings = settings
+        # Phase 4.5 v2.4.0: bot_mode override desde CLI (--mode flag)
+        self.cli_mode_override = cli_mode_override
+        self._active_bot_mode: str = "trader"
         init_db(settings.sqlite_path)
         self.repository = Repository(settings.sqlite_path)
         self.dexscreener = DexScreenerCollector(settings)
@@ -116,6 +123,13 @@ class TradingAlertJob:
             time.sleep(sleep_for)
 
     def run_once(self) -> None:
+        # Phase 4.5 v2.4.0: resolver modo activo (CLI > bot_state > setting)
+        from app.utils.bot_mode import resolve_bot_mode
+        self._active_bot_mode = resolve_bot_mode(
+            self.settings, self.repository, self.cli_mode_override
+        )
+        logger.info("Bot mode active: %s", self._active_bot_mode)
+
         # Phase 3.5: reset cycle counter para throttle de Claude
         self.claude_processor.reset_cycle()
 
@@ -202,6 +216,32 @@ class TradingAlertJob:
             else:
                 security = SecuritySummary(raw_summary="unknown")
             score_result = score_token(snapshot, security, self.settings)
+
+            # Phase 4.5 v2.4.0: Memecoin Hunter enriquece score base si aplica
+            hunter_bonus = 0
+            hunter_multiplier = 1.0
+            hunter_reasons: list[str] = []
+            if (
+                snapshot.category == "memecoin"
+                and self.settings.enable_memecoin_hunter
+            ):
+                from app.analyzers.memecoin_hunter import analyze_memecoin
+                hunter = analyze_memecoin(snapshot, security, self.settings)
+                hunter_bonus = hunter.early_bonus
+                hunter_multiplier = hunter.anti_rug_multiplier
+                hunter_reasons = list(hunter.reasons)
+                # Override score base con la combinacion
+                new_score = int(
+                    max(0, min(100, (score_result.score + hunter_bonus) * hunter_multiplier))
+                )
+                # Mantenemos critical_risk + risk_level, solo ajustamos score
+                score_result = type(score_result)(
+                    score=new_score,
+                    risk_level=score_result.risk_level,
+                    reasons=score_result.reasons,
+                    critical_risk=score_result.critical_risk,
+                )
+
             estimate = estimate_move(
                 snapshot,
                 security,
@@ -230,6 +270,10 @@ class TradingAlertJob:
             if used_sec:
                 sec_analyses += 1
             events, event_reasons = self._detect_events(snapshot, previous, security)
+            # Phase 4.5 v2.4.0: si el collector marcó EARLY_MEMECOIN, lo
+            # priorizamos como alert_type (peso 90 > BOOSTED 65 > TRENDING 60).
+            if snapshot.event_type == "EARLY_MEMECOIN" and "EARLY_MEMECOIN" not in events:
+                events.insert(0, "EARLY_MEMECOIN")
             alert_type = choose_primary_alert(events)
             reasons = self._unique_reasons(
                 event_reasons
@@ -237,6 +281,7 @@ class TradingAlertJob:
                 + estimate.reasons
                 + security_reasons(security)
                 + score_result.reasons
+                + hunter_reasons
             )
 
             features_dict = {
@@ -323,6 +368,7 @@ class TradingAlertJob:
             if (
                 self.settings.enable_strategy_router
                 and snapshot.category in {"stock", "forex", "gold"}
+                and self._active_bot_mode != "alerts_only"
             ):
                 self._try_open_paper_trades(
                     snapshot, alert_record, inserted_record_ids
@@ -426,32 +472,44 @@ class TradingAlertJob:
             return 0
 
         sent_count = 0
+        # Phase 4.5 v2.4.0: memecoin se separa en early vs mature.
         # Phase 3 v2.2.0: forex/gold ahora pueden alertar segun flags.
         cats: list[str] = ["stock"]
         if self.settings.enable_memecoin_telegram:
-            cats.insert(0, "memecoin")
+            cats.insert(0, "memecoin_early")
+            cats.insert(1, "memecoin_mature")
         if self.settings.enable_forex_alerts:
             cats.append("forex")
         if self.settings.enable_gold_alerts:
             cats.append("gold")
         categories = tuple(cats)
         daily_caps = {
-            "memecoin": self.settings.memecoin_max_alerts_per_24h,
+            "memecoin_early": self.settings.max_early_memecoin_alerts_per_24h,
+            "memecoin_mature": self.settings.max_mature_memecoin_alerts_per_24h,
             "stock": self.settings.stock_max_alerts_per_24h,
             "forex": self.settings.max_forex_alerts_per_24h,
             "gold": self.settings.max_gold_alerts_per_24h,
         }
         run_caps = {
-            "memecoin": self.settings.memecoin_max_alerts_per_run,
+            "memecoin_early": self.settings.max_early_memecoin_alerts_per_run,
+            "memecoin_mature": self.settings.memecoin_max_alerts_per_run,
             "stock": self.settings.stock_max_alerts_per_run,
             "forex": self.settings.max_forex_alerts_per_run,
             "gold": self.settings.max_gold_alerts_per_run,
         }
 
+        def _bucket_of(record: AlertRecord) -> str:
+            if record.category == "memecoin":
+                return "memecoin_early" if record.alert_type == "EARLY_MEMECOIN" else "memecoin_mature"
+            return record.category
+
         ranked = sorted(candidates, key=self._alert_rank, reverse=True)
         for category in categories:
+            # sent_alert_count usa categoria real en DB; para memecoin sumamos
+            # ambos buckets ya que la DB no distingue early/mature.
+            real_db_cat = "memecoin" if category.startswith("memecoin_") else category
             sent_last_window = self.repository.sent_alert_count(
-                category,
+                real_db_cat,
                 self.settings.alert_cap_window_hours,
             )
             slots = min(
@@ -463,7 +521,7 @@ class TradingAlertJob:
                 continue
 
             category_candidates = [
-                record for record in ranked if record.category == category
+                record for record in ranked if _bucket_of(record) == category
             ][:slots]
             if not category_candidates:
                 continue

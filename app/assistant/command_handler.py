@@ -130,6 +130,12 @@ class BasicTelegramAssistant:
         if normalized in {"/strategies", "strategies", "/estrategias", "estrategias"}:
             return self.strategies_message()
 
+        # Phase 4.5 v2.4.0: bot mode toggle
+        if normalized.startswith("/mode") or normalized == "mode" or normalized.startswith("mode "):
+            parts = raw.split(" ", 1)
+            arg = parts[1].strip().lower() if len(parts) > 1 else ""
+            return self.mode_message(arg)
+
         # Phase 4 v2.3.0 commands
         if normalized in {"/mt5_status", "mt5_status", "/mt5"}:
             return self.mt5_status_message()
@@ -839,6 +845,31 @@ Ahora puedes usar /aprendizaje y /paper.
             DISCLAIMER,
         ]
         return "\n".join(lines)
+
+    # ---------- Phase 4.5 v2.4.0: bot mode ----------
+
+    def mode_message(self, arg: str) -> str:
+        from app.utils.bot_mode import VALID_MODES, normalize_mode, resolve_bot_mode
+        if not arg:
+            current = resolve_bot_mode(self.settings, self.repository)
+            return (
+                f"Modo actual: {current}\n"
+                f"Validos: {', '.join(sorted(VALID_MODES))}\n"
+                "Cambiar: /mode alerts_only | /mode trader | /mode hybrid\n"
+                "Prioridad: CLI --mode > Telegram /mode > .env BOT_MODE > default trader.\n"
+                + DISCLAIMER
+            )
+        target = normalize_mode(arg)
+        if target is None:
+            return (
+                f"Modo invalido '{arg}'. Validos: {', '.join(sorted(VALID_MODES))}."
+            )
+        self.repository.set_state("bot_mode_active", target)
+        return (
+            f"Modo cambiado a: {target}.\n"
+            f"Efecto en proximo ciclo. Revertir con /mode trader.\n"
+            + DISCLAIMER
+        )
 
     # ---------- Phase 4 v2.3.0 commands ----------
 

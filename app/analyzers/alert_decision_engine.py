@@ -5,6 +5,7 @@ from app.database.models import EstimateResult, SecuritySummary, TokenSnapshot
 ALERT_PRIORITY = {
     "POSSIBLE_HONEYPOT": 100,
     "SECURITY_RISK": 95,
+    "EARLY_MEMECOIN": 90,
     "STOCK_DROP_RISK": 88,
     "STOCK_BREAKOUT": 84,
     "PRICE_SPIKE": 80,

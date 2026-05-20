@@ -153,6 +153,15 @@ def _settings() -> Settings:
         data_quality_gap_threshold_multiplier=2.0,
         enable_csv_export=True,
         csv_export_path="exports",
+        enable_early_memecoin_detection=True,
+        max_early_pool_age_hours=6,
+        enable_memecoin_hunter=True,
+        memecoin_hunter_min_volume_velocity_ratio=2.0,
+        max_early_memecoin_alerts_per_24h=3,
+        max_mature_memecoin_alerts_per_24h=2,
+        max_early_memecoin_alerts_per_run=1,
+        force_learning_gate_for_memecoin=True,
+        bot_mode="trader",
     )
 
 

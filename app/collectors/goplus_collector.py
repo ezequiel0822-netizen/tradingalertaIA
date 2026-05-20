@@ -31,7 +31,7 @@ class GoPlusCollector:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self.session = requests.Session()
-        self.session.headers.update({"User-Agent": "TradingAlertAI/2.3"})
+        self.session.headers.update({"User-Agent": "TradingAlertAI/2.4"})
 
     def check_token(self, chain: str, token_address: str) -> SecuritySummary:
         chain_id = self.settings.goplus_chain_ids.get(chain)
