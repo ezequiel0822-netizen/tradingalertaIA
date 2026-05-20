@@ -20,6 +20,7 @@ El sistema NO debe:
 - **MT5 demo trading** queda autorizado para Fase 5. Solo cuenta demo, nunca real.
 - Esta excepcion se aplica unicamente a la cuenta MT5 demo configurada en el `.env` del usuario.
 - Real-money trading sigue prohibido sin nueva autorizacion explicita.
+- **2026-05-19**: usuario confirma cuenta demo **ICMarkets** lista. Phase 4 (validación + walk-forward + data quality + CSV) shipped en v2.3.0. **Phase 5 está autorizada para arrancar** (`order_send(action=demo)` con kill-switch + mandatory SL + 1% riesgo por trade).
 
 ## Secretos
 

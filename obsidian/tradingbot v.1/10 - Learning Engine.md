@@ -24,6 +24,9 @@ Preparar a Trading Alert AI para pensar como un sistema de trading profesional. 
 - `paper_trades`: setups simulados — desde v2.0.0 tienen strategy_name, direction, size_notional, risk_pct, partial_closed.
 - `daily_pnl_log` (v2.0.0): P&L diario, kill_switch triggers, equity inicial/final.
 - `training_runs`: bitacora de entrenamientos.
+- `walk_forward_results` (v2.3.0): ventanas train/test deslizantes con metricas sharpe/win_rate por strategy. Detecta degradacion out-of-sample.
+- `data_quality_log` (v2.3.0): check_at + gaps + stale_symbols + collector_failures.
+- `mt5_historical_cache` (v2.3.0): OHLCV cache para evitar pedirle al broker dos veces lo mismo.
 
 ## Comandos
 
@@ -36,6 +39,10 @@ Preparar a Trading Alert AI para pensar como un sistema de trading profesional. 
 /portfolio
 /posiciones
 /strategies
+/walk_forward STRATEGY [dias] [categoria]
+/data_quality
+/export_csv [tipo]
+/mt5_status
 ```
 
 ## Modulos clave
@@ -61,6 +68,18 @@ Preparar a Trading Alert AI para pensar como un sistema de trading profesional. 
 ### Strategy router (v2.0.0)
 
 `app/strategies/` con 4 estrategias nombradas + router. Cada strategy decide direction, entry, stop, targets, time horizon. El router filtra por `STRATEGY_MIN_CONFIDENCE`.
+
+### Walk-forward backtester (v2.3.0)
+
+`app/learning/walk_forward.py::WalkForwardBacktester` divide la historia de trades cerrados en ventanas deslizantes (train_days + test_days, slide_days). Calcula metricas en train (in-sample) y test (out-of-sample). Reporta `degradation_pct = (train_sharpe - test_sharpe) / |train_sharpe| * 100`.
+
+NO tunea parametros — eso queda para Phase 6 strategy evolution.
+
+Settings: `walk_forward_train_days=14`, `walk_forward_test_days=7`, `walk_forward_slide_days=1`, `walk_forward_min_train_samples=10`.
+
+### Data quality monitor (v2.3.0)
+
+`app/intelligence/data_quality.py` chequea gaps en `price_snapshots`, staleness de tokens (último snapshot vs ahora), y collector failures. Integrado en `jobs.run_once` cada `data_quality_check_every_n_cycles=10`.
 
 ### Lifecycle manager (v2.0.0)
 

@@ -26,6 +26,10 @@ Se aclaro que:
 - **Decision proximas fases**: el usuario pidio hacer Phase 3 (forex price-action) **y** Phase 3.5 (LLM integration con Claude API) **juntas**.
 - **Concepto Phase 6**: el usuario propuso "evolucion natural" — si una estrategia pierde, muere; si gana, sobrevive. Aceptado conceptualmente, con protecciones contra overfitting/curve-fitting/regime change (no all-or-nothing, sample size minimo, periodos largos).
 - v2.2.0 shipped: Phase 3 (forex price-action + macro/calendar/multi-tf + dashboard avanzado + alertas forex/gold) **y** Phase 3.5 (Claude API integration soft-fail con throttle/cache/cost-cap) ejecutadas juntas. Audit del worktree antes de empezar: 7 commits limpios, 129 archivos, 12 notas Obsidian sincronizadas. Decisiones del usuario: ForexFactory para calendario, Haiku 4.5 como modelo Claude, alertas forex/gold con learning gate forzado. 28 tests nuevos. Total 163 verdes.
+- **Bug encontrado en smoke run post-v2.2.0**: macro_collector y economic_calendar_collector estaban con tests verdes pero NO wireados en `run_once`. Fix en commit `44c552f`. Lección: tests unitarios no detectan wiring missing — agregar tests de integración smoke en próximas fases.
+- v2.3.0 shipped: Phase 4 (validación MT5 ICMarkets + walk-forward backtester out-of-sample + data quality monitor + CSV export). Cuenta demo ICMarkets confirmada lista por usuario el 2026-05-19. Decisiones del usuario: ICMarkets como broker, instalar MetaTrader5 + anthropic packages, walk-forward básico (sin parameter tuning — eso es Phase 6). 34 tests nuevos. Total 197 verdes.
+- Packages instalados en `.venv`: MetaTrader5 5.0.5735, anthropic 0.103.1. Soft-fail mantenido por si user reinstala el venv.
+- **Próximo: Phase 5** — `order_send` a demo MT5 con kill-switch + mandatory SL + 1% riesgo por trade.
 - Pivot conceptual reforzado: el "AI" del nombre ahora es real cuando se enchufa la Claude API key — el bot razona sobre noticias y entiende preguntas naturales en Telegram. Sin la key, sigue siendo bot algoritmico con feedback estadistico (soft-fail completo).
 
 ## Lecciones importantes

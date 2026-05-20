@@ -1,18 +1,23 @@
 # Ideas y Proximos Pasos
 
-## Estado actual (v2.2.0)
+## Estado actual (v2.3.0)
 
-Phase 3 + 3.5 cerrada. 163 tests verdes. El bot ya tiene:
+Phase 4 cerrada. 197 tests verdes. El bot ya tiene:
 - Strategy router con 5 estrategias (breakout + mean_reversion + momentum + news_catalyst + forex_session_breakout)
 - Portfolio manager + risk manager + position sizer
 - Lifecycle manager con MFE/MAE/trailing/time exit/partial close
-- MT5 reader read-only (soft-fail)
+- **MT5 reader extendido**: symbol_info, validate_symbol, pip_value real, historical_range. Cuenta demo ICMarkets disponible.
+- **Walk-forward backtester** out-of-sample (detecta curve-fitting). Persiste en walk_forward_results.
+- **Data quality monitor**: gaps, staleness, collector failures. Persiste en data_quality_log.
+- **CSV export** para outcomes/paper_trades/horizons/walk_forward.
+- Comandos Telegram nuevos: `/mt5_status`, `/data_quality`, `/walk_forward`, `/export_csv`.
 - Forex/oro collector con alertas Telegram activadas (caps separados)
 - Macro context completo: sesiones FX + regime (VIX/DXY/SPY) + calendario economico (ForexFactory)
 - Multi-timeframe analysis (M15 + H1) con confluence score
 - Learning engine con horizons + backtester + learned weights + learning gate
 - Claude API integration (Haiku 4.5) soft-fail para razonamiento sobre noticias + preguntas naturales en Telegram
 - Security hardening (settings repr mascarado, safe_path, log redactor, safe_json, deps pinneadas)
+- Packages `MetaTrader5 5.0.5735` y `anthropic 0.103.1` instalados.
 
 ## Roadmap pendiente
 

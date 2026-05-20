@@ -10,6 +10,7 @@ Activo desde `v1.3`; mejorado iteradamente:
 - `v2.0.0` trader engine (portfolio, halt, strategies)
 - `v2.1.0` security hardening
 - `v2.2.0` forex price-action + Claude API integration (fallback "no entendi" interpreta preguntas naturales)
+- `v2.3.0` Phase 4: `/mt5_status`, `/data_quality`, `/walk_forward`, `/export_csv`
 
 ## Tipo
 
@@ -56,6 +57,12 @@ Cuando `ENABLE_CLAUDE_INTEGRATION=true` y `ANTHROPIC_API_KEY` esta presente:
 /halt [horas]
 /resume_trading
 /strategies
+
+# Phase 4 (v2.3.0)
+/mt5_status
+/data_quality
+/walk_forward STRATEGY [dias] [categoria]
+/export_csv [outcomes|trades|horizons|walk_forward]
 
 # Pausa global
 /pausar
