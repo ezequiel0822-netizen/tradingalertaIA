@@ -12,3 +12,23 @@ Cada bloque incluye:
 - Tabla de retornos medios por horizonte y categoria (memecoin/stock).
 
 Si todavia no hay datos finales, el reporte solo dejara una nota indicando que estamos acumulando snapshots historicos.
+
+## 2026-05-20 - Reporte Semanal v2.2.0
+
+Sin datos suficientes esta semana.
+Acumulando snapshots historicos para evaluar horizontes.
+
+### Nota
+- Simulacion local. No es recomendacion financiera ni orden real.
+- El sistema no compra, no vende, no firma transacciones.
+
+
+## 2026-05-20 - Reporte Semanal v2.2.0
+
+Sin datos suficientes esta semana.
+Acumulando snapshots historicos para evaluar horizontes.
+
+### Nota
+- Simulacion local. No es recomendacion financiera ni orden real.
+- El sistema no compra, no vende, no firma transacciones.
+

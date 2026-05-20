@@ -210,6 +210,19 @@ class Settings:
     claude_calls_per_cycle_cap: int
     claude_cache_ttl_seconds: int
     claude_max_cost_per_day_usd: float
+    # Phase 4 v2.3.0 — MT5 validation + walk-forward + data quality + CSV
+    mt5_broker_profile: str
+    enable_walk_forward_backtest: bool
+    walk_forward_train_days: int
+    walk_forward_test_days: int
+    walk_forward_slide_days: int
+    walk_forward_min_train_samples: int
+    enable_data_quality_monitor: bool
+    data_quality_check_every_n_cycles: int
+    data_quality_staleness_max_minutes: int
+    data_quality_gap_threshold_multiplier: float
+    enable_csv_export: bool
+    csv_export_path: str
 
     def __repr__(self) -> str:
         parts: list[str] = []
@@ -279,7 +292,7 @@ def load_settings() -> Settings:
         obsidian_vault_path = safe_obsidian
 
     return Settings(
-        app_version=os.getenv("APP_VERSION", "v2.2.0"),
+        app_version=os.getenv("APP_VERSION", "v2.3.0"),
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
         telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID"),
         dexscreener_base_url=os.getenv(
@@ -485,4 +498,23 @@ def load_settings() -> Settings:
         claude_calls_per_cycle_cap=_get_int("CLAUDE_CALLS_PER_CYCLE_CAP", 6),
         claude_cache_ttl_seconds=_get_int("CLAUDE_CACHE_TTL_SECONDS", 3600),
         claude_max_cost_per_day_usd=_get_float("CLAUDE_MAX_COST_PER_DAY_USD", 2.0),
+        # Phase 4 v2.3.0
+        mt5_broker_profile=os.getenv("MT5_BROKER_PROFILE", "icmarkets"),
+        enable_walk_forward_backtest=_get_bool("ENABLE_WALK_FORWARD_BACKTEST", True),
+        walk_forward_train_days=_get_int("WALK_FORWARD_TRAIN_DAYS", 14),
+        walk_forward_test_days=_get_int("WALK_FORWARD_TEST_DAYS", 7),
+        walk_forward_slide_days=_get_int("WALK_FORWARD_SLIDE_DAYS", 1),
+        walk_forward_min_train_samples=_get_int("WALK_FORWARD_MIN_TRAIN_SAMPLES", 10),
+        enable_data_quality_monitor=_get_bool("ENABLE_DATA_QUALITY_MONITOR", True),
+        data_quality_check_every_n_cycles=_get_int(
+            "DATA_QUALITY_CHECK_EVERY_N_CYCLES", 10
+        ),
+        data_quality_staleness_max_minutes=_get_int(
+            "DATA_QUALITY_STALENESS_MAX_MINUTES", 15
+        ),
+        data_quality_gap_threshold_multiplier=_get_float(
+            "DATA_QUALITY_GAP_THRESHOLD_MULTIPLIER", 2.0
+        ),
+        enable_csv_export=_get_bool("ENABLE_CSV_EXPORT", True),
+        csv_export_path=os.getenv("CSV_EXPORT_PATH", "exports"),
     )

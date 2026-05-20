@@ -182,6 +182,60 @@ def _init_db_unsafe(db_path: Path) -> None:
                 FOREIGN KEY(token_id) REFERENCES tokens(id)
             );
 
+            CREATE TABLE IF NOT EXISTS mt5_historical_cache (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol TEXT NOT NULL,
+                timeframe INTEGER NOT NULL,
+                time INTEGER NOT NULL,
+                open REAL,
+                high REAL,
+                low REAL,
+                close REAL,
+                volume REAL,
+                UNIQUE(symbol, timeframe, time)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_mt5_hist_symbol_tf
+                ON mt5_historical_cache(symbol, timeframe, time);
+
+            CREATE TABLE IF NOT EXISTS walk_forward_results (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                strategy_name TEXT NOT NULL,
+                symbol TEXT,
+                category TEXT,
+                train_start TEXT NOT NULL,
+                train_end TEXT NOT NULL,
+                test_start TEXT NOT NULL,
+                test_end TEXT NOT NULL,
+                train_sharpe REAL,
+                train_win_rate REAL,
+                train_avg_return REAL,
+                test_sharpe REAL,
+                test_win_rate REAL,
+                test_avg_return REAL,
+                degradation_pct REAL,
+                train_samples INTEGER,
+                test_samples INTEGER,
+                computed_at TEXT NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_wf_strategy
+                ON walk_forward_results(strategy_name);
+            CREATE INDEX IF NOT EXISTS idx_wf_computed
+                ON walk_forward_results(computed_at);
+
+            CREATE TABLE IF NOT EXISTS data_quality_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                check_at TEXT NOT NULL,
+                gaps_detected INTEGER DEFAULT 0,
+                stale_symbols INTEGER DEFAULT 0,
+                collector_failures INTEGER DEFAULT 0,
+                summary TEXT
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_dq_check_at
+                ON data_quality_log(check_at);
+
             CREATE TABLE IF NOT EXISTS macro_snapshots (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 captured_at TEXT NOT NULL UNIQUE,

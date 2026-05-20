@@ -723,6 +723,145 @@ class Repository:
             ).fetchall()
         return [dict(row) for row in rows]
 
+    # Phase 4 v2.3.0 - MT5 historical cache
+    def upsert_mt5_cache_candle(
+        self, symbol: str, timeframe: int, candle: dict[str, Any]
+    ) -> bool:
+        with get_connection(self.db_path) as connection:
+            try:
+                connection.execute(
+                    """
+                    INSERT INTO mt5_historical_cache (
+                        symbol, timeframe, time, open, high, low, close, volume
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(symbol, timeframe, time) DO UPDATE SET
+                        open = excluded.open,
+                        high = excluded.high,
+                        low = excluded.low,
+                        close = excluded.close,
+                        volume = excluded.volume
+                    """,
+                    (
+                        symbol,
+                        timeframe,
+                        int(candle.get("time") or 0),
+                        candle.get("open"),
+                        candle.get("high"),
+                        candle.get("low"),
+                        candle.get("close"),
+                        candle.get("volume"),
+                    ),
+                )
+                return True
+            except Exception:
+                return False
+
+    def fetch_mt5_cache_window(
+        self, symbol: str, timeframe: int, start_epoch: int, end_epoch: int
+    ) -> list[dict[str, Any]]:
+        with get_connection(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT symbol, timeframe, time, open, high, low, close, volume
+                FROM mt5_historical_cache
+                WHERE symbol = ? AND timeframe = ?
+                  AND time BETWEEN ? AND ?
+                ORDER BY time ASC
+                """,
+                (symbol, timeframe, start_epoch, end_epoch),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    # Phase 4 v2.3.0 - walk-forward results
+    def insert_walk_forward_result(self, row: dict[str, Any]) -> int:
+        with get_connection(self.db_path) as connection:
+            cursor = connection.execute(
+                """
+                INSERT INTO walk_forward_results (
+                    strategy_name, symbol, category,
+                    train_start, train_end, test_start, test_end,
+                    train_sharpe, train_win_rate, train_avg_return,
+                    test_sharpe, test_win_rate, test_avg_return,
+                    degradation_pct, train_samples, test_samples, computed_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    row["strategy_name"],
+                    row.get("symbol"),
+                    row.get("category"),
+                    row["train_start"],
+                    row["train_end"],
+                    row["test_start"],
+                    row["test_end"],
+                    row.get("train_sharpe"),
+                    row.get("train_win_rate"),
+                    row.get("train_avg_return"),
+                    row.get("test_sharpe"),
+                    row.get("test_win_rate"),
+                    row.get("test_avg_return"),
+                    row.get("degradation_pct"),
+                    row.get("train_samples"),
+                    row.get("test_samples"),
+                    row.get("computed_at", utc_now_iso()),
+                ),
+            )
+            return int(cursor.lastrowid)
+
+    def fetch_walk_forward_results(
+        self,
+        strategy_name: str | None = None,
+        since_iso: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        with get_connection(self.db_path) as connection:
+            sql = "SELECT * FROM walk_forward_results WHERE 1=1"
+            params: list[Any] = []
+            if strategy_name:
+                sql += " AND strategy_name = ?"
+                params.append(strategy_name)
+            if since_iso:
+                sql += " AND computed_at >= ?"
+                params.append(since_iso)
+            sql += " ORDER BY computed_at DESC LIMIT ?"
+            params.append(limit)
+            rows = connection.execute(sql, params).fetchall()
+        return [dict(row) for row in rows]
+
+    # Phase 4 v2.3.0 - data quality log
+    def insert_data_quality_log(self, row: dict[str, Any]) -> int:
+        with get_connection(self.db_path) as connection:
+            cursor = connection.execute(
+                """
+                INSERT INTO data_quality_log (
+                    check_at, gaps_detected, stale_symbols,
+                    collector_failures, summary
+                )
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    row.get("check_at", utc_now_iso()),
+                    row.get("gaps_detected", 0),
+                    row.get("stale_symbols", 0),
+                    row.get("collector_failures", 0),
+                    row.get("summary"),
+                ),
+            )
+            return int(cursor.lastrowid)
+
+    def fetch_data_quality_log(self, limit: int = 20) -> list[dict[str, Any]]:
+        with get_connection(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM data_quality_log
+                ORDER BY check_at DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
     # Phase 3 v2.2.0 - macro snapshots
     def insert_macro_snapshot(self, snapshot: dict[str, Any]) -> bool:
         with get_connection(self.db_path) as connection:

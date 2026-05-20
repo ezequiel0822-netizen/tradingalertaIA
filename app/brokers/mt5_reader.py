@@ -10,12 +10,29 @@ Logs no incluyen password, server completo ni login.
 """
 
 import logging
+from datetime import datetime
 from typing import Any
 
 from app.config.settings import Settings
 
 
 logger = logging.getLogger(__name__)
+
+
+class MT5Timeframe:
+    """Constants de timeframes para MT5 (minutos por barra).
+
+    Estos son los mismos valores que MetaTrader5 expone como TIMEFRAME_*,
+    pero hardcoded aqui asi tests sin MT5 instalado tambien pueden usarlos.
+    """
+    M1 = 1
+    M5 = 5
+    M15 = 15
+    M30 = 30
+    H1 = 60
+    H4 = 240
+    D1 = 1440
+    W1 = 10080
 
 
 class MT5Reader:
@@ -132,4 +149,96 @@ class MT5Reader:
             "equity": float(getattr(info, "equity", 0)),
             "currency": str(getattr(info, "currency", "USD")),
             "leverage": int(getattr(info, "leverage", 1)),
+            "server": str(getattr(info, "server", "")),
+            "login": int(getattr(info, "login", 0)),
+            "name": str(getattr(info, "name", "")),
         }
+
+    # Phase 4 v2.3.0 — extensiones para validacion y position sizing real
+    def validate_symbol(self, symbol: str) -> bool:
+        """True si el broker reconoce el simbolo."""
+        if not self.is_connected():
+            return False
+        try:
+            info = self._mt5.symbol_info(symbol)  # type: ignore[union-attr]
+            return info is not None
+        except Exception:
+            return False
+
+    def symbol_info(self, symbol: str) -> dict | None:
+        """Devuelve info del simbolo: spread, point, digits, contract size,
+        volume min/step, tick value, currency_profit."""
+        if not self.is_connected():
+            return None
+        try:
+            info = self._mt5.symbol_info(symbol)  # type: ignore[union-attr]
+        except Exception:
+            return None
+        if info is None:
+            return None
+        return {
+            "name": str(getattr(info, "name", symbol)),
+            "spread": float(getattr(info, "spread", 0)),
+            "point": float(getattr(info, "point", 0)),
+            "digits": int(getattr(info, "digits", 0)),
+            "trade_contract_size": float(getattr(info, "trade_contract_size", 0)),
+            "volume_min": float(getattr(info, "volume_min", 0)),
+            "volume_step": float(getattr(info, "volume_step", 0)),
+            "tick_value": float(getattr(info, "trade_tick_value", 0)),
+            "tick_size": float(getattr(info, "trade_tick_size", 0)),
+            "currency_profit": str(getattr(info, "currency_profit", "USD")),
+        }
+
+    def compute_pip_value(
+        self, symbol: str, lot_size: float = 1.0
+    ) -> float | None:
+        """Pip value en moneda de cuenta para 1 lote del simbolo.
+
+        Aproximacion: tick_value * (point * 10 / tick_size) * lot_size.
+        Para FX majors / pares ICMarkets resulta en USD/pip realista.
+        """
+        info = self.symbol_info(symbol)
+        if not info:
+            return None
+        tick_value = info.get("tick_value") or 0
+        tick_size = info.get("tick_size") or 0
+        point = info.get("point") or 0
+        if tick_size <= 0 or point <= 0:
+            return None
+        # 1 pip = 10 points para pares 5-digit, 1 point para 3-digit (JPY)
+        digits = info.get("digits") or 0
+        pip_in_points = 10 if digits in (3, 5) else 1
+        pip_value_per_lot = tick_value * (pip_in_points * point / tick_size)
+        return round(pip_value_per_lot * lot_size, 6)
+
+    def get_historical_range(
+        self,
+        symbol: str,
+        timeframe: int,
+        start_utc: datetime,
+        end_utc: datetime,
+    ) -> list[dict] | None:
+        """Wrapper sobre mt5.copy_rates_range para fetch historico arbitrario."""
+        if not self.is_connected():
+            return None
+        try:
+            rates = self._mt5.copy_rates_range(  # type: ignore[union-attr]
+                symbol, timeframe, start_utc, end_utc
+            )
+        except Exception:
+            return None
+        if rates is None:
+            return None
+        candles: list[dict] = []
+        for r in rates:
+            candles.append(
+                {
+                    "time": int(r["time"]),
+                    "open": float(r["open"]),
+                    "high": float(r["high"]),
+                    "low": float(r["low"]),
+                    "close": float(r["close"]),
+                    "volume": float(r.get("tick_volume", 0) or 0),
+                }
+            )
+        return candles

@@ -1,5 +1,54 @@
 # Changelog
 
+## Trading Alert AI v2.3.0
+
+Phase 4: validación MT5 demo + walk-forward backtester + data quality monitor + CSV export. Sigue read-only para órdenes. Phase 5 (`order_send` a demo) ya es el siguiente paso autorizado.
+
+**MT5 extensiones (broker ICMarkets default):**
+- `app/brokers/mt5_symbol_map.py`: mapping bidireccional Yahoo↔MT5 por broker_profile (icmarkets, metaquotes). EURUSD=X → EURUSD, GC=F → XAUUSD, etc.
+- `app/brokers/mt5_reader.py`: nuevos métodos `validate_symbol`, `symbol_info` (spread, point, digits, contract_size, volume_min/step, tick_value), `compute_pip_value` (pip value en moneda de cuenta para 1 lote), `get_historical_range` (wrapper sobre copy_rates_range). Constants `MT5Timeframe.M1/M5/M15/H1/H4/D1`.
+- `app/brokers/mt5_historical.py`: `MT5HistoricalFetcher` con cache local en SQLite (`mt5_historical_cache`). Evita pedir el mismo bar dos veces al broker.
+
+**Walk-forward backtester:**
+- `app/learning/walk_forward.py`: `WalkForwardBacktester` con train/test split deslizante. NO tunea parámetros (eso queda para Phase 6).
+- Detecta degradación entre in-sample y out-of-sample: `(train_sharpe - test_sharpe) / |train_sharpe| * 100`.
+- Settings: `walk_forward_train_days=14`, `walk_forward_test_days=7`, `walk_forward_slide_days=1`, `walk_forward_min_train_samples=10`.
+- Persiste resultados en nueva tabla `walk_forward_results`.
+
+**Data quality monitor:**
+- `app/intelligence/data_quality.py`: `gap_check`, `staleness_check`, `collector_failure_check`, `run_full_check`.
+- Persiste en nueva tabla `data_quality_log`.
+- Integrado en `jobs.run_once` cada N ciclos (`data_quality_check_every_n_cycles=10`).
+
+**CSV export:**
+- `app/utils/csv_export.py`: `export_outcomes_csv`, `export_paper_trades_csv`, `export_horizons_csv`, `export_walk_forward_csv`. Path saneado con `safe_resolve_within`.
+
+**Telegram commands nuevos:**
+- `/mt5_status`: estado conexión MT5 + broker + account + symbol_info de EURUSD.
+- `/data_quality`: stale symbols + gaps + collector failures.
+- `/walk_forward STRATEGY [días] [categoría]`: corre walk-forward sobre 1 strategy.
+- `/export_csv [outcomes|trades|horizons|walk_forward]`: genera archivo en `exports/`.
+
+**Dashboard expansion:**
+- Nueva sección "Walk-Forward Performance" con resumen por strategy y top 20 ventanas.
+- Nueva sección "Data Quality" con últimos 20 checks.
+
+**Schema (v2.3.0):**
+- Tabla `mt5_historical_cache` (symbol, timeframe, time UNIQUE, ohlcv).
+- Tabla `walk_forward_results` (strategy_name, train/test windows, métricas, degradation, samples).
+- Tabla `data_quality_log` (check_at, gaps, stale, failures, summary JSON).
+
+**Settings nuevos (12):** mt5_broker_profile, walk_forward_* (5), data_quality_* (4), enable_csv_export, csv_export_path.
+
+**Packages:** `MetaTrader5 5.0.5735` y `anthropic 0.103.1` instalados en `.venv`. Soft-fail si faltan.
+
+**Tests:** 34 nuevos (mt5_symbol_map 5, mt5_reader_extensions 6, mt5_historical 3, data_quality 4, csv_export 4, walk_forward 6, telegram_phase4 6). Total **197 verdes** (163 → 197).
+
+- `APP_VERSION` bump a `v2.3.0`.
+- User-Agents en collectors bumpeados a 2.3 + SEC user agent a 2.3.0.
+
+Sigue read-only. `order_send` autorizado para Phase 5 (cuenta demo ICMarkets ya disponible).
+
 ## Trading Alert AI v2.2.0
 
 Phase 3 + 3.5: forex price-action profesional + LLM integration con Claude API. Sigue read-only para ordenes reales.

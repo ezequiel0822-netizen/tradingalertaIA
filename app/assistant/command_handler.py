@@ -130,6 +130,23 @@ class BasicTelegramAssistant:
         if normalized in {"/strategies", "strategies", "/estrategias", "estrategias"}:
             return self.strategies_message()
 
+        # Phase 4 v2.3.0 commands
+        if normalized in {"/mt5_status", "mt5_status", "/mt5"}:
+            return self.mt5_status_message()
+
+        if normalized in {"/data_quality", "data_quality", "/dq", "/calidad"}:
+            return self.data_quality_message()
+
+        if normalized.startswith("/walk_forward") or normalized.startswith("walk_forward") or normalized.startswith("/wf"):
+            parts = raw.split(" ", 1)
+            args = parts[1].strip() if len(parts) > 1 else ""
+            return self.walk_forward_message(args)
+
+        if normalized.startswith("/export_csv") or normalized.startswith("export_csv"):
+            parts = raw.split(" ", 1)
+            arg = parts[1].strip() if len(parts) > 1 else ""
+            return self.export_csv_message(arg)
+
         if "por que" in normalized or "porque" in normalized:
             return self.recent_alerts_message(limit=3)
 
@@ -822,3 +839,148 @@ Ahora puedes usar /aprendizaje y /paper.
             DISCLAIMER,
         ]
         return "\n".join(lines)
+
+    # ---------- Phase 4 v2.3.0 commands ----------
+
+    def mt5_status_message(self) -> str:
+        from app.brokers.mt5_reader import MT5Reader
+        reader = MT5Reader(self.settings)
+        if not reader.connect():
+            return (
+                "MT5 reader: NO conectado.\n"
+                "Pasos: instalar MetaTrader5 + abrir desktop + login demo + "
+                "configurar MT5_LOGIN/PASSWORD/SERVER en .env + "
+                "ENABLE_MT5_READER=true."
+            )
+        try:
+            account = reader.get_account_info() or {}
+            lines = [
+                "MT5 reader: conectado",
+                f"Broker: {account.get('server') or 'unknown'}",
+                f"Account: {account.get('login') or '?'} ({account.get('currency') or 'USD'})",
+                f"Balance: {account.get('balance', 0):.2f}",
+                f"Equity: {account.get('equity', 0):.2f}",
+                f"Leverage: 1:{account.get('leverage', 1)}",
+            ]
+            # Symbol info de EURUSD si esta disponible
+            from app.brokers.mt5_symbol_map import yahoo_to_mt5
+            primary = yahoo_to_mt5("EURUSD=X", self.settings.mt5_broker_profile) or "EURUSD"
+            info = reader.symbol_info(primary)
+            if info:
+                pip = reader.compute_pip_value(primary, lot_size=1.0)
+                lines.append(
+                    f"\nSymbol {primary}: spread {info.get('spread')}, "
+                    f"digits {info.get('digits')}, pip_value {pip}/lot"
+                )
+            return "\n".join(lines) + "\n" + DISCLAIMER
+        finally:
+            reader.disconnect()
+
+    def data_quality_message(self) -> str:
+        from app.intelligence.data_quality import run_full_check
+        try:
+            summary = run_full_check(self.repository, self.settings)
+        except Exception as exc:
+            return f"Data quality check fallo: {exc.__class__.__name__}"
+        lines = [
+            "Data quality (ultimas 24h):",
+            f"  Symbols stale: {summary.get('stale_symbols', 0)}",
+            f"  Gaps detectados: {summary.get('gaps_detected', 0)}",
+            f"  Collector failures: {summary.get('collector_failures', 0)}",
+        ]
+        stale_list = summary.get("stale_list") or []
+        if stale_list:
+            lines.append("\nSymbols viejos:")
+            for s in stale_list[:5]:
+                lines.append(
+                    f"  - {s.get('symbol')} ({s.get('age_minutes')}min)"
+                )
+        lines.append(DISCLAIMER)
+        return "\n".join(lines)
+
+    def walk_forward_message(self, args: str) -> str:
+        from app.learning.walk_forward import WalkForwardBacktester
+        from datetime import datetime, timedelta, timezone
+        parts = args.split()
+        if not parts:
+            return (
+                "Uso: /walk_forward STRATEGY [dias] [categoria]\n"
+                "Ej: /walk_forward breakout 30 stock"
+            )
+        strategy = parts[0].lower()
+        days = 30
+        category = None
+        if len(parts) > 1:
+            try:
+                days = int(parts[1])
+                days = max(7, min(days, 365))
+            except ValueError:
+                pass
+        if len(parts) > 2:
+            category = parts[2].lower()
+
+        end = datetime.now(timezone.utc)
+        start = end - timedelta(days=days)
+        wf = WalkForwardBacktester(self.repository, self.settings)
+        windows = wf.run(strategy, category, start.isoformat(), end.isoformat())
+        if not windows:
+            return (
+                f"Walk-forward {strategy} (ultimos {days}d): sin ventanas. "
+                f"Posibles causas: pocas muestras (<{self.settings.walk_forward_min_train_samples}), "
+                f"sin trades cerrados para esa strategy, o periodo muy corto."
+            )
+        wf.persist_windows(windows)
+        last = windows[-3:]
+        lines = [f"Walk-forward {strategy} (ultimos {days}d, {len(windows)} ventanas):"]
+        for w in last:
+            lines.append(
+                f"  {w.train_start[:10]} → {w.test_end[:10]}: "
+                f"train sharpe {w.train_sharpe:.2f} (wr {w.train_win_rate:.0%}, n={w.train_samples}) → "
+                f"test sharpe {w.test_sharpe:.2f} (wr {w.test_win_rate:.0%}, n={w.test_samples}) | "
+                f"degradacion {w.degradation_pct:+.1f}%"
+            )
+        lines.append(DISCLAIMER)
+        return "\n".join(lines)
+
+    def export_csv_message(self, arg: str) -> str:
+        from pathlib import Path
+        from app.utils.csv_export import (
+            export_horizons_csv,
+            export_outcomes_csv,
+            export_paper_trades_csv,
+            export_walk_forward_csv,
+        )
+        kind = (arg or "").strip().lower() or "outcomes"
+        export_root = Path(self.settings.csv_export_path)
+        if not export_root.is_absolute():
+            export_root = Path.cwd() / export_root
+        from datetime import datetime, timezone
+        ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        out_path = export_root / f"{kind}_{ts}.csv"
+        n = 0
+        if kind == "outcomes":
+            n = export_outcomes_csv(
+                self.repository, "1970-01-01", "2099-12-31",
+                out_path, root=Path.cwd(),
+            )
+        elif kind in {"trades", "paper_trades", "paper"}:
+            n = export_paper_trades_csv(
+                self.repository, status=None, path=out_path, root=Path.cwd()
+            )
+        elif kind in {"horizons", "horizon"}:
+            n = export_horizons_csv(
+                self.repository, horizon_hours=None, path=out_path, root=Path.cwd()
+            )
+        elif kind in {"walk_forward", "wf"}:
+            n = export_walk_forward_csv(
+                self.repository, strategy_name=None, path=out_path, root=Path.cwd()
+            )
+        else:
+            return (
+                "Uso: /export_csv [outcomes|trades|horizons|walk_forward]\n"
+                "Default: outcomes."
+            )
+        return (
+            f"Export OK. Tipo: {kind}, filas: {n}, archivo: {out_path}\n"
+            + DISCLAIMER
+        )

@@ -73,7 +73,7 @@ class MacroCollector:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self.session = requests.Session()
-        self.session.headers.update({"User-Agent": "TradingAlertAI/2.2"})
+        self.session.headers.update({"User-Agent": "TradingAlertAI/2.3"})
 
     def collect(self) -> dict | None:
         if not self.settings.enable_macro_collector:

@@ -196,3 +196,40 @@ Settings: 19 nuevos. Tests: 28 nuevos. Total **163 verdes** (135 → 163).
 APP_VERSION bump a v2.2.0.
 
 Regla: sigue siendo read-only. NO order_send a brokers reales ni demo MT5 (Fase 5).
+
+## v2.3.0
+
+Phase 4: validación MT5 demo + walk-forward backtester + data quality monitor + CSV export. Cuenta demo ICMarkets ya conectada. Sigue read-only para órdenes; `order_send` autorizado para Phase 5.
+
+**MT5:**
+- `mt5_symbol_map.py`: mapping Yahoo↔MT5 por broker (icmarkets default).
+- `mt5_reader.py`: validate_symbol, symbol_info, compute_pip_value, get_historical_range. Constants MT5Timeframe.M1/M5/M15/H1/H4/D1.
+- `mt5_historical.py`: fetcher con cache en SQLite (`mt5_historical_cache`).
+- Packages instalados: MetaTrader5 5.0.5735, anthropic 0.103.1.
+
+**Walk-forward backtester:**
+- `walk_forward.py`: train/test split deslizante out-of-sample. Detecta degradación entre train y test (no tunea params; eso es Phase 6).
+- Persiste en nueva tabla `walk_forward_results`.
+
+**Data quality monitor:**
+- `data_quality.py`: gap_check, staleness_check, collector_failure_check, run_full_check.
+- Integrado en `jobs.run_once` cada 10 ciclos. Persiste en nueva tabla `data_quality_log`.
+
+**CSV export:**
+- `csv_export.py`: outcomes, paper_trades, horizons, walk_forward. Path saneado con safe_resolve_within.
+
+**Telegram nuevos comandos:**
+- `/mt5_status`: estado MT5 + broker + account + symbol_info.
+- `/data_quality`: stale + gaps + failures.
+- `/walk_forward STRATEGY [días]`: corre walk-forward.
+- `/export_csv [tipo]`: genera archivo en `exports/`.
+
+**Dashboard:**
+- Sección "Walk-Forward Performance" (resumen por strategy + top 20 ventanas).
+- Sección "Data Quality" (últimos 20 checks).
+
+Schema: 3 tablas nuevas (`mt5_historical_cache`, `walk_forward_results`, `data_quality_log`).
+Settings: 12 nuevos. Tests: 34 nuevos. Total **197 verdes** (163 → 197).
+APP_VERSION bump a v2.3.0.
+
+Regla: sigue read-only. `order_send` autorizado para Phase 5 (cuenta demo ICMarkets).

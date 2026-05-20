@@ -141,6 +141,18 @@ def _settings() -> Settings:
         claude_calls_per_cycle_cap=6,
         claude_cache_ttl_seconds=3600,
         claude_max_cost_per_day_usd=2.0,
+        mt5_broker_profile="icmarkets",
+        enable_walk_forward_backtest=True,
+        walk_forward_train_days=14,
+        walk_forward_test_days=7,
+        walk_forward_slide_days=1,
+        walk_forward_min_train_samples=10,
+        enable_data_quality_monitor=True,
+        data_quality_check_every_n_cycles=10,
+        data_quality_staleness_max_minutes=15,
+        data_quality_gap_threshold_multiplier=2.0,
+        enable_csv_export=True,
+        csv_export_path="exports",
     )
 
 

@@ -36,6 +36,7 @@ from app.collectors.sec_collector import SECFilingsCollector
 from app.collectors.stock_collector import StockCollector
 from app.config.settings import Settings
 from app.intelligence.claude_processor import ClaudeProcessor
+from app.intelligence.data_quality import run_full_check as run_data_quality_check
 from app.intelligence.macro_context import current_session, full_macro_context
 from app.learning.feature_extractor import extract_features
 from app.learning.lifecycle_manager import manage_open_positions
@@ -96,6 +97,8 @@ class TradingAlertJob:
         # Phase 3 v2.2.0: macro context + economic calendar collectors
         self.macro_collector = MacroCollector(settings)
         self.calendar_collector = EconomicCalendarCollector(settings)
+        # Phase 4 v2.3.0: data quality check counter (no es por tiempo, es por ciclo)
+        self._cycle_counter = 0
 
     def run_forever(self) -> None:
         # Log solo el nombre del archivo (no path completo) para evitar filesystem leak.
@@ -381,6 +384,23 @@ class TradingAlertJob:
                 write_weekly_report_if_needed(self.settings, self.repository)
             except Exception:
                 logger.exception("Failed to write weekly Obsidian report")
+
+        # Phase 4 v2.3.0: data quality check cada N ciclos
+        self._cycle_counter += 1
+        if (
+            self.settings.enable_data_quality_monitor
+            and self._cycle_counter % max(1, self.settings.data_quality_check_every_n_cycles) == 0
+        ):
+            try:
+                dq = run_data_quality_check(self.repository, self.settings)
+                if dq.get("stale_symbols", 0) > 0 or dq.get("gaps_detected", 0) > 0:
+                    logger.warning(
+                        "Data quality: %s stale symbols, %s gaps",
+                        dq.get("stale_symbols", 0),
+                        dq.get("gaps_detected", 0),
+                    )
+            except Exception:
+                logger.exception("Data quality check failed")
 
         logger.info("Monitoring cycle complete. Telegram alerts sent: %s", sent_count)
 

@@ -525,3 +525,52 @@ try:
         st.caption("Sin alertas guardadas todavia.")
 except Exception as exc:
     st.caption(f"Analisis profundo no disponible: {exc}")
+
+st.subheader("Walk-Forward Performance (Phase 4)")
+try:
+    repo_wf = Repository(settings.sqlite_path)
+    wf_rows = repo_wf.fetch_walk_forward_results(limit=50)
+    if wf_rows:
+        df_wf = pd.DataFrame(wf_rows)
+        # Resumen por strategy
+        st.markdown("**Resumen por strategy (degradacion media train→test)**")
+        summary_wf = df_wf.groupby("strategy_name").agg(
+            ventanas=("id", "count"),
+            train_sharpe_avg=("train_sharpe", "mean"),
+            test_sharpe_avg=("test_sharpe", "mean"),
+            degradacion_avg=("degradation_pct", "mean"),
+        ).reset_index()
+        st.dataframe(summary_wf, use_container_width=True, hide_index=True)
+        # Detalle
+        st.markdown("**Ventanas recientes (top 20)**")
+        st.dataframe(
+            df_wf[[
+                "strategy_name", "category", "train_start", "test_end",
+                "train_sharpe", "test_sharpe", "degradation_pct",
+                "train_samples", "test_samples",
+            ]].head(20),
+            use_container_width=True, hide_index=True,
+        )
+    else:
+        st.caption(
+            "Sin walk-forward results todavia. Generar con /walk_forward STRATEGY "
+            "(Telegram) o con WalkForwardBacktester en Python."
+        )
+except Exception as exc:
+    st.caption(f"Walk-forward no disponible: {exc}")
+
+st.subheader("Data Quality (Phase 4)")
+try:
+    repo_dq = Repository(settings.sqlite_path)
+    dq_rows = repo_dq.fetch_data_quality_log(limit=20)
+    if dq_rows:
+        st.markdown("**Ultimos checks**")
+        df_dq = pd.DataFrame(dq_rows)
+        st.dataframe(
+            df_dq[["check_at", "gaps_detected", "stale_symbols", "collector_failures"]],
+            use_container_width=True, hide_index=True,
+        )
+    else:
+        st.caption("Sin data quality logs todavia (corre al menos N ciclos del bot).")
+except Exception as exc:
+    st.caption(f"Data quality no disponible: {exc}")
