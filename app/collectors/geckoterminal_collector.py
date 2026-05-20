@@ -1,5 +1,6 @@
 import logging
 import time
+from datetime import datetime, timezone
 from typing import Any
 
 import requests
@@ -35,17 +36,78 @@ class GeckoTerminalCollector:
         self.settings = settings
         self.rate_limiter = RateLimiter(max_calls=10, period_seconds=60)
         self.session = requests.Session()
-        self.session.headers.update({"User-Agent": "TradingAlertAI/0.1"})
+        self.session.headers.update({"User-Agent": "TradingAlertAI/2.4"})
         self.ohlcv_cooldown_until = 0.0
 
     def collect(self) -> list[TokenSnapshot]:
         snapshots: list[TokenSnapshot] = []
+        seen_keys: set[tuple[str, str]] = set()
         for chain in self.settings.chains_to_monitor:
             network = self.settings.geckoterminal_networks.get(chain)
             if not network:
                 logger.info("GeckoTerminal network not mapped for chain=%s", chain)
                 continue
-            snapshots.extend(self._collect_trending_for_network(chain, network))
+            for snap in self._collect_trending_for_network(chain, network):
+                key = (snap.chain, (snap.token_address or "").lower())
+                if key in seen_keys:
+                    continue
+                seen_keys.add(key)
+                snapshots.append(snap)
+            # Phase 4.5 v2.4.0: early detection via /new_pools (pools recien creados)
+            if self.settings.enable_early_memecoin_detection:
+                for snap in self._collect_new_pools_for_network(chain, network):
+                    key = (snap.chain, (snap.token_address or "").lower())
+                    if key in seen_keys:
+                        continue
+                    seen_keys.add(key)
+                    snapshots.append(snap)
+        return snapshots
+
+    def _collect_new_pools_for_network(
+        self, chain: str, network: str
+    ) -> list[TokenSnapshot]:
+        """Fetch pools recien creados (sorted desc por pool_created_at).
+        Filtra los que tienen edad > max_early_pool_age_hours."""
+        self.rate_limiter.wait()
+        url = f"{self.settings.geckoterminal_base_url}/networks/{network}/new_pools"
+        params = {"include": "base_token,quote_token,dex"}
+        try:
+            response = self.session.get(
+                url, params=params, timeout=self.settings.request_timeout_seconds
+            )
+            response.raise_for_status()
+            from app.utils.safe_http import safe_json
+            payload = safe_json(response, default={})
+        except requests.RequestException as exc:
+            logger.warning("GeckoTerminal new_pools failed for %s: %s", network, exc)
+            return []
+
+        if not payload:
+            return []
+
+        max_age = self.settings.max_early_pool_age_hours
+        now = datetime.now(timezone.utc)
+        included = self._included_index(payload.get("included") or [])
+        snapshots: list[TokenSnapshot] = []
+        for pool in payload.get("data") or []:
+            snapshot = self._pool_to_snapshot(chain, pool, included)
+            if not snapshot:
+                continue
+            # Filtro de edad — solo pools jovenes
+            if snapshot.pool_created_at:
+                try:
+                    created_dt = datetime.fromisoformat(
+                        snapshot.pool_created_at.replace("Z", "+00:00")
+                    )
+                    age_hours = (now - created_dt).total_seconds() / 3600
+                    if age_hours > max_age:
+                        continue
+                except (ValueError, AttributeError):
+                    pass
+            # Marca como EARLY_MEMECOIN para que strategy router/caps lo identifiquen
+            snapshot.event_type = "EARLY_MEMECOIN"
+            snapshot.is_new = True
+            snapshots.append(snapshot)
         return snapshots
 
     def _collect_trending_for_network(
@@ -98,7 +160,8 @@ class GeckoTerminalCollector:
                 timeout=self.settings.request_timeout_seconds,
             )
             response.raise_for_status()
-            return response.json()
+            from app.utils.safe_http import safe_json
+            return safe_json(response, default=None)
         except requests.HTTPError as exc:
             status_code = exc.response.status_code if exc.response is not None else None
             if status_code == 429:

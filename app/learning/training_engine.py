@@ -18,6 +18,8 @@ class LearningRunResult:
     lessons_updated: int
     paper_trades_created: int
     summary: str
+    horizons_created: int = 0
+    horizons_updated: int = 0
 
 
 def run_learning_cycle(settings: Settings, repository: Repository) -> LearningRunResult:
@@ -31,6 +33,16 @@ def run_learning_cycle(settings: Settings, repository: Repository) -> LearningRu
         if outcome and repository.upsert_signal_outcome(outcome):
             outcomes_created += 1
 
+    horizons_created = 0
+    horizons_updated = 0
+    if settings.enable_horizon_evaluator:
+        # Import local para evitar ciclo: horizon_evaluator importa _outcome_label de este modulo.
+        from app.learning.horizon_evaluator import evaluate_horizons
+
+        horizon_counts = evaluate_horizons(settings, repository)
+        horizons_created = horizon_counts.get("horizons_created", 0)
+        horizons_updated = horizon_counts.get("horizons_updated", 0)
+
     lessons = _build_lessons(repository.fetch_signal_outcomes(limit=2000))
     for lesson in lessons:
         repository.upsert_strategy_lesson(lesson)
@@ -38,11 +50,12 @@ def run_learning_cycle(settings: Settings, repository: Repository) -> LearningRu
     paper_trades_created = 0
     if settings.enable_paper_trading:
         paper_trades_created += _create_paper_trades(settings, repository, alerts)
-        _update_paper_trades(repository)
+        _update_paper_trades(repository, settings)
 
     summary = (
         f"Evaluadas {len(alerts)} señales; outcomes nuevos {outcomes_created}; "
-        f"lecciones {len(lessons)}; paper trades nuevos {paper_trades_created}."
+        f"lecciones {len(lessons)}; paper trades nuevos {paper_trades_created}; "
+        f"horizontes nuevos {horizons_created} (refrescados {horizons_updated})."
     )
     repository.insert_training_run(
         {
@@ -61,6 +74,8 @@ def run_learning_cycle(settings: Settings, repository: Repository) -> LearningRu
         lessons_updated=len(lessons),
         paper_trades_created=paper_trades_created,
         summary=summary,
+        horizons_created=horizons_created,
+        horizons_updated=horizons_updated,
     )
 
 
@@ -228,13 +243,19 @@ def _create_paper_trades(
             "opened_at": now,
             "updated_at": now,
             "closed_at": None,
+            "mfe_pct": 0,
+            "mae_pct": 0,
+            "original_stop_loss": readiness.stop_loss,
+            "trailing_active": 0,
         }
         if repository.create_paper_trade(trade):
             created += 1
     return created
 
 
-def _update_paper_trades(repository: Repository) -> None:
+def _update_paper_trades(
+    repository: Repository, settings: Settings | None = None
+) -> None:
     for trade in repository.fetch_paper_trades(status="open", limit=200):
         token = repository.get_token(str(trade.get("chain")), str(trade.get("token_address")))
         latest = _to_float((token or {}).get("latest_price"))
@@ -242,26 +263,53 @@ def _update_paper_trades(repository: Repository) -> None:
         if latest is None or entry is None or entry <= 0:
             continue
         return_pct = ((latest - entry) / entry) * 100
+
+        prior_mfe = _to_float(trade.get("mfe_pct")) or 0.0
+        prior_mae = _to_float(trade.get("mae_pct")) or 0.0
+        new_mfe = max(prior_mfe, return_pct)
+        new_mae = min(prior_mae, return_pct)
+
+        updates: dict[str, Any] = {
+            "latest_price": latest,
+            "unrealized_return_pct": round(return_pct, 4),
+            "mfe_pct": round(new_mfe, 4),
+            "mae_pct": round(new_mae, 4),
+            "updated_at": utc_now_iso(),
+        }
+
+        stop = _to_float(trade.get("stop_loss"))
+
+        if settings is not None and settings.enable_trailing_stop:
+            category = str(trade.get("category") or "memecoin")
+            if category == "stock":
+                activation = settings.trailing_activation_pct_stock
+                distance = settings.trailing_distance_pct_stock
+            else:
+                activation = settings.trailing_activation_pct_memecoin
+                distance = settings.trailing_distance_pct_memecoin
+            trailing_active = int(trade.get("trailing_active") or 0)
+            if not trailing_active and return_pct >= activation:
+                trailing_active = 1
+                updates["trailing_active"] = 1
+            if trailing_active:
+                new_stop = latest * (1 - distance / 100)
+                if stop is None or new_stop > stop:
+                    stop = new_stop
+                    updates["stop_loss"] = round(new_stop, 8)
+
+        target_2 = _to_float(trade.get("take_profit_2"))
         status = "open"
         closed_at = None
-        stop = _to_float(trade.get("stop_loss"))
-        target_2 = _to_float(trade.get("take_profit_2"))
         if stop is not None and latest <= stop:
             status = "stopped_simulated"
             closed_at = utc_now_iso()
         elif target_2 is not None and latest >= target_2:
             status = "target_2_simulated"
             closed_at = utc_now_iso()
-        repository.update_paper_trade(
-            int(trade["id"]),
-            {
-                "latest_price": latest,
-                "status": status,
-                "unrealized_return_pct": round(return_pct, 4),
-                "updated_at": utc_now_iso(),
-                "closed_at": closed_at,
-            },
-        )
+        updates["status"] = status
+        updates["closed_at"] = closed_at
+
+        repository.update_paper_trade(int(trade["id"]), updates)
 
 
 def _snapshot_from_alert(alert: dict[str, Any]) -> TokenSnapshot:

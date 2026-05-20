@@ -51,7 +51,7 @@ class DexScreenerCollector:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self.session = requests.Session()
-        self.session.headers.update({"User-Agent": "TradingAlertAI/0.1"})
+        self.session.headers.update({"User-Agent": "TradingAlertAI/2.4"})
 
     def collect(self) -> list[TokenSnapshot]:
         seeds: list[dict[str, Any]] = []
@@ -61,10 +61,11 @@ class DexScreenerCollector:
         return self._enrich_seeds(seeds)
 
     def _get_json(self, path: str) -> Any:
+        from app.utils.safe_http import safe_json
         url = f"{self.settings.dexscreener_base_url}{path}"
         response = self.session.get(url, timeout=self.settings.request_timeout_seconds)
         response.raise_for_status()
-        return response.json()
+        return safe_json(response, default=None)
 
     def _collect_profiles(self) -> list[dict[str, Any]]:
         try:

@@ -8,16 +8,29 @@ from app.collectors.sec_collector import SECFilingsCollector
 from app.collectors.stock_collector import StockCollector
 from app.database.models import SecuritySummary, TokenSnapshot
 from app.database.repository import Repository
+from app.learning.backtester import (
+    BacktestResult,
+    backtest_strategy,
+    rank_top_strategies,
+)
+from app.learning.horizon_evaluator import HORIZONS
 from app.learning.training_engine import run_learning_cycle
+from app.utils.time_utils import parse_iso_datetime, utc_now
 
 
 DISCLAIMER = "No es recomendacion financiera. Revisar manualmente."
 
 
 class BasicTelegramAssistant:
-    def __init__(self, settings: Settings, repository: Repository) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        repository: Repository,
+        claude_processor=None,
+    ) -> None:
         self.settings = settings
         self.repository = repository
+        self.claude_processor = claude_processor
 
     def handle(self, text: str) -> str:
         raw = text.strip()
@@ -90,8 +103,94 @@ class BasicTelegramAssistant:
             query = raw.split(" ", 1)[1]
             return self.pro_message(query)
 
+        if normalized.startswith("/horizontes") or normalized.startswith("horizontes") or normalized.startswith("/horizons"):
+            parts = raw.split(" ", 1)
+            query = parts[1] if len(parts) > 1 else ""
+            return self.horizons_message(query)
+
+        if normalized.startswith("/backtest") or normalized.startswith("backtest") or normalized.startswith("/bt"):
+            parts = raw.split(" ", 1)
+            args = parts[1] if len(parts) > 1 else ""
+            return self.backtest_message(args)
+
+        if normalized in {"/portfolio", "portfolio", "/portafolio", "portafolio"}:
+            return self.portfolio_message()
+
+        if normalized in {"/posiciones", "posiciones", "/positions", "positions"}:
+            return self.positions_message()
+
+        if normalized.startswith("/halt") or normalized.startswith("halt") or normalized.startswith("/parar"):
+            parts = raw.split(" ", 1)
+            arg = parts[1].strip() if len(parts) > 1 else ""
+            return self.halt_message(arg)
+
+        if normalized in {"/resume_trading", "resume_trading", "/reanudar_trading", "reanudar trading"}:
+            return self.resume_trading_message()
+
+        if normalized in {"/strategies", "strategies", "/estrategias", "estrategias"}:
+            return self.strategies_message()
+
+        # Phase 4.5 v2.4.0: bot mode toggle
+        if normalized.startswith("/mode") or normalized == "mode" or normalized.startswith("mode "):
+            parts = raw.split(" ", 1)
+            arg = parts[1].strip().lower() if len(parts) > 1 else ""
+            return self.mode_message(arg)
+
+        # Phase 4 v2.3.0 commands
+        if normalized in {"/mt5_status", "mt5_status", "/mt5"}:
+            return self.mt5_status_message()
+
+        if normalized in {"/data_quality", "data_quality", "/dq", "/calidad"}:
+            return self.data_quality_message()
+
+        if normalized.startswith("/walk_forward") or normalized.startswith("walk_forward") or normalized.startswith("/wf"):
+            parts = raw.split(" ", 1)
+            args = parts[1].strip() if len(parts) > 1 else ""
+            return self.walk_forward_message(args)
+
+        if normalized.startswith("/export_csv") or normalized.startswith("export_csv"):
+            parts = raw.split(" ", 1)
+            arg = parts[1].strip() if len(parts) > 1 else ""
+            return self.export_csv_message(arg)
+
         if "por que" in normalized or "porque" in normalized:
             return self.recent_alerts_message(limit=3)
+
+        # Phase 3.5 v2.2.0: fallback usando Claude si disponible
+        if self.claude_processor is not None and self.claude_processor.is_available():
+            available = [
+                "/help", "/status", "/cupos", "/top", "/alertas", "/descartes",
+                "/aprendizaje", "/paper", "/portfolio", "/posiciones",
+                "/strategies", "/horizontes SIMBOLO", "/backtest [Nh] [features]",
+                "/analiza SIMBOLO", "/noticias SIMBOLO", "/filings SIMBOLO",
+                "/patron SIMBOLO", "/pro SIMBOLO", "/halt [horas]", "/resume_trading",
+            ]
+            try:
+                claude_response = self.claude_processor.interpret_free_text(raw, available)
+            except Exception:
+                claude_response = None
+            if claude_response:
+                stripped = claude_response.strip()
+                # Si Claude devolvio un comando slash valido, ejecutarlo recursivamente
+                if stripped.startswith("/"):
+                    parts = stripped.split(" ", 1)
+                    cmd = parts[0].lower()
+                    known_prefixes = {
+                        "/help", "/status", "/cupos", "/top", "/top_memecoins",
+                        "/top_stocks", "/alertas", "/ultimas_alertas", "/descartes",
+                        "/aprendizaje", "/paper", "/paper_trades", "/entrenar",
+                        "/config", "/pausar", "/reanudar", "/analiza", "/noticias",
+                        "/filings", "/patron", "/pro", "/horizontes", "/horizons",
+                        "/backtest", "/portfolio", "/portafolio", "/posiciones",
+                        "/positions", "/halt", "/parar", "/resume_trading",
+                        "/strategies", "/estrategias",
+                    }
+                    if cmd in known_prefixes:
+                        # Re-ejecutar como comando real (recursion controlada por longitud)
+                        if len(stripped) < 200:
+                            return self.handle(stripped)
+                # Texto libre: devolverlo directo
+                return stripped + "\n\n🤖 Respuesta generada con IA."
 
         return (
             "No entendi ese mensaje. Prueba con /help, /status, /top, "
@@ -117,6 +216,13 @@ Comandos:
 /filings SIMBOLO - filings SEC recientes para acciones
 /patron SIMBOLO - patron tecnico basico para acciones
 /pro SIMBOLO - lectura profesional: grafico, noticias, filings, riesgos
+/horizontes SIMBOLO - retornos por horizonte (1h/6h/24h/7d) y MFE/MAE
+/backtest [Nh] [filtros] - top reglas o test de una combinacion (ej: /backtest 24h ia_pro,score:80-90)
+/portfolio - posiciones abiertas, exposicion, riesgo total, P&L diario
+/posiciones - detalle de paper trades abiertos
+/halt [horas] - activa kill-switch (default usa setting cooldown)
+/resume_trading - libera kill-switch del trader engine
+/strategies - estrategias habilitadas y senales recientes
 /pausar - pausa alertas automaticas
 /reanudar - reactiva alertas automaticas
 /config - ver configuracion sin secretos
@@ -494,3 +600,418 @@ Ahora puedes usar /aprendizaje y /paper.
             return float(value)
         except (TypeError, ValueError):
             return None
+
+    def horizons_message(self, query: str) -> str:
+        symbol_or_addr = query.strip()
+        if not symbol_or_addr:
+            return "Dime un simbolo o address. Ejemplo: /horizontes NVDA"
+
+        token = self.repository.find_token(symbol_or_addr)
+        if not token:
+            return f"No encontre datos guardados para: {symbol_or_addr}."
+
+        chain = str(token.get("chain") or "")
+        token_address = str(token.get("token_address") or "")
+        alert = self.repository.latest_alert_for_token(chain, token_address)
+        if not alert:
+            return (
+                f"No encontre alertas guardadas para {symbol_or_addr}. "
+                "Espera a que el monitor genere alguna."
+            )
+
+        horizons = self.repository.fetch_alert_outcome_horizons(
+            alert_id=int(alert["id"]),
+            limit=len(HORIZONS) + 2,
+        )
+        horizons_by_h = {int(row["horizon_hours"]): row for row in horizons}
+
+        symbol = alert.get("symbol") or token.get("symbol") or "unknown"
+        lines = [f"Horizontes para {symbol} (alert #{alert['id']}):"]
+        created_at = parse_iso_datetime(str(alert.get("created_at") or ""))
+
+        for horizon in HORIZONS:
+            row = horizons_by_h.get(horizon)
+            label = self._horizon_label(horizon)
+            if row and row.get("status") == "final":
+                lines.append(
+                    f"{label}: return {self._fmt_pct(row.get('return_pct'))} | "
+                    f"MFE {self._fmt_pct(row.get('mfe_pct'))} | "
+                    f"MAE {self._fmt_pct(row.get('mae_pct'))} | "
+                    f"snapshots {row.get('snapshots_used')} | {row.get('outcome_label')}"
+                )
+            elif row and row.get("status") == "pending":
+                lines.append(
+                    f"{label}: pendiente (datos insuficientes, snapshots {row.get('snapshots_used')})"
+                )
+            elif created_at is not None:
+                remaining_hours = max(
+                    horizon - (utc_now() - created_at).total_seconds() / 3600,
+                    0,
+                )
+                lines.append(
+                    f"{label}: pendiente (faltan {remaining_hours:.1f}h para evaluar)"
+                )
+            else:
+                lines.append(f"{label}: sin datos")
+
+        lines.append(DISCLAIMER)
+        return "\n".join(lines)
+
+    def backtest_message(self, args: str) -> str:
+        horizon, filters = self._parse_backtest_args(args)
+        if filters:
+            result = backtest_strategy(
+                self.repository,
+                filter_features=filters,
+                horizon_hours=horizon,
+            )
+            return self._format_single_backtest(result)
+        top = rank_top_strategies(
+            self.repository,
+            horizon_hours=horizon,
+            min_samples=self.settings.backtest_min_samples,
+        )
+        if not top:
+            return (
+                f"Aun no hay outcomes finales suficientes para horizonte {horizon}h. "
+                f"Necesitas {self.settings.backtest_min_samples}+ casos por regla."
+            )
+        lines = [f"Top reglas (horizonte {horizon}h, ultimos 30 dias):"]
+        for index, row in enumerate(top, start=1):
+            lines.append(self._format_backtest_row(index, row))
+        lines.append(DISCLAIMER)
+        return "\n".join(lines)
+
+    def _parse_backtest_args(self, args: str) -> tuple[int, list[str]]:
+        horizon = self.settings.backtest_default_horizon_hours
+        filters: list[str] = []
+        for piece in args.split():
+            stripped = piece.strip().lower()
+            if not stripped:
+                continue
+            if stripped.endswith("h") and stripped[:-1].isdigit():
+                horizon = int(stripped[:-1])
+                continue
+            if stripped.isdigit():
+                horizon = int(stripped)
+                continue
+            filters.extend(part for part in stripped.split(",") if part)
+        if horizon not in HORIZONS:
+            horizon = self.settings.backtest_default_horizon_hours
+        return horizon, filters
+
+    def _format_single_backtest(self, result: BacktestResult) -> str:
+        if result.sample_count == 0:
+            return (
+                f"Sin casos para regla '{result.rule_label}' "
+                f"(horizonte {result.horizon_hours}h)."
+            )
+        win_rate = self._fmt_pct(result.win_rate * 100)
+        return (
+            f"Backtest {result.rule_label} (horizonte {result.horizon_hours}h)\n"
+            f"Casos: {result.sample_count}\n"
+            f"Win rate: {win_rate}\n"
+            f"Avg return: {self._fmt_pct(result.avg_return_pct)}\n"
+            f"Median: {self._fmt_pct(result.median_return_pct)}\n"
+            f"MFE prom: {self._fmt_pct(result.avg_mfe_pct)} | "
+            f"MAE prom: {self._fmt_pct(result.avg_mae_pct)}\n"
+            f"Drawdown peor: {self._fmt_pct(result.max_drawdown_pct)}\n"
+            f"Sharpe aprox: {result.sharpe_approx}\n"
+            f"{DISCLAIMER}"
+        )
+
+    def _format_backtest_row(self, index: int, row: BacktestResult) -> str:
+        win_rate = self._fmt_pct(row.win_rate * 100)
+        return (
+            f"{index}. {row.rule_label} | n={row.sample_count} | "
+            f"win {win_rate} | avg {self._fmt_pct(row.avg_return_pct)} | "
+            f"MFE {self._fmt_pct(row.avg_mfe_pct)} | "
+            f"MAE {self._fmt_pct(row.avg_mae_pct)} | sharpe {row.sharpe_approx}"
+        )
+
+    def _horizon_label(self, hours: int) -> str:
+        labels = {1: "1h", 6: "6h", 24: "24h", 168: "7d"}
+        return labels.get(hours, f"{hours}h")
+
+    # ---------- Fase 2.5 v2.0.0 trader engine commands ----------
+
+    def portfolio_message(self) -> str:
+        from app.portfolio.portfolio_manager import PortfolioManager
+        pm = PortfolioManager(self.settings, self.repository)
+        positions = pm.get_open_positions()
+        counts = pm.count_open_by_category()
+        exposure = pm.total_exposure_by_category()
+        balance = pm.account_balance()
+        risk_pct = pm.total_risk_pct(balance)
+        daily_pnl = pm.realized_pnl_today()
+        kill_state = self.repository.get_state("kill_switch_active_until") or ""
+        kill_str = f" (kill switch hasta {kill_state})" if kill_state else ""
+        lines = [
+            f"Portfolio Trading Alert AI {self.settings.app_version}",
+            f"Balance: {balance:,.0f} USD{kill_str}",
+            f"Posiciones abiertas: {len(positions)} (limite {self.settings.max_open_trades_total})",
+        ]
+        if counts:
+            for cat, n in sorted(counts.items()):
+                exp = exposure.get(cat, 0.0)
+                lines.append(f"  {cat}: {n} abierta(s), exposicion ~{exp:,.0f} USD")
+        lines.append(f"Riesgo agregado: {risk_pct:.2f}% (max {self.settings.max_total_risk_pct:.1f}%)")
+        lines.append(f"P&L hoy: {daily_pnl:+.2f}%")
+        lines.append(DISCLAIMER)
+        return "\n".join(lines)
+
+    def positions_message(self) -> str:
+        from app.portfolio.portfolio_manager import PortfolioManager
+        pm = PortfolioManager(self.settings, self.repository)
+        positions = pm.get_open_positions()
+        if not positions:
+            return "No hay paper trades abiertos."
+        lines = [f"Posiciones abiertas ({len(positions)}):"]
+        for pos in positions[:10]:
+            sym = pos.get("symbol") or "?"
+            direction = pos.get("direction") or "long"
+            entry = pos.get("entry_price") or 0
+            latest = pos.get("latest_price") or entry
+            mfe = pos.get("mfe_pct") or 0
+            mae = pos.get("mae_pct") or 0
+            ret = pos.get("unrealized_return_pct") or 0
+            strat = pos.get("strategy_name") or "?"
+            lines.append(
+                f"{sym} ({direction}, {strat}): entry {entry:g} → {latest:g} "
+                f"| ret {ret:+.2f}% | MFE {mfe:+.2f}% | MAE {mae:+.2f}%"
+            )
+        lines.append(DISCLAIMER)
+        return "\n".join(lines)
+
+    def halt_message(self, arg: str) -> str:
+        from app.portfolio.portfolio_manager import PortfolioManager
+        from app.risk.risk_manager import RiskManager
+        try:
+            hours = int(arg) if arg else self.settings.kill_switch_cooldown_hours
+        except ValueError:
+            hours = self.settings.kill_switch_cooldown_hours
+        # Clamp a rango seguro [1, 168] (1 hora a 1 semana)
+        if hours < 1:
+            hours = 1
+        if hours > 168:
+            hours = 168
+        pm = PortfolioManager(self.settings, self.repository)
+        rm = RiskManager(self.settings, self.repository, pm)
+        rm.trigger_kill_switch(reason="manual halt via Telegram", hours=hours)
+        return (
+            f"Kill switch activado por {hours}h. No abrire nuevos trades "
+            f"hasta /resume_trading o que pase el plazo."
+        )
+
+    def resume_trading_message(self) -> str:
+        from app.portfolio.portfolio_manager import PortfolioManager
+        from app.risk.risk_manager import RiskManager
+        pm = PortfolioManager(self.settings, self.repository)
+        rm = RiskManager(self.settings, self.repository, pm)
+        rm.release_kill_switch()
+        return "Kill switch liberado. Trader engine puede volver a abrir trades."
+
+    def strategies_message(self) -> str:
+        enabled = []
+        if self.settings.enable_strategy_breakout:
+            enabled.append("breakout")
+        if self.settings.enable_strategy_mean_reversion:
+            enabled.append("mean_reversion")
+        if self.settings.enable_strategy_momentum:
+            enabled.append("momentum")
+        if self.settings.enable_strategy_news_catalyst:
+            enabled.append("news_catalyst")
+        # Contar senales por strategy en las ultimas 24h via paper_trades
+        trades = self.repository.fetch_paper_trades(limit=200)
+        from collections import Counter
+        from datetime import datetime, timedelta, timezone
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+        recent_counts: Counter[str] = Counter()
+        for t in trades:
+            opened_at_str = t.get("opened_at") or ""
+            try:
+                opened = datetime.fromisoformat(str(opened_at_str).replace("Z", "+00:00"))
+            except ValueError:
+                continue
+            if opened.tzinfo is None:
+                opened = opened.replace(tzinfo=timezone.utc)
+            if opened >= cutoff:
+                name = str(t.get("strategy_name") or "unknown")
+                recent_counts[name] += 1
+        lines = [
+            f"Strategies habilitadas: {len(enabled)}",
+            *[f"  - {name} ({recent_counts.get(name, 0)} senal(es) en 24h)" for name in enabled],
+            f"Min confidence: {self.settings.strategy_min_confidence}",
+            DISCLAIMER,
+        ]
+        return "\n".join(lines)
+
+    # ---------- Phase 4.5 v2.4.0: bot mode ----------
+
+    def mode_message(self, arg: str) -> str:
+        from app.utils.bot_mode import VALID_MODES, normalize_mode, resolve_bot_mode
+        if not arg:
+            current = resolve_bot_mode(self.settings, self.repository)
+            return (
+                f"Modo actual: {current}\n"
+                f"Validos: {', '.join(sorted(VALID_MODES))}\n"
+                "Cambiar: /mode alerts_only | /mode trader | /mode hybrid\n"
+                "Prioridad: CLI --mode > Telegram /mode > .env BOT_MODE > default trader.\n"
+                + DISCLAIMER
+            )
+        target = normalize_mode(arg)
+        if target is None:
+            return (
+                f"Modo invalido '{arg}'. Validos: {', '.join(sorted(VALID_MODES))}."
+            )
+        self.repository.set_state("bot_mode_active", target)
+        return (
+            f"Modo cambiado a: {target}.\n"
+            f"Efecto en proximo ciclo. Revertir con /mode trader.\n"
+            + DISCLAIMER
+        )
+
+    # ---------- Phase 4 v2.3.0 commands ----------
+
+    def mt5_status_message(self) -> str:
+        from app.brokers.mt5_reader import MT5Reader
+        reader = MT5Reader(self.settings)
+        if not reader.connect():
+            return (
+                "MT5 reader: NO conectado.\n"
+                "Pasos: instalar MetaTrader5 + abrir desktop + login demo + "
+                "configurar MT5_LOGIN/PASSWORD/SERVER en .env + "
+                "ENABLE_MT5_READER=true."
+            )
+        try:
+            account = reader.get_account_info() or {}
+            lines = [
+                "MT5 reader: conectado",
+                f"Broker: {account.get('server') or 'unknown'}",
+                f"Account: {account.get('login') or '?'} ({account.get('currency') or 'USD'})",
+                f"Balance: {account.get('balance', 0):.2f}",
+                f"Equity: {account.get('equity', 0):.2f}",
+                f"Leverage: 1:{account.get('leverage', 1)}",
+            ]
+            # Symbol info de EURUSD si esta disponible
+            from app.brokers.mt5_symbol_map import yahoo_to_mt5
+            primary = yahoo_to_mt5("EURUSD=X", self.settings.mt5_broker_profile) or "EURUSD"
+            info = reader.symbol_info(primary)
+            if info:
+                pip = reader.compute_pip_value(primary, lot_size=1.0)
+                lines.append(
+                    f"\nSymbol {primary}: spread {info.get('spread')}, "
+                    f"digits {info.get('digits')}, pip_value {pip}/lot"
+                )
+            return "\n".join(lines) + "\n" + DISCLAIMER
+        finally:
+            reader.disconnect()
+
+    def data_quality_message(self) -> str:
+        from app.intelligence.data_quality import run_full_check
+        try:
+            summary = run_full_check(self.repository, self.settings)
+        except Exception as exc:
+            return f"Data quality check fallo: {exc.__class__.__name__}"
+        lines = [
+            "Data quality (ultimas 24h):",
+            f"  Symbols stale: {summary.get('stale_symbols', 0)}",
+            f"  Gaps detectados: {summary.get('gaps_detected', 0)}",
+            f"  Collector failures: {summary.get('collector_failures', 0)}",
+        ]
+        stale_list = summary.get("stale_list") or []
+        if stale_list:
+            lines.append("\nSymbols viejos:")
+            for s in stale_list[:5]:
+                lines.append(
+                    f"  - {s.get('symbol')} ({s.get('age_minutes')}min)"
+                )
+        lines.append(DISCLAIMER)
+        return "\n".join(lines)
+
+    def walk_forward_message(self, args: str) -> str:
+        from app.learning.walk_forward import WalkForwardBacktester
+        from datetime import datetime, timedelta, timezone
+        parts = args.split()
+        if not parts:
+            return (
+                "Uso: /walk_forward STRATEGY [dias] [categoria]\n"
+                "Ej: /walk_forward breakout 30 stock"
+            )
+        strategy = parts[0].lower()
+        days = 30
+        category = None
+        if len(parts) > 1:
+            try:
+                days = int(parts[1])
+                days = max(7, min(days, 365))
+            except ValueError:
+                pass
+        if len(parts) > 2:
+            category = parts[2].lower()
+
+        end = datetime.now(timezone.utc)
+        start = end - timedelta(days=days)
+        wf = WalkForwardBacktester(self.repository, self.settings)
+        windows = wf.run(strategy, category, start.isoformat(), end.isoformat())
+        if not windows:
+            return (
+                f"Walk-forward {strategy} (ultimos {days}d): sin ventanas. "
+                f"Posibles causas: pocas muestras (<{self.settings.walk_forward_min_train_samples}), "
+                f"sin trades cerrados para esa strategy, o periodo muy corto."
+            )
+        wf.persist_windows(windows)
+        last = windows[-3:]
+        lines = [f"Walk-forward {strategy} (ultimos {days}d, {len(windows)} ventanas):"]
+        for w in last:
+            lines.append(
+                f"  {w.train_start[:10]} → {w.test_end[:10]}: "
+                f"train sharpe {w.train_sharpe:.2f} (wr {w.train_win_rate:.0%}, n={w.train_samples}) → "
+                f"test sharpe {w.test_sharpe:.2f} (wr {w.test_win_rate:.0%}, n={w.test_samples}) | "
+                f"degradacion {w.degradation_pct:+.1f}%"
+            )
+        lines.append(DISCLAIMER)
+        return "\n".join(lines)
+
+    def export_csv_message(self, arg: str) -> str:
+        from pathlib import Path
+        from app.utils.csv_export import (
+            export_horizons_csv,
+            export_outcomes_csv,
+            export_paper_trades_csv,
+            export_walk_forward_csv,
+        )
+        kind = (arg or "").strip().lower() or "outcomes"
+        export_root = Path(self.settings.csv_export_path)
+        if not export_root.is_absolute():
+            export_root = Path.cwd() / export_root
+        from datetime import datetime, timezone
+        ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        out_path = export_root / f"{kind}_{ts}.csv"
+        n = 0
+        if kind == "outcomes":
+            n = export_outcomes_csv(
+                self.repository, "1970-01-01", "2099-12-31",
+                out_path, root=Path.cwd(),
+            )
+        elif kind in {"trades", "paper_trades", "paper"}:
+            n = export_paper_trades_csv(
+                self.repository, status=None, path=out_path, root=Path.cwd()
+            )
+        elif kind in {"horizons", "horizon"}:
+            n = export_horizons_csv(
+                self.repository, horizon_hours=None, path=out_path, root=Path.cwd()
+            )
+        elif kind in {"walk_forward", "wf"}:
+            n = export_walk_forward_csv(
+                self.repository, strategy_name=None, path=out_path, root=Path.cwd()
+            )
+        else:
+            return (
+                "Uso: /export_csv [outcomes|trades|horizons|walk_forward]\n"
+                "Default: outcomes."
+            )
+        return (
+            f"Export OK. Tipo: {kind}, filas: {n}, archivo: {out_path}\n"
+            + DISCLAIMER
+        )

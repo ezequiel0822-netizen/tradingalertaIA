@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+from app.analyzers.technical_patterns import atr_pct_from_candles
 from app.config.settings import Settings
 from app.database.models import EstimateResult, TokenSnapshot
 
@@ -25,6 +26,7 @@ def build_trade_readiness(
     risk_level: str,
     settings: Settings,
     reasons: list[str] | None = None,
+    candles: list[dict[str, float]] | None = None,
 ) -> TradeReadiness:
     price = snapshot.price
     confidence = estimate.confidence
@@ -54,8 +56,19 @@ def build_trade_readiness(
     readiness = max(0, min(100, readiness))
     grade = _grade(readiness)
     entry_zone = _entry_zone(price, snapshot.category)
-    stop_loss = _stop_loss(price, estimate, snapshot.category)
-    take_profit_1, take_profit_2 = _targets(price, estimate, snapshot.category)
+
+    atr_pct = None
+    if settings.enable_atr_based_sltp and candles:
+        atr_pct = atr_pct_from_candles(candles)
+
+    if atr_pct is not None and atr_pct > 0:
+        stop_loss = _stop_loss_atr(price, atr_pct, snapshot.category, settings)
+        take_profit_1, take_profit_2 = _targets_atr(
+            price, atr_pct, snapshot.category, settings
+        )
+    else:
+        stop_loss = _stop_loss(price, estimate, snapshot.category)
+        take_profit_1, take_profit_2 = _targets(price, estimate, snapshot.category)
     invalidation = _invalidation(snapshot, risk_level, stop_loss)
     thesis = (
         f"{snapshot.symbol}: setup {grade}, score {score}/100, "
@@ -118,6 +131,29 @@ def _stop_loss(price: float, estimate: EstimateResult, category: str) -> float:
     else:
         loss_pct = min(max(estimate.estimated_loss_pct, 20), 70)
     return round(price * (1 - loss_pct / 100), 10)
+
+
+def _stop_loss_atr(price: float, atr_pct: float, category: str, settings: Settings) -> float:
+    raw = atr_pct * settings.atr_stop_multiplier
+    if category == "stock":
+        loss_pct = min(max(raw, 3), 12)
+    else:
+        loss_pct = min(max(raw, 20), 70)
+    return round(price * (1 - loss_pct / 100), 10)
+
+
+def _targets_atr(
+    price: float, atr_pct: float, category: str, settings: Settings
+) -> tuple[float, float]:
+    tp1_raw = atr_pct * settings.atr_tp1_multiplier
+    tp2_raw = atr_pct * settings.atr_tp2_multiplier
+    if category == "stock":
+        first = min(max(tp1_raw, 2), 12)
+        second = min(max(tp2_raw, 4), 30)
+    else:
+        first = min(max(tp1_raw, 30), 300)
+        second = min(max(tp2_raw, 80), 1000)
+    return round(price * (1 + first / 100), 10), round(price * (1 + second / 100), 10)
 
 
 def _targets(

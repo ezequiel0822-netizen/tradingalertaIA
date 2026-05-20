@@ -5,6 +5,7 @@ from app.database.models import EstimateResult, SecuritySummary, TokenSnapshot
 ALERT_PRIORITY = {
     "POSSIBLE_HONEYPOT": 100,
     "SECURITY_RISK": 95,
+    "EARLY_MEMECOIN": 90,
     "STOCK_DROP_RISK": 88,
     "STOCK_BREAKOUT": 84,
     "PRICE_SPIKE": 80,
@@ -39,6 +40,21 @@ def should_send_alert(
     settings: Settings,
     category: str = "memecoin",
 ) -> bool:
+    # Phase 3 v2.2.0: forex/gold ahora pueden alertar, controlado por settings.
+    if category == "forex" and not settings.enable_forex_alerts:
+        return False
+    if category == "gold" and not settings.enable_gold_alerts:
+        return False
+    # Para forex/gold: solo permite si learning_gate ya pasó (delega al router caller).
+    # El strategy_router + learning_gate ya filtran ANTES de should_send.
+    # Aqui solo damos green light si la category esta habilitada.
+    if category in {"forex", "gold"}:
+        return True
+    # Memecoins quedan como lab de aprendizaje desde Fase 2.5: alimentan
+    # strategy_lessons y outcomes por horizonte pero NO van a Telegram salvo
+    # que el usuario active explicitamente el flag.
+    if category == "memecoin" and not settings.enable_memecoin_telegram:
+        return False
     if category == "stock":
         return estimate.eligible_for_gain_alert
     if estimate.eligible_for_gain_alert:
@@ -53,7 +69,7 @@ def should_send_alert(
 
 
 def candidate_for_security_check(snapshot: TokenSnapshot, settings: Settings) -> bool:
-    if snapshot.category == "stock":
+    if snapshot.category in {"stock", "forex", "gold"}:
         return False
     if snapshot.event_type in {"BOOSTED_TOKEN", "TRENDING_POOL", "NEW_TOKEN"}:
         return True

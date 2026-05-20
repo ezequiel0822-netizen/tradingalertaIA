@@ -136,9 +136,10 @@ class Repository:
                     score, risk_level, reasons, security_summary, price,
                     liquidity_usd, volume_5m, volume_1h, source,
                     estimated_gain_pct, estimated_loss_pct, estimate_confidence,
-                    estimate_summary, app_version, created_at, sent_to_telegram
+                    estimate_summary, app_version, created_at, sent_to_telegram,
+                    strategy_name
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     record.token_id,
@@ -164,6 +165,7 @@ class Repository:
                     record.app_version,
                     utc_now_iso(),
                     1 if record.sent_to_telegram else 0,
+                    getattr(record, "strategy_name", None),
                 ),
             )
             return int(cursor.lastrowid)
@@ -524,9 +526,13 @@ class Repository:
                     alert_id, token_id, category, chain, token_address, symbol,
                     thesis, readiness_grade, entry_price, latest_price, stop_loss,
                     take_profit_1, take_profit_2, invalidation, status,
-                    unrealized_return_pct, opened_at, updated_at, closed_at
+                    unrealized_return_pct, opened_at, updated_at, closed_at,
+                    mfe_pct, mae_pct, original_stop_loss, trailing_active,
+                    strategy_name, direction, time_horizon_hours,
+                    size_notional, size_units, risk_pct, partial_closed,
+                    account_balance_at_open
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     trade["alert_id"],
@@ -548,6 +554,18 @@ class Repository:
                     trade["opened_at"],
                     trade["updated_at"],
                     trade.get("closed_at"),
+                    trade.get("mfe_pct", 0),
+                    trade.get("mae_pct", 0),
+                    trade.get("original_stop_loss", trade["stop_loss"]),
+                    trade.get("trailing_active", 0),
+                    trade.get("strategy_name"),
+                    trade.get("direction", "long"),
+                    trade.get("time_horizon_hours"),
+                    trade.get("size_notional"),
+                    trade.get("size_units"),
+                    trade.get("risk_pct"),
+                    trade.get("partial_closed", 0),
+                    trade.get("account_balance_at_open"),
                 ),
             )
         return True
@@ -588,6 +606,17 @@ class Repository:
             "unrealized_return_pct",
             "updated_at",
             "closed_at",
+            "mfe_pct",
+            "mae_pct",
+            "stop_loss",
+            "trailing_active",
+            "partial_closed",
+            "size_notional",
+            "size_units",
+            "strategy_name",
+            "direction",
+            "time_horizon_hours",
+            "risk_pct",
         }
         fields = [key for key in updates if key in allowed]
         if not fields:
@@ -600,6 +629,359 @@ class Repository:
                 f"UPDATE paper_trades SET {assignments} WHERE id = ?",
                 values,
             )
+
+    def count_open_trades_by_category(self) -> dict[str, int]:
+        with get_connection(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT category, COUNT(*) AS count
+                FROM paper_trades
+                WHERE status = 'open'
+                GROUP BY category
+                """
+            ).fetchall()
+        return {str(row["category"] or "unknown"): int(row["count"]) for row in rows}
+
+    def fetch_open_positions_full(self) -> list[dict[str, Any]]:
+        with get_connection(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT *
+                FROM paper_trades
+                WHERE status = 'open'
+                ORDER BY opened_at DESC
+                """
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def fetch_closed_trades_since(self, since_iso: str) -> list[dict[str, Any]]:
+        with get_connection(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT *
+                FROM paper_trades
+                WHERE status != 'open' AND closed_at >= ?
+                ORDER BY closed_at DESC
+                """,
+                (since_iso,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def upsert_daily_pnl_row(self, row: dict[str, Any]) -> None:
+        with get_connection(self.db_path) as connection:
+            connection.execute(
+                """
+                INSERT INTO daily_pnl_log (
+                    date, realized_pnl_pct, realized_pnl_usd, trades_closed,
+                    trades_opened, kill_switch_triggered, kill_switch_reason,
+                    starting_equity, ending_equity, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(date) DO UPDATE SET
+                    realized_pnl_pct = excluded.realized_pnl_pct,
+                    realized_pnl_usd = excluded.realized_pnl_usd,
+                    trades_closed = excluded.trades_closed,
+                    trades_opened = excluded.trades_opened,
+                    kill_switch_triggered = excluded.kill_switch_triggered,
+                    kill_switch_reason = excluded.kill_switch_reason,
+                    starting_equity = excluded.starting_equity,
+                    ending_equity = excluded.ending_equity,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    row["date"],
+                    row.get("realized_pnl_pct", 0),
+                    row.get("realized_pnl_usd", 0),
+                    row.get("trades_closed", 0),
+                    row.get("trades_opened", 0),
+                    row.get("kill_switch_triggered", 0),
+                    row.get("kill_switch_reason"),
+                    row.get("starting_equity"),
+                    row.get("ending_equity"),
+                    row.get("updated_at", utc_now_iso()),
+                ),
+            )
+
+    def get_daily_pnl_row(self, date_str: str) -> dict[str, Any] | None:
+        with get_connection(self.db_path) as connection:
+            row = connection.execute(
+                "SELECT * FROM daily_pnl_log WHERE date = ?",
+                (date_str,),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def fetch_daily_pnl_log(self, days: int = 14) -> list[dict[str, Any]]:
+        with get_connection(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT *
+                FROM daily_pnl_log
+                ORDER BY date DESC
+                LIMIT ?
+                """,
+                (days,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    # Phase 4 v2.3.0 - MT5 historical cache
+    def upsert_mt5_cache_candle(
+        self, symbol: str, timeframe: int, candle: dict[str, Any]
+    ) -> bool:
+        with get_connection(self.db_path) as connection:
+            try:
+                connection.execute(
+                    """
+                    INSERT INTO mt5_historical_cache (
+                        symbol, timeframe, time, open, high, low, close, volume
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(symbol, timeframe, time) DO UPDATE SET
+                        open = excluded.open,
+                        high = excluded.high,
+                        low = excluded.low,
+                        close = excluded.close,
+                        volume = excluded.volume
+                    """,
+                    (
+                        symbol,
+                        timeframe,
+                        int(candle.get("time") or 0),
+                        candle.get("open"),
+                        candle.get("high"),
+                        candle.get("low"),
+                        candle.get("close"),
+                        candle.get("volume"),
+                    ),
+                )
+                return True
+            except Exception:
+                return False
+
+    def fetch_mt5_cache_window(
+        self, symbol: str, timeframe: int, start_epoch: int, end_epoch: int
+    ) -> list[dict[str, Any]]:
+        with get_connection(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT symbol, timeframe, time, open, high, low, close, volume
+                FROM mt5_historical_cache
+                WHERE symbol = ? AND timeframe = ?
+                  AND time BETWEEN ? AND ?
+                ORDER BY time ASC
+                """,
+                (symbol, timeframe, start_epoch, end_epoch),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    # Phase 4 v2.3.0 - walk-forward results
+    def insert_walk_forward_result(self, row: dict[str, Any]) -> int:
+        with get_connection(self.db_path) as connection:
+            cursor = connection.execute(
+                """
+                INSERT INTO walk_forward_results (
+                    strategy_name, symbol, category,
+                    train_start, train_end, test_start, test_end,
+                    train_sharpe, train_win_rate, train_avg_return,
+                    test_sharpe, test_win_rate, test_avg_return,
+                    degradation_pct, train_samples, test_samples, computed_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    row["strategy_name"],
+                    row.get("symbol"),
+                    row.get("category"),
+                    row["train_start"],
+                    row["train_end"],
+                    row["test_start"],
+                    row["test_end"],
+                    row.get("train_sharpe"),
+                    row.get("train_win_rate"),
+                    row.get("train_avg_return"),
+                    row.get("test_sharpe"),
+                    row.get("test_win_rate"),
+                    row.get("test_avg_return"),
+                    row.get("degradation_pct"),
+                    row.get("train_samples"),
+                    row.get("test_samples"),
+                    row.get("computed_at", utc_now_iso()),
+                ),
+            )
+            return int(cursor.lastrowid)
+
+    def fetch_walk_forward_results(
+        self,
+        strategy_name: str | None = None,
+        since_iso: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        with get_connection(self.db_path) as connection:
+            sql = "SELECT * FROM walk_forward_results WHERE 1=1"
+            params: list[Any] = []
+            if strategy_name:
+                sql += " AND strategy_name = ?"
+                params.append(strategy_name)
+            if since_iso:
+                sql += " AND computed_at >= ?"
+                params.append(since_iso)
+            sql += " ORDER BY computed_at DESC LIMIT ?"
+            params.append(limit)
+            rows = connection.execute(sql, params).fetchall()
+        return [dict(row) for row in rows]
+
+    # Phase 4 v2.3.0 - data quality log
+    def insert_data_quality_log(self, row: dict[str, Any]) -> int:
+        with get_connection(self.db_path) as connection:
+            cursor = connection.execute(
+                """
+                INSERT INTO data_quality_log (
+                    check_at, gaps_detected, stale_symbols,
+                    collector_failures, summary
+                )
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    row.get("check_at", utc_now_iso()),
+                    row.get("gaps_detected", 0),
+                    row.get("stale_symbols", 0),
+                    row.get("collector_failures", 0),
+                    row.get("summary"),
+                ),
+            )
+            return int(cursor.lastrowid)
+
+    def fetch_data_quality_log(self, limit: int = 20) -> list[dict[str, Any]]:
+        with get_connection(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM data_quality_log
+                ORDER BY check_at DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    # Phase 3 v2.2.0 - macro snapshots
+    def insert_macro_snapshot(self, snapshot: dict[str, Any]) -> bool:
+        with get_connection(self.db_path) as connection:
+            try:
+                connection.execute(
+                    """
+                    INSERT INTO macro_snapshots (
+                        captured_at, vix_value, dxy_value, spy_value, regime
+                    )
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        snapshot["captured_at"],
+                        snapshot.get("vix_value"),
+                        snapshot.get("dxy_value"),
+                        snapshot.get("spy_value"),
+                        snapshot.get("regime"),
+                    ),
+                )
+                return True
+            except Exception:
+                return False
+
+    def fetch_latest_macro_snapshot(self) -> dict[str, Any] | None:
+        with get_connection(self.db_path) as connection:
+            row = connection.execute(
+                """
+                SELECT * FROM macro_snapshots
+                ORDER BY captured_at DESC
+                LIMIT 1
+                """
+            ).fetchone()
+        return dict(row) if row else None
+
+    # Phase 3 v2.2.0 - economic events
+    def upsert_economic_event(self, event: dict[str, Any]) -> bool:
+        with get_connection(self.db_path) as connection:
+            try:
+                connection.execute(
+                    """
+                    INSERT INTO economic_events (
+                        event_time, country, impact, title, captured_at
+                    )
+                    VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT(event_time, country, title) DO UPDATE SET
+                        impact = excluded.impact,
+                        captured_at = excluded.captured_at
+                    """,
+                    (
+                        event["event_time"],
+                        event["country"],
+                        event.get("impact"),
+                        event.get("title"),
+                        event.get("captured_at", utc_now_iso()),
+                    ),
+                )
+                return True
+            except Exception:
+                return False
+
+    def fetch_economic_events_window(
+        self, start_iso: str, end_iso: str, countries: list[str] | None = None,
+        impact: str | None = None,
+    ) -> list[dict[str, Any]]:
+        with get_connection(self.db_path) as connection:
+            sql = "SELECT * FROM economic_events WHERE event_time BETWEEN ? AND ?"
+            params: list[Any] = [start_iso, end_iso]
+            if impact:
+                sql += " AND impact = ?"
+                params.append(impact)
+            if countries:
+                placeholders = ",".join(["?"] * len(countries))
+                sql += f" AND country IN ({placeholders})"
+                params.extend(countries)
+            sql += " ORDER BY event_time ASC"
+            rows = connection.execute(sql, params).fetchall()
+        return [dict(row) for row in rows]
+
+    # Phase 3 v2.2.0 - dashboard heatmap queries
+    def fetch_heatmap_horizon_hour(
+        self, category: str | None = None
+    ) -> list[dict[str, Any]]:
+        with get_connection(self.db_path) as connection:
+            sql = """
+                SELECT
+                    aoh.horizon_hours AS horizon_hours,
+                    strftime('%H', a.created_at) AS hour_of_day,
+                    AVG(aoh.return_pct) AS avg_return,
+                    COUNT(*) AS n
+                FROM alert_outcome_horizons aoh
+                JOIN alerts a ON a.id = aoh.alert_id
+                WHERE aoh.status = 'final'
+            """
+            params: list[Any] = []
+            if category:
+                sql += " AND a.category = ?"
+                params.append(category)
+            sql += " GROUP BY aoh.horizon_hours, hour_of_day"
+            rows = connection.execute(sql, params).fetchall()
+        return [dict(row) for row in rows]
+
+    def fetch_alert_full_detail(self, alert_id: int) -> dict[str, Any] | None:
+        with get_connection(self.db_path) as connection:
+            alert_row = connection.execute(
+                "SELECT * FROM alerts WHERE id = ?", (alert_id,)
+            ).fetchone()
+            if not alert_row:
+                return None
+            paper_row = connection.execute(
+                "SELECT * FROM paper_trades WHERE alert_id = ?", (alert_id,)
+            ).fetchone()
+            horizon_rows = connection.execute(
+                "SELECT * FROM alert_outcome_horizons WHERE alert_id = ?",
+                (alert_id,),
+            ).fetchall()
+        return {
+            "alert": dict(alert_row),
+            "paper_trade": dict(paper_row) if paper_row else None,
+            "horizons": [dict(r) for r in horizon_rows],
+        }
 
     def insert_training_run(self, run: dict[str, Any]) -> None:
         with get_connection(self.db_path) as connection:
@@ -632,5 +1014,204 @@ class Repository:
                 LIMIT ?
                 """,
                 (limit,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def latest_alert_for_token(
+        self,
+        chain: str,
+        token_address: str,
+    ) -> dict[str, Any] | None:
+        with get_connection(self.db_path) as connection:
+            row = connection.execute(
+                """
+                SELECT *
+                FROM alerts
+                WHERE chain = ? AND token_address = ?
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (chain, token_address),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def insert_price_snapshot(self, snapshot: TokenSnapshot, token_id: int) -> int:
+        with get_connection(self.db_path) as connection:
+            cursor = connection.execute(
+                """
+                INSERT INTO price_snapshots (
+                    token_id, chain, token_address, category, price,
+                    liquidity_usd, volume_5m, volume_1h, volume_24h,
+                    captured_at, source
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    token_id,
+                    snapshot.chain,
+                    snapshot.token_address,
+                    snapshot.category,
+                    snapshot.price,
+                    snapshot.liquidity_usd,
+                    snapshot.volume_5m,
+                    snapshot.volume_1h,
+                    snapshot.volume_24h,
+                    utc_now_iso(),
+                    snapshot.source,
+                ),
+            )
+            return int(cursor.lastrowid)
+
+    def fetch_snapshots_in_window(
+        self,
+        chain: str,
+        token_address: str,
+        start_iso: str,
+        end_iso: str,
+    ) -> list[dict[str, Any]]:
+        with get_connection(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT *
+                FROM price_snapshots
+                WHERE chain = ?
+                  AND token_address = ?
+                  AND captured_at >= ?
+                  AND captured_at <= ?
+                ORDER BY captured_at ASC
+                """,
+                (chain, token_address, start_iso, end_iso),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def purge_old_snapshots(self, retention_days: int) -> int:
+        cutoff = minutes_ago(retention_days * 24 * 60)
+        with get_connection(self.db_path) as connection:
+            cursor = connection.execute(
+                "DELETE FROM price_snapshots WHERE captured_at < ?",
+                (cutoff,),
+            )
+            return int(cursor.rowcount or 0)
+
+    def upsert_alert_outcome_horizon(self, row: dict[str, Any]) -> bool:
+        with get_connection(self.db_path) as connection:
+            existing = connection.execute(
+                """
+                SELECT id FROM alert_outcome_horizons
+                WHERE alert_id = ? AND horizon_hours = ?
+                """,
+                (row["alert_id"], row["horizon_hours"]),
+            ).fetchone()
+            connection.execute(
+                """
+                INSERT INTO alert_outcome_horizons (
+                    alert_id, horizon_hours, entry_price, exit_price,
+                    return_pct, mfe_pct, mae_pct, snapshots_used,
+                    outcome_label, status, evaluated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(alert_id, horizon_hours) DO UPDATE SET
+                    exit_price = excluded.exit_price,
+                    return_pct = excluded.return_pct,
+                    mfe_pct = excluded.mfe_pct,
+                    mae_pct = excluded.mae_pct,
+                    snapshots_used = excluded.snapshots_used,
+                    outcome_label = excluded.outcome_label,
+                    status = excluded.status,
+                    evaluated_at = excluded.evaluated_at
+                """,
+                (
+                    row["alert_id"],
+                    row["horizon_hours"],
+                    row["entry_price"],
+                    row.get("exit_price"),
+                    row.get("return_pct"),
+                    row.get("mfe_pct"),
+                    row.get("mae_pct"),
+                    row.get("snapshots_used", 0),
+                    row.get("outcome_label"),
+                    row.get("status"),
+                    row.get("evaluated_at") or utc_now_iso(),
+                ),
+            )
+        return existing is None
+
+    def fetch_alert_outcome_horizons(
+        self,
+        alert_id: int | None = None,
+        horizon_hours: int | None = None,
+        status: str | None = None,
+        limit: int = 1000,
+    ) -> list[dict[str, Any]]:
+        clauses: list[str] = []
+        params: list[Any] = []
+        if alert_id is not None:
+            clauses.append("alert_id = ?")
+            params.append(alert_id)
+        if horizon_hours is not None:
+            clauses.append("horizon_hours = ?")
+            params.append(horizon_hours)
+        if status is not None:
+            clauses.append("status = ?")
+            params.append(status)
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        params.append(limit)
+        with get_connection(self.db_path) as connection:
+            rows = connection.execute(
+                f"""
+                SELECT *
+                FROM alert_outcome_horizons
+                {where}
+                ORDER BY evaluated_at DESC
+                LIMIT ?
+                """,
+                params,
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def fetch_horizons_by_features(
+        self,
+        horizon_hours: int,
+        since_iso: str,
+        limit: int = 2000,
+    ) -> list[dict[str, Any]]:
+        with get_connection(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    h.id AS horizon_id,
+                    h.alert_id,
+                    h.horizon_hours,
+                    h.entry_price,
+                    h.exit_price,
+                    h.return_pct,
+                    h.mfe_pct,
+                    h.mae_pct,
+                    h.outcome_label,
+                    h.status,
+                    h.evaluated_at,
+                    alerts.id AS alert_real_id,
+                    alerts.alert_type,
+                    alerts.category,
+                    alerts.chain,
+                    alerts.token_address,
+                    alerts.symbol,
+                    alerts.score,
+                    alerts.risk_level,
+                    alerts.reasons,
+                    alerts.security_summary,
+                    alerts.estimated_gain_pct,
+                    alerts.estimate_confidence,
+                    alerts.estimate_summary,
+                    alerts.created_at
+                FROM alert_outcome_horizons AS h
+                JOIN alerts ON alerts.id = h.alert_id
+                WHERE h.horizon_hours = ?
+                  AND h.status = 'final'
+                  AND alerts.created_at >= ?
+                ORDER BY alerts.created_at DESC
+                LIMIT ?
+                """,
+                (horizon_hours, since_iso, limit),
             ).fetchall()
         return [dict(row) for row in rows]

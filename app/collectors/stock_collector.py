@@ -21,7 +21,7 @@ class StockCollector:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self.session = requests.Session()
-        self.session.headers.update({"User-Agent": "TradingAlertAI/1.2"})
+        self.session.headers.update({"User-Agent": "TradingAlertAI/2.4"})
 
     def collect(self) -> list[TokenSnapshot]:
         if not self.settings.enable_stock_alerts:

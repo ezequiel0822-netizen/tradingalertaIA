@@ -101,3 +101,7 @@ class AlertRecord:
     estimate: EstimateResult
     intel_rank_bonus: float = 0.0
     sent_to_telegram: bool = False
+    # Phase 3 v2.2.0: nombre de la strategy que generó la alerta (si aplica)
+    strategy_name: str | None = None
+    # Phase 3.5 v2.2.0: razonamiento de Claude (opcional)
+    ai_reasoning: list[str] = field(default_factory=list)

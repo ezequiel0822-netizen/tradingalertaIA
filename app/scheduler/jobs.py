@@ -1,3 +1,4 @@
+import json
 import logging
 import time
 
@@ -10,6 +11,8 @@ from app.analyzers.alert_decision_engine import (
     security_event_types,
     should_send_alert,
 )
+from app.analyzers.learned_weights import apply_learned_weights
+from app.analyzers.learning_gate import evaluate_learning_gate
 from app.analyzers.liquidity_analyzer import detect_liquidity_spike, detect_price_spike
 from app.analyzers.move_estimator import estimate_move
 from app.analyzers.filing_analyzer import analyze_filings
@@ -20,32 +23,59 @@ from app.analyzers.technical_patterns import analyze_ohlcv, candles_from_gecko
 from app.analyzers.token_score import score_token
 from app.analyzers.volume_spike_detector import detect_volume_spike
 from app.assistant.telegram_assistant import TelegramAssistantPoller
+from app.alerts.trade_reporter import format_trade_opened
+from app.brokers.mt5_reader import MT5Reader
 from app.collectors.dexscreener_collector import DexScreenerCollector
+from app.collectors.economic_calendar_collector import EconomicCalendarCollector
+from app.collectors.forex_collector import ForexCollector
 from app.collectors.geckoterminal_collector import GeckoTerminalCollector
 from app.collectors.goplus_collector import GoPlusCollector
+from app.collectors.macro_collector import MacroCollector
 from app.collectors.news_collector import NewsCollector
 from app.collectors.sec_collector import SECFilingsCollector
 from app.collectors.stock_collector import StockCollector
 from app.config.settings import Settings
+from app.intelligence.claude_processor import ClaudeProcessor
+from app.intelligence.data_quality import run_full_check as run_data_quality_check
+from app.intelligence.macro_context import current_session, full_macro_context
+from app.learning.feature_extractor import extract_features
+from app.learning.lifecycle_manager import manage_open_positions
+from app.portfolio.portfolio_manager import PortfolioManager
+from app.risk.position_sizer import calculate_position_size
+from app.risk.risk_manager import RiskManager
+from app.strategies.base import StrategyContext
+from app.strategies.strategy_router import StrategyRouter
 from app.database.db import init_db
 from app.database.models import AlertRecord, SecuritySummary, TokenSnapshot
 from app.database.repository import Repository
 from app.learning.training_engine import run_learning_cycle
 from app.utils.dedup import should_send_deduped_alert
-from app.utils.obsidian_memory import write_daily_memory_if_needed
+from app.utils.obsidian_memory import (
+    write_daily_memory_if_needed,
+    write_weekly_report_if_needed,
+)
+from app.utils.time_utils import minutes_ago
 
 
 logger = logging.getLogger(__name__)
 
 
 class TradingAlertJob:
-    def __init__(self, settings: Settings) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        cli_mode_override: str | None = None,
+    ) -> None:
         self.settings = settings
+        # Phase 4.5 v2.4.0: bot_mode override desde CLI (--mode flag)
+        self.cli_mode_override = cli_mode_override
+        self._active_bot_mode: str = "trader"
         init_db(settings.sqlite_path)
         self.repository = Repository(settings.sqlite_path)
         self.dexscreener = DexScreenerCollector(settings)
         self.geckoterminal = GeckoTerminalCollector(settings)
         self.stocks = StockCollector(settings)
+        self.forex = ForexCollector(settings)
         self.news = NewsCollector(settings)
         self.sec = SECFilingsCollector(settings)
         self.goplus = GoPlusCollector(settings)
@@ -55,9 +85,31 @@ class TradingAlertJob:
             self.repository,
             self.notifier,
         )
+        # Fase 2.5 trader engine
+        self.mt5_reader = MT5Reader(settings)
+        if settings.enable_mt5_reader:
+            try:
+                self.mt5_reader.connect()
+            except Exception:
+                logger.exception("MT5 connect failed; continuing without")
+        self.portfolio_manager = PortfolioManager(
+            settings, self.repository, self.mt5_reader
+        )
+        self.risk_manager = RiskManager(
+            settings, self.repository, self.portfolio_manager
+        )
+        self.strategy_router = StrategyRouter(settings)
+        # Phase 3.5 v2.2.0: Claude processor (soft-fail si key no presente)
+        self.claude_processor = ClaudeProcessor(settings, self.repository)
+        # Phase 3 v2.2.0: macro context + economic calendar collectors
+        self.macro_collector = MacroCollector(settings)
+        self.calendar_collector = EconomicCalendarCollector(settings)
+        # Phase 4 v2.3.0: data quality check counter (no es por tiempo, es por ciclo)
+        self._cycle_counter = 0
 
     def run_forever(self) -> None:
-        logger.info("Trading Alert AI started. Database: %s", self.settings.sqlite_path)
+        # Log solo el nombre del archivo (no path completo) para evitar filesystem leak.
+        logger.info("Trading Alert AI started. Database: %s", self.settings.sqlite_path.name)
         while True:
             started = time.monotonic()
             try:
@@ -71,15 +123,71 @@ class TradingAlertJob:
             time.sleep(sleep_for)
 
     def run_once(self) -> None:
+        # Phase 4.5 v2.4.0: resolver modo activo (CLI > bot_state > setting)
+        from app.utils.bot_mode import resolve_bot_mode
+        self._active_bot_mode = resolve_bot_mode(
+            self.settings, self.repository, self.cli_mode_override
+        )
+        logger.info("Bot mode active: %s", self._active_bot_mode)
+
+        # Phase 3.5: reset cycle counter para throttle de Claude
+        self.claude_processor.reset_cycle()
+
         handled = self.assistant.process_updates()
         if handled:
             logger.info("Telegram assistant handled %s message(s)", handled)
+
+        # Phase 3 v2.2.0: macro context refresh (gateado por interval)
+        try:
+            if self.macro_collector.should_run(self.repository):
+                macro_snapshot = self.macro_collector.collect()
+                if macro_snapshot:
+                    self.repository.insert_macro_snapshot(macro_snapshot)
+                    self.repository.set_state(
+                        "macro_last_capture_iso", macro_snapshot["captured_at"]
+                    )
+                    logger.info(
+                        "Macro snapshot: VIX=%s DXY=%s regime=%s",
+                        macro_snapshot.get("vix_value"),
+                        macro_snapshot.get("dxy_value"),
+                        macro_snapshot.get("regime"),
+                    )
+        except Exception:
+            logger.exception("Macro collector failed")
+
+        # Phase 3 v2.2.0: economic calendar refresh (gateado por interval)
+        try:
+            if self.calendar_collector.should_run(self.repository):
+                events = self.calendar_collector.collect()
+                created = 0
+                for ev in events:
+                    if self.repository.upsert_economic_event(ev):
+                        created += 1
+                self.repository.set_state(
+                    "calendar_last_refresh_iso",
+                    minutes_ago(0),
+                )
+                logger.info("Economic calendar refreshed: %s events", created)
+        except Exception:
+            logger.exception("Economic calendar fetch failed")
+
+        # Fase 2.5: gestionar posiciones abiertas ANTES de buscar nuevas
+        if self.settings.enable_paper_trading:
+            try:
+                lifecycle_summary = manage_open_positions(
+                    self.settings, self.repository, self.mt5_reader
+                )
+                if lifecycle_summary.get("managed", 0):
+                    logger.info("Lifecycle: %s", lifecycle_summary)
+            except Exception:
+                logger.exception("Lifecycle management failed")
 
         snapshots = self._limit_snapshots(self._collect_snapshots())
         logger.info("Collected %s market snapshots", len(snapshots))
 
         records: list[AlertRecord] = []
         send_candidates: list[AlertRecord] = []
+        inserted_record_ids: set[int] = set()
         security_checks = 0
         chart_analyses = 0
         sec_analyses = 0
@@ -108,6 +216,32 @@ class TradingAlertJob:
             else:
                 security = SecuritySummary(raw_summary="unknown")
             score_result = score_token(snapshot, security, self.settings)
+
+            # Phase 4.5 v2.4.0: Memecoin Hunter enriquece score base si aplica
+            hunter_bonus = 0
+            hunter_multiplier = 1.0
+            hunter_reasons: list[str] = []
+            if (
+                snapshot.category == "memecoin"
+                and self.settings.enable_memecoin_hunter
+            ):
+                from app.analyzers.memecoin_hunter import analyze_memecoin
+                hunter = analyze_memecoin(snapshot, security, self.settings)
+                hunter_bonus = hunter.early_bonus
+                hunter_multiplier = hunter.anti_rug_multiplier
+                hunter_reasons = list(hunter.reasons)
+                # Override score base con la combinacion
+                new_score = int(
+                    max(0, min(100, (score_result.score + hunter_bonus) * hunter_multiplier))
+                )
+                # Mantenemos critical_risk + risk_level, solo ajustamos score
+                score_result = type(score_result)(
+                    score=new_score,
+                    risk_level=score_result.risk_level,
+                    reasons=score_result.reasons,
+                    critical_risk=score_result.critical_risk,
+                )
+
             estimate = estimate_move(
                 snapshot,
                 security,
@@ -136,6 +270,10 @@ class TradingAlertJob:
             if used_sec:
                 sec_analyses += 1
             events, event_reasons = self._detect_events(snapshot, previous, security)
+            # Phase 4.5 v2.4.0: si el collector marcó EARLY_MEMECOIN, lo
+            # priorizamos como alert_type (peso 90 > BOOSTED 65 > TRENDING 60).
+            if snapshot.event_type == "EARLY_MEMECOIN" and "EARLY_MEMECOIN" not in events:
+                events.insert(0, "EARLY_MEMECOIN")
             alert_type = choose_primary_alert(events)
             reasons = self._unique_reasons(
                 event_reasons
@@ -143,25 +281,72 @@ class TradingAlertJob:
                 + estimate.reasons
                 + security_reasons(security)
                 + score_result.reasons
+                + hunter_reasons
             )
+
+            features_dict = {
+                "category": snapshot.category,
+                "alert_type": alert_type,
+                "risk_level": score_result.risk_level,
+                "reasons": json.dumps(reasons, ensure_ascii=False),
+                "estimate_summary": json.dumps(estimate.reasons, ensure_ascii=False),
+                "security_summary": security.raw_summary or "unknown",
+                "score": score_result.score,
+                "estimate_confidence": estimate.confidence,
+                "estimated_gain_pct": estimate.estimated_gain_pct,
+            }
+            features = extract_features(features_dict)
+            adjusted_score, weight_reasons = apply_learned_weights(
+                score_result.score,
+                features,
+                snapshot.category,
+                self.settings,
+                self.repository,
+            )
+            if weight_reasons:
+                reasons = self._unique_reasons(reasons + weight_reasons)
 
             token_id = self.repository.upsert_token(
                 snapshot,
-                score_result.score,
+                adjusted_score,
                 score_result.risk_level,
                 estimate,
             )
+            if self.settings.enable_price_snapshots and snapshot.price:
+                try:
+                    self.repository.insert_price_snapshot(snapshot, token_id)
+                except Exception:
+                    logger.exception("Failed to insert price snapshot")
             self.repository.save_security_check(
                 snapshot.chain, snapshot.token_address, security
             )
 
             should_send = should_send_alert(
-                score_result.score,
+                adjusted_score,
                 score_result.critical_risk,
                 estimate,
                 self.settings,
                 snapshot.category,
             )
+
+            if should_send and self.settings.enable_learning_gate:
+                gate_ok, gate_reason = evaluate_learning_gate(
+                    features,
+                    snapshot.category,
+                    self.settings,
+                    self.repository,
+                )
+                if not gate_ok:
+                    should_send = False
+                    reasons = self._unique_reasons(
+                        reasons + [f"Bloqueada por learning gate: {gate_reason}"]
+                    )
+                    logger.info(
+                        "Alert blocked by learning gate: chain=%s symbol=%s reason=%s",
+                        snapshot.chain,
+                        snapshot.symbol,
+                        gate_reason,
+                    )
 
             alert_record = AlertRecord(
                 token_id=token_id,
@@ -169,7 +354,7 @@ class TradingAlertJob:
                 snapshot=snapshot,
                 app_version=self.settings.app_version,
                 category=snapshot.category,
-                score=score_result.score,
+                score=adjusted_score,
                 risk_level=score_result.risk_level,
                 reasons=reasons,
                 security=security,
@@ -178,6 +363,16 @@ class TradingAlertJob:
                 sent_to_telegram=False,
             )
             records.append(alert_record)
+
+            # Fase 2.5: Strategy router → potencialmente abre paper trade
+            if (
+                self.settings.enable_strategy_router
+                and snapshot.category in {"stock", "forex", "gold"}
+                and self._active_bot_mode != "alerts_only"
+            ):
+                self._try_open_paper_trades(
+                    snapshot, alert_record, inserted_record_ids
+                )
 
             if should_send:
                 recent = self.repository.latest_sent_alert(
@@ -189,7 +384,7 @@ class TradingAlertJob:
                 dedup_ok, dedup_reason = should_send_deduped_alert(
                     recent,
                     alert_type,
-                    score_result.score,
+                    adjusted_score,
                     score_result.risk_level,
                     snapshot,
                     estimate.estimated_gain_pct,
@@ -201,6 +396,8 @@ class TradingAlertJob:
 
         sent_count = self._send_ranked_candidates(send_candidates)
         for record in records:
+            if id(record) in inserted_record_ids:
+                continue
             self.repository.insert_alert(record)
         write_daily_memory_if_needed(
             self.settings,
@@ -212,6 +409,45 @@ class TradingAlertJob:
             learning = run_learning_cycle(self.settings, self.repository)
             logger.info("Learning cycle complete. %s", learning.summary)
 
+        if self.settings.enable_price_snapshots:
+            last_purge = self.repository.get_state("snapshots_last_purge")
+            cutoff = minutes_ago(24 * 60)
+            if last_purge is None or last_purge < cutoff:
+                try:
+                    deleted = self.repository.purge_old_snapshots(
+                        self.settings.snapshot_retention_days
+                    )
+                    self.repository.set_state(
+                        "snapshots_last_purge",
+                        minutes_ago(0),
+                    )
+                    logger.info("Purged %s old price snapshots", deleted)
+                except Exception:
+                    logger.exception("Failed to purge old price snapshots")
+
+        if self.settings.enable_weekly_obsidian_report:
+            try:
+                write_weekly_report_if_needed(self.settings, self.repository)
+            except Exception:
+                logger.exception("Failed to write weekly Obsidian report")
+
+        # Phase 4 v2.3.0: data quality check cada N ciclos
+        self._cycle_counter += 1
+        if (
+            self.settings.enable_data_quality_monitor
+            and self._cycle_counter % max(1, self.settings.data_quality_check_every_n_cycles) == 0
+        ):
+            try:
+                dq = run_data_quality_check(self.repository, self.settings)
+                if dq.get("stale_symbols", 0) > 0 or dq.get("gaps_detected", 0) > 0:
+                    logger.warning(
+                        "Data quality: %s stale symbols, %s gaps",
+                        dq.get("stale_symbols", 0),
+                        dq.get("gaps_detected", 0),
+                    )
+            except Exception:
+                logger.exception("Data quality check failed")
+
         logger.info("Monitoring cycle complete. Telegram alerts sent: %s", sent_count)
 
     def _collect_snapshots(self) -> list[TokenSnapshot]:
@@ -220,6 +456,7 @@ class TradingAlertJob:
             ("DEX Screener", self.dexscreener),
             ("GeckoTerminal", self.geckoterminal),
             ("Stocks", self.stocks),
+            ("Forex", self.forex),
         ):
             try:
                 snapshots.extend(collector.collect())
@@ -235,20 +472,44 @@ class TradingAlertJob:
             return 0
 
         sent_count = 0
-        categories = ("memecoin", "stock")
+        # Phase 4.5 v2.4.0: memecoin se separa en early vs mature.
+        # Phase 3 v2.2.0: forex/gold ahora pueden alertar segun flags.
+        cats: list[str] = ["stock"]
+        if self.settings.enable_memecoin_telegram:
+            cats.insert(0, "memecoin_early")
+            cats.insert(1, "memecoin_mature")
+        if self.settings.enable_forex_alerts:
+            cats.append("forex")
+        if self.settings.enable_gold_alerts:
+            cats.append("gold")
+        categories = tuple(cats)
         daily_caps = {
-            "memecoin": self.settings.memecoin_max_alerts_per_24h,
+            "memecoin_early": self.settings.max_early_memecoin_alerts_per_24h,
+            "memecoin_mature": self.settings.max_mature_memecoin_alerts_per_24h,
             "stock": self.settings.stock_max_alerts_per_24h,
+            "forex": self.settings.max_forex_alerts_per_24h,
+            "gold": self.settings.max_gold_alerts_per_24h,
         }
         run_caps = {
-            "memecoin": self.settings.memecoin_max_alerts_per_run,
+            "memecoin_early": self.settings.max_early_memecoin_alerts_per_run,
+            "memecoin_mature": self.settings.memecoin_max_alerts_per_run,
             "stock": self.settings.stock_max_alerts_per_run,
+            "forex": self.settings.max_forex_alerts_per_run,
+            "gold": self.settings.max_gold_alerts_per_run,
         }
+
+        def _bucket_of(record: AlertRecord) -> str:
+            if record.category == "memecoin":
+                return "memecoin_early" if record.alert_type == "EARLY_MEMECOIN" else "memecoin_mature"
+            return record.category
 
         ranked = sorted(candidates, key=self._alert_rank, reverse=True)
         for category in categories:
+            # sent_alert_count usa categoria real en DB; para memecoin sumamos
+            # ambos buckets ya que la DB no distingue early/mature.
+            real_db_cat = "memecoin" if category.startswith("memecoin_") else category
             sent_last_window = self.repository.sent_alert_count(
-                category,
+                real_db_cat,
                 self.settings.alert_cap_window_hours,
             )
             slots = min(
@@ -260,7 +521,7 @@ class TradingAlertJob:
                 continue
 
             category_candidates = [
-                record for record in ranked if record.category == category
+                record for record in ranked if _bucket_of(record) == category
             ][:slots]
             if not category_candidates:
                 continue
@@ -378,6 +639,14 @@ class TradingAlertJob:
             reasons.extend(pro.reasons[:3])
             reasons.extend([f"Riesgo pro: {risk}" for risk in pro.risks[:2]])
 
+            # Phase 3.5 v2.2.0: Claude expand
+            try:
+                claude_text = self.claude_processor.expand_pro_analysis(pro, snapshot)
+                if claude_text:
+                    reasons.append(f"🤖 IA: {claude_text}")
+            except Exception:
+                logger.exception("Claude expand_pro_analysis failed")
+
         return reasons[:12], rank_bonus, used_chart, used_sec
 
     def _limit_snapshots(self, snapshots: list[TokenSnapshot]) -> list[TokenSnapshot]:
@@ -401,6 +670,12 @@ class TradingAlertJob:
         stocks = [
             snapshot for snapshot in unique.values() if snapshot.category == "stock"
         ]
+        # Forex y oro entran al pipeline para snapshots/horizons; no van a Telegram.
+        forex_and_gold = [
+            snapshot
+            for snapshot in unique.values()
+            if snapshot.category in {"forex", "gold"}
+        ]
         ordered_memecoins = sorted(memecoins, key=self._snapshot_priority, reverse=True)
         ordered_stocks = sorted(stocks, key=self._snapshot_priority, reverse=True)
         limit = max(self.settings.max_snapshots_per_run, 1)
@@ -410,7 +685,7 @@ class TradingAlertJob:
                 len(ordered_memecoins),
                 limit,
             )
-        return ordered_memecoins[:limit] + ordered_stocks
+        return ordered_memecoins[:limit] + ordered_stocks + forex_and_gold
 
     def _snapshot_priority(self, snapshot: TokenSnapshot) -> float:
         event_score = ALERT_PRIORITY.get(snapshot.event_type, 0)
@@ -474,3 +749,133 @@ class TradingAlertJob:
                 output.append(reason)
                 seen.add(reason)
         return output[:10] or ["Evento detectado y guardado para revisión manual."]
+
+    def _try_open_paper_trades(
+        self,
+        snapshot: TokenSnapshot,
+        alert_record: AlertRecord,
+        inserted_record_ids: set[int],
+    ) -> None:
+        """Pregunta al strategy router; abre paper trades si pasan risk + sizing."""
+        from app.utils.time_utils import utc_now_iso
+
+        candles = snapshot.raw.get("candles") if snapshot.raw else []
+        if not candles:
+            return  # sin OHLCV no podemos pattern → strategy
+        try:
+            from app.analyzers.technical_patterns import analyze_ohlcv
+            pattern = analyze_ohlcv(candles)
+        except Exception:
+            logger.exception("analyze_ohlcv failed for %s", snapshot.symbol)
+            return
+
+        ctx = StrategyContext(
+            snapshot=snapshot,
+            candles=candles,
+            pattern=pattern,
+            pro=None,  # pro analysis ya pasó al score; usar None aquí simplifica
+            news_label="no_recent_news",
+            news_score=0,
+            macro=current_session(),
+        )
+        try:
+            signals = self.strategy_router.route(ctx, self.settings)
+        except Exception:
+            logger.exception("Strategy router failed for %s", snapshot.symbol)
+            return
+
+        if not signals:
+            return
+
+        # Evitar duplicados: si ya hay un open trade para (chain, address), skip
+        existing_open = [
+            p
+            for p in self.portfolio_manager.get_open_positions()
+            if str(p.get("chain")) == snapshot.chain
+            and str(p.get("token_address")) == snapshot.token_address
+        ]
+        if existing_open:
+            return
+
+        balance = self.portfolio_manager.account_balance()
+
+        for signal in signals:
+            sizing = calculate_position_size(
+                entry=signal.entry,
+                stop=signal.stop,
+                account_balance=balance,
+                risk_pct=self.settings.risk_per_trade_pct,
+                direction=signal.direction,
+            )
+            if sizing.invalid_reason:
+                logger.info(
+                    "Signal sizing invalid: %s symbol=%s",
+                    sizing.invalid_reason,
+                    snapshot.symbol,
+                )
+                continue
+            ok, reason = self.risk_manager.check_can_open_trade(
+                snapshot.category, sizing.risk_pct_actual
+            )
+            if not ok:
+                logger.info(
+                    "Trade blocked by risk manager: %s strategy=%s symbol=%s",
+                    reason,
+                    signal.strategy_name,
+                    snapshot.symbol,
+                )
+                continue
+
+            # Insertar alert primero (necesitamos alert_id)
+            if id(alert_record) not in inserted_record_ids:
+                # Phase 3 v2.2.0: copiar strategy_name al alert_record
+                alert_record.strategy_name = signal.strategy_name
+                alert_id = self.repository.insert_alert(alert_record)
+                inserted_record_ids.add(id(alert_record))
+            else:
+                # ya insertado por una señal previa de este mismo snapshot.
+                # solo permitimos 1 trade por snapshot/alert para evitar UNIQUE constraint.
+                continue
+
+            now = utc_now_iso()
+            trade = {
+                "alert_id": int(alert_id),
+                "token_id": int(alert_record.token_id),
+                "category": snapshot.category,
+                "chain": snapshot.chain,
+                "token_address": snapshot.token_address,
+                "symbol": snapshot.symbol,
+                "thesis": f"{signal.strategy_name}: {'; '.join(signal.reasoning[:2])}",
+                "readiness_grade": "A" if signal.confidence >= 80 else "B",
+                "entry_price": signal.entry,
+                "latest_price": signal.entry,
+                "stop_loss": signal.stop,
+                "take_profit_1": signal.targets[0] if signal.targets else None,
+                "take_profit_2": signal.targets[1] if len(signal.targets) > 1 else None,
+                "invalidation": f"strategy {signal.strategy_name} signal pierde validez",
+                "status": "open",
+                "unrealized_return_pct": 0,
+                "opened_at": now,
+                "updated_at": now,
+                "closed_at": None,
+                "mfe_pct": 0,
+                "mae_pct": 0,
+                "original_stop_loss": signal.stop,
+                "trailing_active": 0,
+                "strategy_name": signal.strategy_name,
+                "direction": signal.direction,
+                "time_horizon_hours": signal.time_horizon_hours,
+                "size_notional": sizing.size_notional,
+                "size_units": sizing.size_units,
+                "risk_pct": sizing.risk_pct_actual,
+                "partial_closed": 0,
+                "account_balance_at_open": balance,
+            }
+            created = self.repository.create_paper_trade(trade)
+            if created and self.settings.enable_trade_action_reports:
+                try:
+                    msg = format_trade_opened(snapshot, signal, sizing)
+                    self.notifier.send_message(msg)
+                except Exception:
+                    logger.exception("Trade opened report failed")
+            return  # solo 1 trade por snapshot (la primera signal valida)

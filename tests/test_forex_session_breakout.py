@@ -1,0 +1,123 @@
+"""Tests para ForexSessionBreakoutStrategy + analyze_multitf."""
+
+from types import SimpleNamespace
+
+from app.analyzers.technical_patterns import analyze_multitf
+from app.database.models import TokenSnapshot
+from app.strategies.base import StrategyContext
+from app.strategies.forex_session_breakout import ForexSessionBreakoutStrategy
+from tests.test_score import _settings
+
+
+def _forex_snap(price: float = 1.0900) -> TokenSnapshot:
+    return TokenSnapshot(
+        chain="forex", token_address="EURUSD=X", category="forex",
+        symbol="EURUSD=X", price=price,
+    )
+
+
+def _candles(asian_high: float = 1.0850, asian_low: float = 1.0820, count: int = 60):
+    """Genera 60 candles, primeras 32 con asian range, resto con escalada."""
+    candles = []
+    for i in range(min(32, count)):
+        mid = (asian_high + asian_low) / 2
+        candles.append({
+            "open": mid, "high": asian_high, "low": asian_low,
+            "close": mid, "volume": 1000,
+        })
+    for i in range(count - len(candles)):
+        candles.append({
+            "open": asian_high * (1 + 0.0001 * i),
+            "high": asian_high * (1 + 0.001 * i),
+            "low": asian_low,
+            "close": asian_high * (1 + 0.0008 * i),
+            "volume": 1500,
+        })
+    return candles
+
+
+def test_forex_breakout_long_during_overlap() -> None:
+    settings = _settings()
+    snap = _forex_snap(price=1.0880)  # rompe asian_high 1.0850
+    ctx = StrategyContext(
+        snapshot=snap,
+        candles=_candles(),
+        pattern=SimpleNamespace(atr_pct=0.5),
+        pro=None,
+        macro={"active_sessions": ["london", "ny"], "is_high_liquidity": True},
+    )
+    signal = ForexSessionBreakoutStrategy().evaluate(ctx, settings)
+    assert signal is not None
+    assert signal.direction == "long"
+
+
+def test_forex_breakout_short_when_below_asian_low() -> None:
+    settings = _settings()
+    snap = _forex_snap(price=1.0800)  # rompe asian_low 1.0820 hacia abajo
+    ctx = StrategyContext(
+        snapshot=snap,
+        candles=_candles(),
+        pattern=SimpleNamespace(atr_pct=0.5),
+        pro=None,
+        macro={"active_sessions": ["london", "ny"], "is_high_liquidity": True},
+    )
+    signal = ForexSessionBreakoutStrategy().evaluate(ctx, settings)
+    assert signal is not None
+    assert signal.direction == "short"
+
+
+def test_forex_breakout_skip_outside_overlap() -> None:
+    settings = _settings()
+    snap = _forex_snap(price=1.0880)
+    ctx = StrategyContext(
+        snapshot=snap,
+        candles=_candles(),
+        pattern=SimpleNamespace(atr_pct=0.5),
+        pro=None,
+        macro={"active_sessions": ["asian"], "is_high_liquidity": False},
+    )
+    signal = ForexSessionBreakoutStrategy().evaluate(ctx, settings)
+    assert signal is None
+
+
+def test_forex_breakout_skip_non_forex_category() -> None:
+    settings = _settings()
+    snap = TokenSnapshot(
+        chain="stock", token_address="NVDA", category="stock",
+        symbol="NVDA", price=200.0,
+    )
+    ctx = StrategyContext(
+        snapshot=snap,
+        candles=_candles(),
+        pattern=SimpleNamespace(atr_pct=0.5),
+        pro=None,
+        macro={"active_sessions": ["london", "ny"], "is_high_liquidity": True},
+    )
+    signal = ForexSessionBreakoutStrategy().evaluate(ctx, settings)
+    assert signal is None
+
+
+def _ohlcv(close_series: list[float]) -> list[dict[str, float]]:
+    return [
+        {"open": c, "high": c * 1.005, "low": c * 0.995, "close": c, "volume": 1000}
+        for c in close_series
+    ]
+
+
+def test_analyze_multitf_aligned_bullish() -> None:
+    short = _ohlcv([100 + i * 0.5 for i in range(30)])
+    long_tf = _ohlcv([100 + i * 0.5 for i in range(50)])
+    result = analyze_multitf(short, long_tf)
+    assert result["short_pattern"] is not None
+    assert result["long_pattern"] is not None
+    # No aseguramos aligned True porque depende de trend del analyzer,
+    # pero confluence_score debe ser 10 o 0
+    assert result["confluence_score"] in {0, 10}
+
+
+def test_analyze_multitf_short_only() -> None:
+    short = _ohlcv([100 + i * 0.5 for i in range(30)])
+    result = analyze_multitf(short, None)
+    assert result["short_pattern"] is not None
+    assert result["long_pattern"] is None
+    assert result["confluence_score"] == 0

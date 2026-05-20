@@ -1,5 +1,13 @@
-python-dotenv
-requests
-streamlit
-pandas
-pytest
+# Versiones pinneadas (Fase 2.6 v2.1.0 hardening).
+# Cambiar deliberadamente al actualizar; previene cadenas suministro maliciosas.
+python-dotenv==1.2.2
+requests==2.34.2
+streamlit==1.57.0
+pandas==3.0.3
+pytest==9.0.3
+# Windows-only (MT5 read-only). Soft-fail si no instalado.
+# Pin generoso porque la API de MetaTrader5 es estable.
+MetaTrader5>=5.0.45,<6.0.0; sys_platform == 'win32'
+# Phase 3.5 v2.2.0 - Claude API (LLM integration). Opcional;
+# si no se instala, el bot corre en modo sin Claude (soft-fail).
+anthropic>=0.40.0,<1.0.0
