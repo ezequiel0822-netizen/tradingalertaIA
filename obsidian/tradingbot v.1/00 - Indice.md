@@ -15,6 +15,7 @@ Esta es la memoria principal del proyecto. Aqui guardamos decisiones, reglas, ve
 - [[09 - Memoria Automatica]]
 - [[10 - Learning Engine]]
 - [[11 - Reporte Semanal]]
+- [[12 - Guia de Uso]]
 
 ## Regla de oro
 
