@@ -1,6 +1,7 @@
 import json
 import logging
 import time
+from datetime import timedelta
 
 from app.alerts.alert_formatter import format_grouped_telegram_alert
 from app.alerts.telegram_notifier import TelegramNotifier
@@ -54,7 +55,7 @@ from app.utils.obsidian_memory import (
     write_daily_memory_if_needed,
     write_weekly_report_if_needed,
 )
-from app.utils.time_utils import minutes_ago
+from app.utils.time_utils import minutes_ago, utc_now
 
 
 logger = logging.getLogger(__name__)
@@ -878,4 +879,71 @@ class TradingAlertJob:
                     self.notifier.send_message(msg)
                 except Exception:
                     logger.exception("Trade opened report failed")
+            if created:
+                paper_trade = self.repository.fetch_paper_trade_by_alert_id(int(alert_id))
+                if paper_trade:
+                    self._try_prepare_demo_order(paper_trade)
             return  # solo 1 trade por snapshot (la primera signal valida)
+
+    def _try_prepare_demo_order(self, paper_trade: dict) -> None:
+        """Phase 5: create a pending MT5 demo order request, never auto-send."""
+        if not self.settings.enable_mt5_demo_trading:
+            return
+        if not self.settings.demo_order_require_confirmation:
+            logger.warning("Demo trading requires manual confirmation; skipping request")
+            return
+        if self.repository.get_state("demo_trading_halted", "false") == "true":
+            return
+        if str(paper_trade.get("category") or "").lower() not in {"forex", "gold"}:
+            return
+        try:
+            from app.brokers.mt5_demo_trader import MT5DemoTrader
+
+            trader = MT5DemoTrader(self.settings, self.mt5_reader)
+            open_positions = len(trader.positions())
+            result = trader.prepare_from_paper_trade(paper_trade, open_positions)
+        except Exception:
+            logger.exception("Demo order preparation failed")
+            return
+        if not result.ok or result.draft is None:
+            logger.info(
+                "Demo order candidate skipped: %s symbol=%s",
+                result.reason,
+                paper_trade.get("symbol"),
+            )
+            return
+
+        now = utc_now()
+        expires_at = now + timedelta(
+            minutes=self.settings.demo_trade_request_ttl_minutes
+        )
+        draft = result.draft
+        request_id = self.repository.create_demo_trade_request(
+            {
+                "paper_trade_id": paper_trade["id"],
+                "symbol": draft.symbol,
+                "direction": draft.direction,
+                "volume": draft.volume,
+                "entry_price": draft.entry_price,
+                "stop_loss": draft.stop_loss,
+                "take_profit": draft.take_profit,
+                "risk_pct": draft.risk_pct,
+                "strategy_name": draft.strategy_name,
+                "status": "pending",
+                "reason": draft.reason,
+                "request_summary": draft.request_summary,
+                "created_at": now.isoformat(),
+                "expires_at": expires_at.isoformat(),
+            }
+        )
+        try:
+            self.notifier.send_message(
+                "Orden demo MT5 lista para confirmar\n"
+                f"ID: {request_id}\n"
+                f"{draft.request_summary}\n"
+                f"Estrategia: {draft.strategy_name or '?'}\n"
+                f"Confirmar: /confirm_demo_trade {request_id}\n"
+                f"Expira en {self.settings.demo_trade_request_ttl_minutes} min."
+            )
+        except Exception:
+            logger.exception("Demo order request notification failed")

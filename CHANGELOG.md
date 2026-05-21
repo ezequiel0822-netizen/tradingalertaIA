@@ -1,5 +1,29 @@
 # Changelog
 
+## Trading Alert AI v2.5.3
+
+Patch de candidatos demo: `/demo_candidates` ahora valida cada paper trade contra el precio actual de MT5 antes de mostrarlo. Los setups vencidos, por ejemplo longs cuyo TP ya quedo debajo del precio actual, se ocultan y se reportan como descartes en vez de dejar que fallen repetidamente en `/demo_prepare`.
+
+## Trading Alert AI v2.5.2
+
+Patch de compatibilidad MT5: si un broker no entrega `trade_tick_size` o `trade_tick_value` para un simbolo demo, el bot intenta calcular riesgo usando `point`, `trade_tick_value_profit/loss` o `trade_contract_size` antes de bloquear la orden. Trading real sigue bloqueado.
+
+## Trading Alert AI v2.5.1
+
+Patch de practica demo: el modo MT5 demo ahora permite hasta 10 operaciones abiertas y sube el limite de riesgo demo por trade a 5.26% (aprox. 1/19 de la cuenta). Trading real sigue bloqueado y la confirmacion manual por Telegram sigue siendo obligatoria.
+
+## Trading Alert AI v2.5.0
+
+Phase 5: órdenes reales en **cuenta demo MT5** con confirmación manual obligatoria. Real-money trading sigue bloqueado.
+
+- Nuevo `app/brokers/mt5_demo_trader.py`: ejecutor separado del reader. Es el único módulo que puede llamar `order_send`.
+- Valida antes de enviar: MT5 conectado, cuenta demo, `trade_allowed`, `trade_expert`, símbolo permitido, SL/TP obligatorio, volumen normalizado, riesgo máximo, kill-switch demo y máximo de posiciones demo.
+- Nuevas tablas SQLite: `demo_trade_requests` y `demo_orders`.
+- Nuevos comandos Telegram: `/demo_candidates`, `/demo_prepare ID`, `/confirm_demo_trade ID`, `/demo_positions`, `/demo_halt`.
+- Nuevas variables seguras: `ENABLE_MT5_DEMO_TRADING=false`, `DEMO_ORDER_REQUIRE_CONFIRMATION=true`, `DEMO_MAX_OPEN_TRADES=1`, `DEMO_RISK_PER_TRADE_PCT=0.25`, `DEMO_MAX_LOT=0.01`, `DEMO_ALLOWED_SYMBOLS=EURUSD,XAUUSD`, `DEMO_TRADE_REQUEST_TTL_MINUTES=15`, `ENABLE_REAL_TRADING=false`.
+- El scheduler puede crear una solicitud demo pendiente cuando abre un paper trade forex/oro, pero nunca envía la orden sin `/confirm_demo_trade`.
+- Tests nuevos para el ejecutor MT5 demo y comandos Telegram.
+
 ## Trading Alert AI v2.4.0
 
 Phase 4.5: Memecoin Hunter Pro (early detection + scoring refinado) + Bot Mode Toggle (alerts_only / trader / hybrid). Sigue read-only para órdenes reales.

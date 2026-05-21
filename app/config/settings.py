@@ -250,6 +250,15 @@ class Settings:
     max_early_memecoin_alerts_per_run: int
     force_learning_gate_for_memecoin: bool
     bot_mode: str
+    # Phase 5 v2.5.0 — MT5 demo order execution with manual confirmation
+    enable_mt5_demo_trading: bool
+    demo_order_require_confirmation: bool
+    demo_max_open_trades: int
+    demo_risk_per_trade_pct: float
+    demo_max_lot: float
+    demo_allowed_symbols: list[str]
+    demo_trade_request_ttl_minutes: int
+    enable_real_trading: bool
 
     def __repr__(self) -> str:
         parts: list[str] = []
@@ -319,7 +328,7 @@ def load_settings() -> Settings:
         obsidian_vault_path = safe_obsidian
 
     return Settings(
-        app_version=os.getenv("APP_VERSION", "v2.4.0"),
+        app_version=os.getenv("APP_VERSION", "v2.5.3"),
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
         telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID"),
         dexscreener_base_url=os.getenv(
@@ -386,7 +395,7 @@ def load_settings() -> Settings:
         sec_recent_days=_get_int("SEC_RECENT_DAYS", 14),
         sec_user_agent=os.getenv(
             "SEC_USER_AGENT",
-            "TradingAlertAI/2.4.0 local-read-only contact@example.com",
+            "TradingAlertAI/2.5.3 local-read-only contact@example.com",
         ),
         enable_obsidian_memory=_get_bool("ENABLE_OBSIDIAN_MEMORY", True),
         obsidian_vault_path=obsidian_vault_path,
@@ -569,4 +578,17 @@ def load_settings() -> Settings:
             "FORCE_LEARNING_GATE_FOR_MEMECOIN", True
         ),
         bot_mode=_get_bot_mode(),
+        # Phase 5 v2.5.0 - MT5 demo order execution. Real trading stays blocked.
+        enable_mt5_demo_trading=_get_bool("ENABLE_MT5_DEMO_TRADING", False),
+        demo_order_require_confirmation=_get_bool(
+            "DEMO_ORDER_REQUIRE_CONFIRMATION", True
+        ),
+        demo_max_open_trades=_get_int("DEMO_MAX_OPEN_TRADES", 10),
+        demo_risk_per_trade_pct=_get_float("DEMO_RISK_PER_TRADE_PCT", 5.26),
+        demo_max_lot=_get_float("DEMO_MAX_LOT", 0.01),
+        demo_allowed_symbols=_get_list("DEMO_ALLOWED_SYMBOLS", ["eurusd", "xauusd"]),
+        demo_trade_request_ttl_minutes=_get_int(
+            "DEMO_TRADE_REQUEST_TTL_MINUTES", 15
+        ),
+        enable_real_trading=_get_bool("ENABLE_REAL_TRADING", False),
     )

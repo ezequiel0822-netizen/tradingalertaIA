@@ -294,6 +294,49 @@ def _init_db_unsafe(db_path: Path) -> None:
                 FOREIGN KEY(alert_id) REFERENCES alerts(id)
             );
 
+            CREATE TABLE IF NOT EXISTS demo_trade_requests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                paper_trade_id INTEGER NOT NULL,
+                symbol TEXT NOT NULL,
+                direction TEXT NOT NULL,
+                volume REAL NOT NULL,
+                entry_price REAL NOT NULL,
+                stop_loss REAL NOT NULL,
+                take_profit REAL NOT NULL,
+                risk_pct REAL,
+                strategy_name TEXT,
+                status TEXT NOT NULL,
+                reason TEXT,
+                request_summary TEXT,
+                created_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                confirmed_at TEXT,
+                sent_at TEXT,
+                result_message TEXT,
+                FOREIGN KEY(paper_trade_id) REFERENCES paper_trades(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS demo_orders (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                demo_request_id INTEGER NOT NULL,
+                paper_trade_id INTEGER NOT NULL,
+                symbol TEXT NOT NULL,
+                direction TEXT NOT NULL,
+                volume REAL NOT NULL,
+                price REAL,
+                stop_loss REAL NOT NULL,
+                take_profit REAL NOT NULL,
+                retcode INTEGER,
+                order_ticket INTEGER,
+                deal_ticket INTEGER,
+                status TEXT NOT NULL,
+                strategy_name TEXT,
+                result_summary TEXT,
+                sent_at TEXT NOT NULL,
+                FOREIGN KEY(demo_request_id) REFERENCES demo_trade_requests(id),
+                FOREIGN KEY(paper_trade_id) REFERENCES paper_trades(id)
+            );
+
             CREATE INDEX IF NOT EXISTS idx_alerts_token_type_time
                 ON alerts(chain, token_address, alert_type, created_at);
             CREATE INDEX IF NOT EXISTS idx_alerts_created_at
@@ -312,6 +355,12 @@ def _init_db_unsafe(db_path: Path) -> None:
                 ON alert_outcome_horizons(alert_id);
             CREATE INDEX IF NOT EXISTS idx_outcome_horizons_status
                 ON alert_outcome_horizons(status);
+            CREATE INDEX IF NOT EXISTS idx_demo_requests_status
+                ON demo_trade_requests(status, created_at);
+            CREATE INDEX IF NOT EXISTS idx_demo_requests_paper
+                ON demo_trade_requests(paper_trade_id, created_at);
+            CREATE INDEX IF NOT EXISTS idx_demo_orders_request
+                ON demo_orders(demo_request_id);
             """
         )
         _ensure_column(connection, "tokens", "latest_estimated_gain_pct", "REAL")

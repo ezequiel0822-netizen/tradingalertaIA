@@ -599,6 +599,161 @@ class Repository:
                 ).fetchall()
         return [dict(row) for row in rows]
 
+    def fetch_paper_trade(self, trade_id: int) -> dict[str, Any] | None:
+        with get_connection(self.db_path) as connection:
+            row = connection.execute(
+                "SELECT * FROM paper_trades WHERE id = ?",
+                (trade_id,),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def fetch_paper_trade_by_alert_id(self, alert_id: int) -> dict[str, Any] | None:
+        with get_connection(self.db_path) as connection:
+            row = connection.execute(
+                "SELECT * FROM paper_trades WHERE alert_id = ?",
+                (alert_id,),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def create_demo_trade_request(self, request: dict[str, Any]) -> int:
+        with get_connection(self.db_path) as connection:
+            cursor = connection.execute(
+                """
+                INSERT INTO demo_trade_requests (
+                    paper_trade_id, symbol, direction, volume, entry_price,
+                    stop_loss, take_profit, risk_pct, strategy_name, status,
+                    reason, request_summary, created_at, expires_at,
+                    confirmed_at, sent_at, result_message
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    request["paper_trade_id"],
+                    request["symbol"],
+                    request["direction"],
+                    request["volume"],
+                    request["entry_price"],
+                    request["stop_loss"],
+                    request["take_profit"],
+                    request.get("risk_pct"),
+                    request.get("strategy_name"),
+                    request.get("status", "pending"),
+                    request.get("reason"),
+                    request.get("request_summary"),
+                    request["created_at"],
+                    request["expires_at"],
+                    request.get("confirmed_at"),
+                    request.get("sent_at"),
+                    request.get("result_message"),
+                ),
+            )
+        return int(cursor.lastrowid)
+
+    def fetch_demo_trade_request(self, request_id: int) -> dict[str, Any] | None:
+        with get_connection(self.db_path) as connection:
+            row = connection.execute(
+                "SELECT * FROM demo_trade_requests WHERE id = ?",
+                (request_id,),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def fetch_demo_trade_requests(
+        self,
+        status: str | None = None,
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        with get_connection(self.db_path) as connection:
+            if status:
+                rows = connection.execute(
+                    """
+                    SELECT *
+                    FROM demo_trade_requests
+                    WHERE status = ?
+                    ORDER BY created_at DESC
+                    LIMIT ?
+                    """,
+                    (status, limit),
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    """
+                    SELECT *
+                    FROM demo_trade_requests
+                    ORDER BY created_at DESC
+                    LIMIT ?
+                    """,
+                    (limit,),
+                ).fetchall()
+        return [dict(row) for row in rows]
+
+    def update_demo_trade_request(
+        self, request_id: int, updates: dict[str, Any]
+    ) -> None:
+        allowed = {
+            "status",
+            "reason",
+            "request_summary",
+            "confirmed_at",
+            "sent_at",
+            "result_message",
+        }
+        fields = [key for key in updates if key in allowed]
+        if not fields:
+            return
+        assignments = ", ".join(f"{field} = ?" for field in fields)
+        values = [updates[field] for field in fields]
+        values.append(request_id)
+        with get_connection(self.db_path) as connection:
+            connection.execute(
+                f"UPDATE demo_trade_requests SET {assignments} WHERE id = ?",
+                values,
+            )
+
+    def create_demo_order(self, order: dict[str, Any]) -> int:
+        with get_connection(self.db_path) as connection:
+            cursor = connection.execute(
+                """
+                INSERT INTO demo_orders (
+                    demo_request_id, paper_trade_id, symbol, direction,
+                    volume, price, stop_loss, take_profit, retcode,
+                    order_ticket, deal_ticket, status, strategy_name,
+                    result_summary, sent_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    order["demo_request_id"],
+                    order["paper_trade_id"],
+                    order["symbol"],
+                    order["direction"],
+                    order["volume"],
+                    order.get("price"),
+                    order["stop_loss"],
+                    order["take_profit"],
+                    order.get("retcode"),
+                    order.get("order_ticket"),
+                    order.get("deal_ticket"),
+                    order.get("status", "sent"),
+                    order.get("strategy_name"),
+                    order.get("result_summary"),
+                    order["sent_at"],
+                ),
+            )
+        return int(cursor.lastrowid)
+
+    def fetch_demo_orders(self, limit: int = 20) -> list[dict[str, Any]]:
+        with get_connection(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT *
+                FROM demo_orders
+                ORDER BY sent_at DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
     def update_paper_trade(self, trade_id: int, updates: dict[str, Any]) -> None:
         allowed = {
             "latest_price",

@@ -1,6 +1,6 @@
-# Trading Alert AI v2.4.0
+# Trading Alert AI v2.5.3
 
-Sistema local read-only para monitorear cripto, memecoins y bolsa. Observa datos publicos, guarda historial en SQLite, estima posible subida/caida, revisa riesgo, analiza patrones/noticias/filings SEC, aprende de resultados historicos por horizonte y simula setups en papel.
+Sistema local para monitorear cripto, memecoins y bolsa. Observa datos publicos, guarda historial en SQLite, estima posible subida/caida, revisa riesgo, analiza patrones/noticias/filings SEC, aprende de resultados historicos por horizonte, simula setups en papel y puede mandar ordenes solo a cuenta MT5 demo con confirmacion manual.
 
 ## Que hace
 
@@ -17,13 +17,14 @@ Sistema local read-only para monitorear cripto, memecoins y bolsa. Observa datos
 - Envia Telegram solo con los mejores candidatos.
 - Responde comandos basicos por Telegram.
 - Escribe memoria diaria y reporte semanal automatico en Obsidian.
+- Prepara y confirma ordenes demo MT5 con SL/TP obligatorio.
 
 ## Que NO hace
 
 - No compra ni vende.
 - No conecta wallets ni brokers.
 - No firma transacciones.
-- No ejecuta ordenes.
+- No ejecuta ordenes con dinero real.
 - No pide seed phrase ni private keys.
 
 ## Instalar
@@ -39,7 +40,7 @@ Copia `.env.example` como referencia y pon los valores reales solo en `.env`.
 ```env
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_CHAT_ID=
-APP_VERSION=v1.7.0
+APP_VERSION=v2.5.0
 ENABLE_TELEGRAM_ASSISTANT=true
 ENABLE_PRO_INTELLIGENCE=true
 ENABLE_SEC_FILINGS_INTEL=true
@@ -50,6 +51,10 @@ ENABLE_PRICE_SNAPSHOTS=true
 ENABLE_HORIZON_EVALUATOR=true
 ENABLE_WEEKLY_OBSIDIAN_REPORT=true
 SNAPSHOT_RETENTION_DAYS=30
+ENABLE_MT5_READER=true
+ENABLE_MT5_DEMO_TRADING=false
+DEMO_ORDER_REQUIRE_CONFIRMATION=true
+ENABLE_REAL_TRADING=false
 OBSIDIAN_VAULT_PATH=obsidian/tradingbot v.1
 ```
 
@@ -92,6 +97,12 @@ streamlit run app/dashboard/streamlit_app.py
 /horizontes NVDA
 /backtest
 /backtest 6h ia_pro,score:80-90
+/mt5_status
+/demo_candidates
+/demo_prepare ID
+/confirm_demo_trade ID
+/demo_positions
+/demo_halt
 /analiza NVDA
 /noticias NVDA
 /filings NVDA
@@ -181,7 +192,22 @@ El bot ahora opera como **trader engine autonomo simulado**. Sigue read-only: no
 - **Comandos Telegram nuevos**: `/portfolio`, `/posiciones`, `/halt [horas]`, `/resume_trading`, `/strategies`.
 - **Memecoins en modo lab**: siguen alimentando `strategy_lessons` y outcomes por horizonte, pero NO van a Telegram ni se operan. Activar con `ENABLE_MEMECOIN_TELEGRAM=true` si queres recibir alertas memecoin como en v1.7.0.
 
-Restriccion absoluta de seguridad: **sin order_send a brokers reales ni demo todavia**. Real money trading sigue prohibido sin nueva autorizacion explicita.
+## MT5 demo orders v2.5.1 (Phase 5)
+
+Phase 5 permite `order_send` solo contra cuenta **MT5 demo** y solo con confirmacion manual por Telegram.
+
+- `ENABLE_MT5_DEMO_TRADING=false` en `.env.example`; en tu `.env` local se puede activar solo para demo.
+- `DEMO_ORDER_REQUIRE_CONFIRMATION=true` debe permanecer activo.
+- `ENABLE_REAL_TRADING=false` mantiene bloqueado dinero real.
+- Solo forex/oro por `DEMO_ALLOWED_SYMBOLS=EURUSD,XAUUSD`.
+- Cada orden requiere SL y TP.
+- Lotaje inicial conservador: `DEMO_MAX_LOT=0.01`.
+- Practica demo ampliada: `DEMO_MAX_OPEN_TRADES=10`.
+- Riesgo maximo demo por trade: `DEMO_RISK_PER_TRADE_PCT=5.26` (aprox. 1/19 de la cuenta).
+- Flujo: `/demo_candidates` -> `/demo_prepare ID` -> `/confirm_demo_trade ID`.
+- Emergencia: `/demo_halt` bloquea nuevas ordenes demo; `/resume_trading` libera.
+
+Restriccion absoluta de seguridad: **real money trading sigue prohibido**. Phase 5 solo opera cuenta demo MT5 con confirmacion manual.
 
 ## Carpetas
 

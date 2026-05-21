@@ -16,6 +16,7 @@ from app.learning.backtester import (
 from app.learning.horizon_evaluator import HORIZONS
 from app.learning.training_engine import run_learning_cycle
 from app.utils.time_utils import parse_iso_datetime, utc_now
+from datetime import timedelta
 
 
 DISCLAIMER = "No es recomendacion financiera. Revisar manualmente."
@@ -140,6 +141,26 @@ class BasicTelegramAssistant:
         if normalized in {"/mt5_status", "mt5_status", "/mt5"}:
             return self.mt5_status_message()
 
+        # Phase 5 v2.5.0 demo MT5 order confirmation commands
+        if normalized in {"/demo_candidates", "demo_candidates", "/demo_candidatos"}:
+            return self.demo_candidates_message()
+
+        if normalized.startswith("/demo_prepare") or normalized.startswith("demo_prepare"):
+            parts = raw.split(" ", 1)
+            arg = parts[1].strip() if len(parts) > 1 else ""
+            return self.demo_prepare_message(arg)
+
+        if normalized.startswith("/confirm_demo_trade") or normalized.startswith("confirm_demo_trade"):
+            parts = raw.split(" ", 1)
+            arg = parts[1].strip() if len(parts) > 1 else ""
+            return self.confirm_demo_trade_message(arg)
+
+        if normalized in {"/demo_positions", "demo_positions", "/demo_posiciones"}:
+            return self.demo_positions_message()
+
+        if normalized in {"/demo_halt", "demo_halt", "/parar_demo"}:
+            return self.demo_halt_message()
+
         if normalized in {"/data_quality", "data_quality", "/dq", "/calidad"}:
             return self.data_quality_message()
 
@@ -183,7 +204,9 @@ class BasicTelegramAssistant:
                         "/filings", "/patron", "/pro", "/horizontes", "/horizons",
                         "/backtest", "/portfolio", "/portafolio", "/posiciones",
                         "/positions", "/halt", "/parar", "/resume_trading",
-                        "/strategies", "/estrategias",
+                        "/strategies", "/estrategias", "/demo_candidates",
+                        "/demo_prepare", "/confirm_demo_trade", "/demo_positions",
+                        "/demo_halt",
                     }
                     if cmd in known_prefixes:
                         # Re-ejecutar como comando real (recursion controlada por longitud)
@@ -223,11 +246,16 @@ Comandos:
 /halt [horas] - activa kill-switch (default usa setting cooldown)
 /resume_trading - libera kill-switch del trader engine
 /strategies - estrategias habilitadas y senales recientes
+/demo_candidates - paper trades listos para preparar orden demo MT5
+/demo_prepare ID - prepara una orden demo pendiente desde un paper trade
+/confirm_demo_trade ID - confirma y envia order_send a cuenta demo MT5
+/demo_positions - posiciones demo abiertas en MT5
+/demo_halt - bloquea nuevas ordenes demo
 /pausar - pausa alertas automaticas
 /reanudar - reactiva alertas automaticas
 /config - ver configuracion sin secretos
 
-Solo observo datos publicos. No compro, no vendo y no conecto wallets."""
+Ordenes demo MT5 requieren confirmacion manual. Real-money trading sigue bloqueado."""
 
     def status_message(self) -> str:
         paused = self.repository.alerts_paused()
@@ -363,6 +391,8 @@ IA Pro: {"activa" if self.settings.enable_pro_intelligence else "apagada"}
 SEC filings: {"activo" if self.settings.enable_sec_filings_intel else "apagado"}
 Learning engine: {"activo" if self.settings.enable_learning_engine else "apagado"}
 Paper trading simulado: {"activo" if self.settings.enable_paper_trading else "apagado"}
+MT5 demo trading: {"activo" if self.settings.enable_mt5_demo_trading else "apagado"} (confirmacion manual)
+Real trading: {"bloqueado" if not self.settings.enable_real_trading else "NO IMPLEMENTADO"}
 Memecoin min subida: {self.settings.min_estimated_gain_pct}%
 Stock min subida: {self.settings.min_stock_estimated_gain_pct}%
 Cupo memecoins: {self.settings.memecoin_max_alerts_per_24h}/{self.settings.alert_cap_window_hours}h
@@ -601,6 +631,33 @@ Ahora puedes usar /aprendizaje y /paper.
         except (TypeError, ValueError):
             return None
 
+    def _parse_int_arg(self, value: str) -> int | None:
+        try:
+            return int(str(value).strip())
+        except (TypeError, ValueError):
+            return None
+
+    def _demo_prepare_failure_hint(self, reason: str) -> str:
+        lowered = reason.lower()
+        if "requires tp above" in lowered or "requires tp below" in lowered:
+            return (
+                "setup vencido: el precio actual ya paso la zona del TP. "
+                "Pide /demo_candidates para buscar uno fresco."
+            )
+        if "requires sl below" in lowered or "requires sl above" in lowered:
+            return (
+                "setup vencido: el precio actual ya invalido el SL. "
+                "Pide /demo_candidates para buscar uno fresco."
+            )
+        if "max open trades" in lowered:
+            return "limite de posiciones demo abiertas alcanzado."
+        if "allowed list" in lowered:
+            return (
+                f"{reason}. Agrega el simbolo a DEMO_ALLOWED_SYMBOLS en .env "
+                "si quieres practicarlo."
+            )
+        return reason
+
     def horizons_message(self, query: str) -> str:
         symbol_or_addr = query.strip()
         if not symbol_or_addr:
@@ -809,7 +866,8 @@ Ahora puedes usar /aprendizaje y /paper.
         pm = PortfolioManager(self.settings, self.repository)
         rm = RiskManager(self.settings, self.repository, pm)
         rm.release_kill_switch()
-        return "Kill switch liberado. Trader engine puede volver a abrir trades."
+        self.repository.set_state("demo_trading_halted", "false")
+        return "Kill switch liberado. Trader engine y demo trading pueden volver a abrir trades."
 
     def strategies_message(self) -> str:
         enabled = []
@@ -906,6 +964,240 @@ Ahora puedes usar /aprendizaje y /paper.
             return "\n".join(lines) + "\n" + DISCLAIMER
         finally:
             reader.disconnect()
+
+    # ---------- Phase 5 v2.5.0 demo MT5 orders ----------
+
+    def demo_candidates_message(self) -> str:
+        if not self.settings.enable_mt5_demo_trading:
+            return (
+                "Demo trading MT5 esta apagado. En .env usa "
+                "ENABLE_MT5_DEMO_TRADING=true solo para cuenta demo."
+            )
+        if self.repository.get_state("demo_trading_halted", "false") == "true":
+            return "Demo trading esta detenido por /demo_halt. Usa /resume_trading para liberar."
+
+        raw_candidates = [
+            trade for trade in self.repository.fetch_paper_trades(status="open", limit=20)
+            if str(trade.get("category") or "").lower() in {"forex", "gold"}
+            and trade.get("stop_loss") is not None
+            and trade.get("take_profit_1") is not None
+        ]
+        if not raw_candidates:
+            return (
+                "No hay paper trades forex/oro listos para demo. "
+                "Primero deja correr el bot en /mode trader."
+            )
+
+        from app.brokers.mt5_demo_trader import MT5DemoTrader
+        trader = MT5DemoTrader(self.settings)
+        valid_candidates = []
+        skipped = []
+        try:
+            open_positions = len(trader.positions())
+            for trade in raw_candidates:
+                result = trader.prepare_from_paper_trade(trade, open_positions)
+                if result.ok and result.draft is not None:
+                    valid_candidates.append((trade, result.draft))
+                else:
+                    skipped.append((trade, result.reason))
+        finally:
+            trader.disconnect()
+
+        if not valid_candidates:
+            lines = [
+                "No hay candidatos demo vigentes ahora.",
+                "Los paper trades abiertos existen, pero el precio actual ya no permite una orden segura.",
+            ]
+            if skipped:
+                lines.append("Descartes principales:")
+                for trade, reason in skipped[:5]:
+                    lines.append(
+                        f"- ID {trade.get('id')}: "
+                        f"{self._demo_prepare_failure_hint(str(reason))}"
+                    )
+            lines.append("Deja correr el bot unos minutos para generar setups frescos.")
+            lines.append(DISCLAIMER)
+            return "\n".join(lines)
+
+        lines = [
+            "Candidatos demo MT5 (confirmacion manual obligatoria):",
+        ]
+        for trade, draft in valid_candidates[:8]:
+            lines.append(
+                f"ID {trade.get('id')}: {trade.get('symbol') or '?'} "
+                f"{draft.direction} "
+                f"({draft.strategy_name or '?'}) | "
+                f"entry actual {self._fmt_money(draft.entry_price)} | "
+                f"SL {self._fmt_money(draft.stop_loss)} | "
+                f"TP {self._fmt_money(draft.take_profit)} | "
+                f"riesgo {self._fmt_pct(draft.risk_pct)}"
+            )
+        if skipped:
+            lines.append(
+                f"Oculté {len(skipped)} candidato(s) vencidos o no preparables."
+            )
+        lines.append("Preparar: /demo_prepare ID")
+        lines.append(DISCLAIMER)
+        return "\n".join(lines)
+
+    def demo_prepare_message(self, arg: str) -> str:
+        if not self.settings.enable_mt5_demo_trading:
+            return (
+                "Demo trading MT5 esta apagado. En .env usa "
+                "ENABLE_MT5_DEMO_TRADING=true solo para cuenta demo."
+            )
+        if self.repository.get_state("demo_trading_halted", "false") == "true":
+            return "Demo trading esta detenido por /demo_halt. Usa /resume_trading para liberar."
+        trade_id = self._parse_int_arg(arg)
+        if trade_id is None:
+            return "Uso: /demo_prepare ID. Mira candidatos con /demo_candidates."
+        paper_trade = self.repository.fetch_paper_trade(trade_id)
+        if not paper_trade:
+            return f"No encontre paper trade ID {trade_id}."
+
+        from app.brokers.mt5_demo_trader import MT5DemoTrader
+        trader = MT5DemoTrader(self.settings)
+        try:
+            open_positions = len(trader.positions())
+            result = trader.prepare_from_paper_trade(paper_trade, open_positions)
+        finally:
+            trader.disconnect()
+        if not result.ok or result.draft is None:
+            return (
+                "No puedo preparar orden demo: "
+                f"{self._demo_prepare_failure_hint(result.reason)}"
+            )
+
+        now = utc_now()
+        expires_at = now + timedelta(minutes=self.settings.demo_trade_request_ttl_minutes)
+        draft = result.draft
+        request_id = self.repository.create_demo_trade_request(
+            {
+                "paper_trade_id": trade_id,
+                "symbol": draft.symbol,
+                "direction": draft.direction,
+                "volume": draft.volume,
+                "entry_price": draft.entry_price,
+                "stop_loss": draft.stop_loss,
+                "take_profit": draft.take_profit,
+                "risk_pct": draft.risk_pct,
+                "strategy_name": draft.strategy_name,
+                "status": "pending",
+                "reason": draft.reason,
+                "request_summary": draft.request_summary,
+                "created_at": now.isoformat(),
+                "expires_at": expires_at.isoformat(),
+            }
+        )
+        return (
+            f"Orden demo preparada #{request_id}\n"
+            f"{draft.request_summary}\n"
+            f"Estrategia: {draft.strategy_name or '?'}\n"
+            f"Motivo: {draft.reason}\n\n"
+            f"Confirmar: /confirm_demo_trade {request_id}\n"
+            f"Expira en {self.settings.demo_trade_request_ttl_minutes} min.\n"
+            "Solo cuenta demo MT5. Real-money trading bloqueado."
+        )
+
+    def confirm_demo_trade_message(self, arg: str) -> str:
+        if not self.settings.enable_mt5_demo_trading:
+            return "Demo trading MT5 esta apagado: ENABLE_MT5_DEMO_TRADING=false."
+        if self.repository.get_state("demo_trading_halted", "false") == "true":
+            return "Demo trading esta detenido por /demo_halt. Usa /resume_trading para liberar."
+        request_id = self._parse_int_arg(arg)
+        if request_id is None:
+            return "Uso: /confirm_demo_trade ID."
+        request = self.repository.fetch_demo_trade_request(request_id)
+        if not request:
+            return f"No encontre solicitud demo #{request_id}."
+        if request.get("status") != "pending":
+            return f"La solicitud #{request_id} ya esta en estado {request.get('status')}."
+        expires = parse_iso_datetime(str(request.get("expires_at") or ""))
+        if expires is None or expires < utc_now():
+            self.repository.update_demo_trade_request(
+                request_id,
+                {"status": "expired", "result_message": "confirmation expired"},
+            )
+            return f"La solicitud #{request_id} expiro. Prepara otra con /demo_prepare."
+
+        from app.brokers.mt5_demo_trader import MT5DemoTrader
+        trader = MT5DemoTrader(self.settings)
+        try:
+            open_positions = len(trader.positions())
+            result = trader.send_prepared_request(request, open_positions)
+        finally:
+            trader.disconnect()
+
+        now = utc_now().isoformat()
+        self.repository.update_demo_trade_request(
+            request_id,
+            {
+                "status": result.status,
+                "confirmed_at": now,
+                "sent_at": now if result.status == "sent" else None,
+                "result_message": result.result_summary or result.reason,
+            },
+        )
+        self.repository.create_demo_order(
+            {
+                "demo_request_id": request_id,
+                "paper_trade_id": request["paper_trade_id"],
+                "symbol": request["symbol"],
+                "direction": request["direction"],
+                "volume": request["volume"],
+                "price": result.price,
+                "stop_loss": request["stop_loss"],
+                "take_profit": request["take_profit"],
+                "retcode": result.retcode,
+                "order_ticket": result.order_ticket,
+                "deal_ticket": result.deal_ticket,
+                "status": result.status,
+                "strategy_name": request.get("strategy_name"),
+                "result_summary": result.result_summary or result.reason,
+                "sent_at": now,
+            }
+        )
+        if result.ok:
+            return (
+                f"Orden demo enviada #{request_id}\n"
+                f"{request['direction'].upper()} {request['symbol']} "
+                f"{float(request['volume']):g} lot\n"
+                f"Order: {result.order_ticket or '?'} | Deal: {result.deal_ticket or '?'}\n"
+                f"Retcode: {result.retcode}\n"
+                "Revisa la pestaña Operaciones en MT5 demo."
+            )
+        return (
+            f"Orden demo fallida #{request_id}\n"
+            f"Motivo: {result.reason}\n"
+            f"Detalle: {result.result_summary or 'sin detalle'}"
+        )
+
+    def demo_positions_message(self) -> str:
+        from app.brokers.mt5_demo_trader import MT5DemoTrader
+        trader = MT5DemoTrader(self.settings)
+        try:
+            positions = trader.positions()
+        finally:
+            trader.disconnect()
+        if not positions:
+            return "No hay posiciones demo abiertas o MT5 demo no esta conectado."
+        lines = [f"Posiciones demo MT5 abiertas ({len(positions)}):"]
+        for pos in positions[:10]:
+            ptype = pos.get("type")
+            direction = "BUY" if ptype == 0 else "SELL" if ptype == 1 else str(ptype)
+            lines.append(
+                f"{pos.get('ticket')}: {pos.get('symbol')} {direction} "
+                f"{pos.get('volume')} lot @ {pos.get('price_open')} | "
+                f"SL {pos.get('sl')} | TP {pos.get('tp')} | PnL {pos.get('profit')}"
+            )
+        return "\n".join(lines)
+
+    def demo_halt_message(self) -> str:
+        self.repository.set_state("demo_trading_halted", "true")
+        return (
+            "Demo trading detenido. No enviare nuevas ordenes demo hasta "
+            "/resume_trading."
+        )
 
     def data_quality_message(self) -> str:
         from app.intelligence.data_quality import run_full_check

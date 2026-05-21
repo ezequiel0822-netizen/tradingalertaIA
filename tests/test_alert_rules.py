@@ -165,6 +165,14 @@ def _settings() -> Settings:
         max_early_memecoin_alerts_per_run=1,
         force_learning_gate_for_memecoin=True,
         bot_mode="trader",
+        enable_mt5_demo_trading=False,
+        demo_order_require_confirmation=True,
+        demo_max_open_trades=1,
+        demo_risk_per_trade_pct=0.25,
+        demo_max_lot=0.01,
+        demo_allowed_symbols=["eurusd", "xauusd"],
+        demo_trade_request_ttl_minutes=15,
+        enable_real_trading=False,
     )
 
 
