@@ -1,5 +1,53 @@
 # Changelog
 
+## Trading Alert AI v2.6.0
+
+Phase 5.5 Bloque B: Scalping Engine en thread dedicado + Mode toggle + Learning per-style. Tres capacidades nuevas que conviven con el swing engine sin reemplazarlo. Real-money trading sigue 100% bloqueado.
+
+**Architecture decision:** Dos flags orthogonal en lugar de un enum compuesto. `BOT_MODE` controla swing engine (como antes desde v2.4.0). Nuevo `ENABLE_SCALPING_ENGINE` controla scalping engine. Combinaciones libres: hybrid (ambos), swing_only, scalping_only, alerts_only.
+
+**Scalping Engine (Commit 1+2):**
+- `app/scheduler/scalping_engine.py` NUEVO: thread dedicado (`threading.Thread` con `stop_event`) que polea MT5 cada `SCALPING_POLL_INTERVAL_SECONDS` (default 5s). Por ciclo: kill-switch checks, force-exits, evaluacion de signal por simbolo permitido, auto-ejecucion.
+- `app/strategies/scalping_breakout.py` NUEVO: M1 range breakout sobre N velas (default 10), SL/TP fijos en pips (default 8/12), cooldown 60s post-signal.
+- `app/utils/scalping_state.py` NUEVO: `resolve_scalping_state` espejo de `bot_mode.resolve_bot_mode` (prioridad CLI > bot_state > setting > default False).
+- 12 settings nuevos: `ENABLE_SCALPING_ENGINE`, `SCALPING_ALLOWED_SYMBOLS=EURUSD,GBPUSD`, `SCALPING_RISK_PER_TRADE_PCT=1.0`, `SCALPING_MAX_TRADES_PER_DAY=30`, `SCALPING_MAX_OPEN_TRADES=3`, `SCALPING_MAX_DAILY_LOSS_PCT=3.0`, `SCALPING_FORCE_EXIT_MINUTES=5`, `SCALPING_POLL_INTERVAL_SECONDS=5`, `SCALPING_HEARTBEAT_EVERY_N_TRADES=5`, `SCALPING_SL_PIPS=8`, `SCALPING_TP_PIPS=12`, `SCALPING_RANGE_LOOKBACK_BARS=10`.
+- Schema migration: nueva columna `is_scalping INTEGER DEFAULT 0` en `paper_trades`, `demo_orders`, `signal_outcomes`, `strategy_lessons` via `_ensure_column` (backward-compat).
+- `main.py` arranca el thread en startup cuando flag activo, y lo cierra limpio en KeyboardInterrupt.
+- Reusa `mt5_demo_trader.send_prepared_request` con todas las validaciones demo-only intactas (cuenta demo + trade_allowed + mandatory SL + simbolo whitelist + riesgo cap).
+
+**Mode Toggle (Commit 3):**
+- 6 comandos Telegram nuevos: `/scalping_on`, `/scalping_off`, `/scalping_status`, `/scalping_halt`, `/scalping_resume`, `/scalping_stats` (con aliases en español).
+- `/mode` extendido con MACROS que setean ambos flags simultaneamente:
+  - `/mode swing_only` -> trader + scalping OFF
+  - `/mode scalping_only` -> alerts_only + scalping ON
+  - `/mode hybrid` -> trader + scalping ON
+  - `/mode alerts_only` y `/mode trader`: comportamiento previo (solo bot_mode_active, no toca scalping)
+- `/health` (v2.5.5) extendido con seccion "Scalping engine".
+
+**Learning per-style (Commit 4):**
+- `_build_lessons` ahora agrupa scalping outcomes en buckets separados (sufijo `_scalping` en category, ej. `forex_scalping`). Lessons swing vs scalping no se mezclan ni contaminan win-rate.
+- `scalping_engine._close_scalping_trade` registra signal_outcome con is_scalping=1 al cerrar (force-exit, TP, SL). Usa alert_id negativo (`-paper_trade.id`) para no colisionar con outcomes swing.
+- `/aprendizaje` muestra "== SWING LESSONS ==" y "== SCALPING LESSONS ==" en secciones separadas.
+- `upsert_signal_outcome` persiste flag is_scalping.
+
+**Safety stack intacto:**
+- `ENABLE_REAL_TRADING=false` sigue hardcoded. Scalping no toca real-money.
+- Kill-switch global respeta ambos engines.
+- Kill-switch propio scalping (`/scalping_halt` -> `bot_state.scalping_halted`) bloquea solo scalping.
+- Memecoins siguen como lab de aprendizaje (no MT5, ni swing ni scalping).
+- Lifecycle SL-to-breakeven post-TP1 sin cambios.
+
+**Tests:** 253 -> 291 verdes (+38). Distribuidos en:
+- test_scalping_state.py (7 nuevos)
+- test_scalping_breakout.py (6 nuevos)
+- test_scalping_engine.py (7 nuevos)
+- test_scalping_commands.py (10 nuevos)
+- test_learning_per_style.py (4 nuevos)
+- test_telegram_mode_command.py (3 actualizados para v2.6.0 strings)
+- test_health_command.py (regression con seccion scalping)
+
+**Out of scope (para v2.6.x posteriores):** mean-reversion scalping strategy, session-aware lessons (London/NY/Asian), auto-enable ENABLE_LEARNED_WEIGHTS, dashboard Streamlit scalping timeline widget.
+
 ## Trading Alert AI v2.5.5
 
 Patches tacticos post-observacion overnight v2.5.4. Dos cambios focused: cap separado de riesgo para demo execution + nuevo comando `/health` en Telegram.
