@@ -193,7 +193,13 @@ class ScalpingEngine:
         return closed
 
     def _close_scalping_trade(self, trade_id: int, reason: str) -> None:
-        """Marca paper_trade scalping como cerrado. NO toca MT5 position aún (v2.6.x)."""
+        """Marca paper_trade scalping como cerrado y registra outcome para learning.
+
+        v2.6.0: además del update de status, inserta un signal_outcome con
+        is_scalping=1 que alimenta el pipeline de lessons en el próximo
+        learning cycle. NO toca MT5 position aún (v2.6.x).
+        """
+        # 1. Update paper_trade status
         try:
             self.repository.update_paper_trade(
                 trade_id,
@@ -205,6 +211,70 @@ class ScalpingEngine:
             )
         except Exception:
             logger.exception("Failed to close scalping trade %s", trade_id)
+            return
+
+        # 2. Insertar outcome para learning (v2.6.0 Commit 4)
+        try:
+            self._record_scalping_outcome(trade_id, reason)
+        except Exception:
+            logger.exception("Failed to record scalping outcome for trade %s", trade_id)
+
+    def _record_scalping_outcome(self, trade_id: int, reason: str) -> None:
+        """Inserta signal_outcome con is_scalping=1 al cerrar paper_trade scalping.
+
+        Usa alert_id negativo (= -paper_trade.id) para no colisionar con outcomes
+        swing que usan alert.id (positivo). UNIQUE constraint en alert_id se
+        respeta porque negative IDs no overlap con positive.
+        """
+        from app.learning.training_engine import _outcome_label
+
+        # Fetch trade actual
+        all_open_and_closed = self.repository.fetch_paper_trades(limit=200) or []
+        trade = next((t for t in all_open_and_closed if int(t.get("id") or 0) == trade_id), None)
+        if trade is None:
+            logger.warning("Scalping outcome: trade %s not found in DB", trade_id)
+            return
+
+        entry = self._float_or_zero(trade.get("entry_price"))
+        latest = self._float_or_zero(trade.get("latest_price")) or entry
+        direction = str(trade.get("direction") or "long").lower()
+        if entry <= 0:
+            return
+
+        if direction == "long":
+            return_pct = (latest - entry) / entry * 100
+        else:
+            return_pct = (entry - latest) / entry * 100
+
+        category = str(trade.get("category") or "forex")
+        label = _outcome_label(return_pct, category, self.settings)
+
+        outcome = {
+            "alert_id": -trade_id,  # negative para no colisionar con swing alerts
+            "token_id": int(trade.get("token_id") or 0),
+            "category": category,
+            "chain": str(trade.get("chain") or category),
+            "token_address": str(trade.get("token_address") or trade.get("symbol") or ""),
+            "symbol": str(trade.get("symbol") or ""),
+            "entry_price": entry,
+            "latest_price": latest,
+            "observed_return_pct": round(return_pct, 4),
+            "score": 0,  # scalping no usa scoring tradicional
+            "confidence": 0,
+            "outcome_label": label,
+            "age_minutes": int(self.settings.scalping_force_exit_minutes),
+            "features": '["' + str(trade.get("strategy_name") or "scalping_breakout") + '"]',
+            "evaluated_at": utc_now_iso(),
+            "is_scalping": 1,
+        }
+        self.repository.upsert_signal_outcome(outcome)
+
+    @staticmethod
+    def _float_or_zero(value: Any) -> float:
+        try:
+            return float(value) if value is not None else 0.0
+        except (TypeError, ValueError):
+            return 0.0
 
     # ---------------- Signal evaluation ----------------
 

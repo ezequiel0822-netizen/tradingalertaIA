@@ -391,6 +391,7 @@ class Repository:
         return [dict(row) for row in rows]
 
     def upsert_signal_outcome(self, outcome: dict[str, Any]) -> bool:
+        """v2.6.0: ahora persiste is_scalping flag (default 0 para outcomes pre-existentes)."""
         with get_connection(self.db_path) as connection:
             existing = connection.execute(
                 "SELECT id FROM signal_outcomes WHERE alert_id = ?",
@@ -401,16 +402,18 @@ class Repository:
                 INSERT INTO signal_outcomes (
                     alert_id, token_id, category, chain, token_address, symbol,
                     entry_price, latest_price, observed_return_pct, score,
-                    confidence, outcome_label, age_minutes, features, evaluated_at
+                    confidence, outcome_label, age_minutes, features, evaluated_at,
+                    is_scalping
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(alert_id) DO UPDATE SET
                     latest_price = excluded.latest_price,
                     observed_return_pct = excluded.observed_return_pct,
                     outcome_label = excluded.outcome_label,
                     age_minutes = excluded.age_minutes,
                     features = excluded.features,
-                    evaluated_at = excluded.evaluated_at
+                    evaluated_at = excluded.evaluated_at,
+                    is_scalping = excluded.is_scalping
                 """,
                 (
                     outcome["alert_id"],
@@ -428,6 +431,7 @@ class Repository:
                     outcome["age_minutes"],
                     outcome["features"],
                     outcome["evaluated_at"],
+                    int(outcome.get("is_scalping") or 0),
                 ),
             )
         return existing is None

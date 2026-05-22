@@ -441,24 +441,49 @@ Chains: {", ".join(self.settings.chains_to_monitor)}
         return "\n".join(lines)
 
     def learning_message(self, limit: int = 8) -> str:
-        lessons = self.repository.fetch_strategy_lessons(limit=limit)
+        """v2.6.0: separa lessons SWING (categorias normales) vs SCALPING (sufijo _scalping)."""
+        # Pedimos más para tener margen tras filtrar.
+        all_lessons = self.repository.fetch_strategy_lessons(limit=max(limit * 2, 20))
         runs = self.repository.latest_training_runs(limit=1)
-        if not lessons:
+        if not all_lessons:
             return "Todavia no hay suficientes outcomes para aprender. Deja correr el monitor mas tiempo o usa /entrenar."
 
-        lines = ["Aprendizaje local de Trading Alert AI"]
+        # Partir lessons por sufijo _scalping (decisión del Commit 4 v2.6.0)
+        swing_lessons = [
+            l for l in all_lessons
+            if not str(l.get("category") or "").endswith("_scalping")
+        ][:limit]
+        scalping_lessons = [
+            l for l in all_lessons
+            if str(l.get("category") or "").endswith("_scalping")
+        ][:limit]
+
+        lines = [f"Aprendizaje local de Trading Alert AI {self.settings.app_version}"]
         if runs:
             lines.append(f"Ultimo entrenamiento: {runs[0].get('summary')}")
-        for index, lesson in enumerate(lessons, start=1):
-            win_rate = self._fmt_pct((self._as_float(lesson.get("win_rate")) or 0) * 100)
-            avg_return = self._fmt_pct(lesson.get("avg_return_pct"))
-            sample_count = lesson.get("sample_count") or 0
-            feature = lesson.get("feature") or "unknown"
-            category = lesson.get("category") or "unknown"
-            lines.append(
-                f"{index}. {feature} ({category}) | casos {sample_count} | win {win_rate} | retorno medio {avg_return}"
-            )
-            lines.append(f"   {lesson.get('lesson')}")
+
+        def _render_block(title: str, items: list[dict]) -> list[str]:
+            block = ["", f"== {title} =="]
+            if not items:
+                block.append("(sin lessons todavia)")
+                return block
+            for index, lesson in enumerate(items, start=1):
+                win_rate = self._fmt_pct(
+                    (self._as_float(lesson.get("win_rate")) or 0) * 100
+                )
+                avg_return = self._fmt_pct(lesson.get("avg_return_pct"))
+                sample_count = lesson.get("sample_count") or 0
+                feature = lesson.get("feature") or "unknown"
+                category = lesson.get("category") or "unknown"
+                block.append(
+                    f"{index}. {feature} ({category}) | casos {sample_count} | win {win_rate} | retorno medio {avg_return}"
+                )
+                block.append(f"   {lesson.get('lesson')}")
+            return block
+
+        lines.extend(_render_block("SWING LESSONS", swing_lessons))
+        lines.extend(_render_block("SCALPING LESSONS", scalping_lessons))
+        lines.append("")
         lines.append(DISCLAIMER)
         return "\n".join(lines)
 

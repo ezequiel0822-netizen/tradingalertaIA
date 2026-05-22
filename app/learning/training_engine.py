@@ -128,9 +128,18 @@ def _outcome_label(return_pct: float, category: str, settings: Settings) -> str:
 
 
 def _build_lessons(outcomes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Agrupa outcomes en lessons por (feature, category).
+
+    v2.6.0 Phase 5.5 Bloque B: si outcome.is_scalping=1, la category del
+    bucket lleva sufijo `_scalping` (ej. 'forex_scalping') para no mezclar
+    lessons de scalping con las de swing. Esto evita schema change a la
+    constraint UNIQUE(feature, category) de strategy_lessons.
+    """
     buckets: dict[tuple[str, str], list[dict[str, Any]]] = {}
     for outcome in outcomes:
         category = str(outcome.get("category") or "unknown")
+        if int(outcome.get("is_scalping") or 0) == 1:
+            category = f"{category}_scalping"
         try:
             features = json.loads(outcome.get("features") or "[]")
         except json.JSONDecodeError:
