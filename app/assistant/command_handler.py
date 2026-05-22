@@ -121,6 +121,20 @@ class BasicTelegramAssistant:
         if normalized in {"/health", "health", "/salud", "salud"}:
             return self.health_message()
 
+        # Phase 5.5 Bloque B v2.6.0: scalping commands
+        if normalized in {"/scalping_on", "scalping_on", "/escalar_on", "scalping on"}:
+            return self.scalping_on_message()
+        if normalized in {"/scalping_off", "scalping_off", "/escalar_off", "scalping off"}:
+            return self.scalping_off_message()
+        if normalized in {"/scalping_status", "scalping_status", "/escalar_estado"}:
+            return self.scalping_status_message()
+        if normalized in {"/scalping_halt", "scalping_halt", "/parar_scalping"}:
+            return self.scalping_halt_message()
+        if normalized in {"/scalping_resume", "scalping_resume", "/reanudar_scalping"}:
+            return self.scalping_resume_message()
+        if normalized in {"/scalping_stats", "scalping_stats", "/escalar_stats"}:
+            return self.scalping_stats_message()
+
         if normalized in {"/posiciones", "posiciones", "/positions", "positions"}:
             return self.positions_message()
 
@@ -161,6 +175,14 @@ class BasicTelegramAssistant:
 
         if normalized in {"/demo_positions", "demo_positions", "/demo_posiciones"}:
             return self.demo_positions_message()
+
+        if normalized in {
+            "/demo_close_all",
+            "demo_close_all",
+            "/cerrar_demo",
+            "/cerrar_demo_todo",
+        }:
+            return self.demo_close_all_message()
 
         if normalized in {"/demo_halt", "demo_halt", "/parar_demo"}:
             return self.demo_halt_message()
@@ -210,7 +232,7 @@ class BasicTelegramAssistant:
                         "/positions", "/halt", "/parar", "/resume_trading",
                         "/strategies", "/estrategias", "/demo_candidates",
                         "/demo_prepare", "/confirm_demo_trade", "/demo_positions",
-                        "/demo_halt",
+                        "/demo_close_all", "/cerrar_demo", "/demo_halt",
                     }
                     if cmd in known_prefixes:
                         # Re-ejecutar como comando real (recursion controlada por longitud)
@@ -254,6 +276,7 @@ Comandos:
 /demo_prepare ID - prepara una orden demo pendiente desde un paper trade
 /confirm_demo_trade ID - confirma y envia order_send a cuenta demo MT5
 /demo_positions - posiciones demo abiertas en MT5
+/demo_close_all - cierra todas las posiciones demo abiertas en MT5
 /demo_halt - bloquea nuevas ordenes demo
 /pausar - pausa alertas automaticas
 /reanudar - reactiva alertas automaticas
@@ -876,6 +899,25 @@ Ahora puedes usar /aprendizaje y /paper.
             )
         else:
             lines.append("Ultima auto-order: ninguna registrada todavia")
+
+        # Phase 5.5 Bloque B v2.6.0: seccion scalping engine
+        from app.utils.scalping_state import is_scalping_halted, resolve_scalping_state
+
+        scalping_active = resolve_scalping_state(self.settings, self.repository)
+        scalping_halted_state = is_scalping_halted(self.repository)
+        scalping_open = self._count_open_scalping()
+        scalping_today = self._count_scalping_orders_today()
+        lines.extend(
+            [
+                "",
+                "Scalping engine:",
+                f"  estado: {'ACTIVO' if scalping_active else 'inactivo'}",
+                f"  halt manual: {'SI' if scalping_halted_state else 'no'}",
+                f"  trades hoy: {scalping_today}/{self.settings.scalping_max_trades_per_day}",
+                f"  abiertos: {scalping_open}/{self.settings.scalping_max_open_trades}",
+                f"  simbolos: {','.join(self.settings.scalping_allowed_symbols)}",
+            ]
+        )
         lines.append("")
         lines.append(DISCLAIMER)
         return "\n".join(lines)
@@ -995,27 +1037,175 @@ Ahora puedes usar /aprendizaje y /paper.
     # ---------- Phase 4.5 v2.4.0: bot mode ----------
 
     def mode_message(self, arg: str) -> str:
+        """v2.6.0: extiende /mode con macros swing_only / scalping_only / hybrid.
+
+        Modos basicos (afecta solo bot_mode_active):
+        - trader: swing engine on.
+        - alerts_only: swing engine off, solo alertas Telegram.
+
+        Macros (afecta bot_mode_active Y scalping_active):
+        - swing_only: trader + scalping OFF.
+        - scalping_only: alerts_only + scalping ON.
+        - hybrid: trader + scalping ON (extiende semantic v2.4.0 que era alias de trader).
+        """
         from app.utils.bot_mode import VALID_MODES, normalize_mode, resolve_bot_mode
+        from app.utils.scalping_state import resolve_scalping_state
+
         if not arg:
-            current = resolve_bot_mode(self.settings, self.repository)
+            current_mode = resolve_bot_mode(self.settings, self.repository)
+            scalping_on = resolve_scalping_state(self.settings, self.repository)
             return (
-                f"Modo actual: {current}\n"
-                f"Validos: {', '.join(sorted(VALID_MODES))}\n"
-                "Cambiar: /mode alerts_only | /mode trader | /mode hybrid\n"
-                "Prioridad: CLI --mode > Telegram /mode > .env BOT_MODE > default trader.\n"
+                f"Modo bot: {current_mode}\n"
+                f"Scalping: {'ON' if scalping_on else 'OFF'}\n"
+                f"Validos basicos: {', '.join(sorted(VALID_MODES))}\n"
+                "Macros: /mode swing_only | /mode scalping_only | /mode hybrid | /mode alerts_only\n"
                 + DISCLAIMER
             )
+
+        normalized_arg = arg.strip().lower()
+        # Macros que setean ambos flags
+        if normalized_arg == "swing_only":
+            self.repository.set_state("bot_mode_active", "trader")
+            self.repository.set_state("scalping_active", "false")
+            return (
+                "Modo: SWING_ONLY (trader + scalping OFF).\n"
+                "Efecto en proximo ciclo.\n" + DISCLAIMER
+            )
+        if normalized_arg == "scalping_only":
+            self.repository.set_state("bot_mode_active", "alerts_only")
+            self.repository.set_state("scalping_active", "true")
+            return (
+                "Modo: SCALPING_ONLY (alerts_only swing + scalping ON).\n"
+                "Efecto en proximo ciclo. Reinicia el bot para que el thread scalping arranque.\n"
+                + DISCLAIMER
+            )
+        if normalized_arg == "hybrid":
+            self.repository.set_state("bot_mode_active", "trader")
+            self.repository.set_state("scalping_active", "true")
+            return (
+                "Modo: HYBRID (swing + scalping ON).\n"
+                "Efecto en proximo ciclo. Reinicia el bot para que el thread scalping arranque.\n"
+                + DISCLAIMER
+            )
+
+        # Modos basicos (solo bot_mode_active)
         target = normalize_mode(arg)
         if target is None:
             return (
-                f"Modo invalido '{arg}'. Validos: {', '.join(sorted(VALID_MODES))}."
+                f"Modo invalido '{arg}'. Validos: {', '.join(sorted(VALID_MODES))} | "
+                "macros: swing_only, scalping_only, hybrid."
             )
         self.repository.set_state("bot_mode_active", target)
         return (
-            f"Modo cambiado a: {target}.\n"
+            f"Modo bot cambiado a: {target} (scalping_active sin cambio).\n"
             f"Efecto en proximo ciclo. Revertir con /mode trader.\n"
             + DISCLAIMER
         )
+
+    # ---------- Phase 5.5 Bloque B v2.6.0: scalping commands ----------
+
+    def scalping_on_message(self) -> str:
+        self.repository.set_state("scalping_active", "true")
+        return (
+            "Scalping engine: ON (persistido).\n"
+            "Si el bot ya esta corriendo, REINICIA para que el thread scalping arranque.\n"
+            + DISCLAIMER
+        )
+
+    def scalping_off_message(self) -> str:
+        self.repository.set_state("scalping_active", "false")
+        return (
+            "Scalping engine: OFF (persistido).\n"
+            "Si el bot ya esta corriendo, REINICIA para que el thread scalping se detenga.\n"
+            + DISCLAIMER
+        )
+
+    def scalping_status_message(self) -> str:
+        from app.utils.scalping_state import is_scalping_halted, resolve_scalping_state
+
+        active = resolve_scalping_state(self.settings, self.repository)
+        halted = is_scalping_halted(self.repository)
+        open_count = self._count_open_scalping()
+        today_count = self._count_scalping_orders_today()
+        sent_count, failed_count = self._scalping_orders_breakdown()
+
+        lines = [
+            f"Scalping engine: {'ACTIVO' if active else 'inactivo'}",
+            f"Halt manual: {'SI' if halted else 'no'}",
+            f"Trades abiertos: {open_count}/{self.settings.scalping_max_open_trades}",
+            f"Trades hoy: {today_count}/{self.settings.scalping_max_trades_per_day}",
+            f"Auto-orders (last 20): {sent_count} sent / {failed_count} failed",
+            f"Simbolos: {','.join(self.settings.scalping_allowed_symbols)}",
+            f"Force-exit: {self.settings.scalping_force_exit_minutes} min",
+            f"Risk per trade: {self.settings.scalping_risk_per_trade_pct:.2f}%",
+            DISCLAIMER,
+        ]
+        return "\n".join(lines)
+
+    def scalping_halt_message(self) -> str:
+        self.repository.set_state("scalping_halted", "true")
+        return (
+            "Scalping HALTED. El engine sigue corriendo pero no abre nuevos trades.\n"
+            "Liberar con /scalping_resume.\n" + DISCLAIMER
+        )
+
+    def scalping_resume_message(self) -> str:
+        self.repository.set_state("scalping_halted", "false")
+        return (
+            "Scalping resumed. El engine puede volver a abrir trades.\n" + DISCLAIMER
+        )
+
+    def scalping_stats_message(self) -> str:
+        """Win rate + profit factor de scalping vs swing en outcomes recientes."""
+        outcomes = self.repository.fetch_signal_outcomes(limit=500)
+        scalping_outcomes = [o for o in outcomes if int(o.get("is_scalping") or 0) == 1]
+        if not scalping_outcomes:
+            return (
+                "Sin outcomes scalping todavia. Dejá correr el bot y mandá /scalping_stats luego.\n"
+                + DISCLAIMER
+            )
+        wins = sum(1 for o in scalping_outcomes if str(o.get("outcome_label") or "").startswith("win"))
+        losses = sum(1 for o in scalping_outcomes if str(o.get("outcome_label") or "").startswith("loss"))
+        total = len(scalping_outcomes)
+        win_rate = (wins / total * 100) if total > 0 else 0.0
+        returns = [float(o.get("return_pct") or 0) for o in scalping_outcomes]
+        avg_return = sum(returns) / len(returns) if returns else 0.0
+        return (
+            f"Scalping stats (ultimos {total} outcomes)\n"
+            f"Win rate: {win_rate:.1f}% ({wins}W / {losses}L)\n"
+            f"Avg return per trade: {avg_return:+.3f}%\n"
+            + DISCLAIMER
+        )
+
+    def _count_open_scalping(self) -> int:
+        try:
+            all_open = self.repository.fetch_open_positions_full() or []
+        except Exception:
+            return 0
+        return sum(1 for t in all_open if int(t.get("is_scalping") or 0) == 1)
+
+    def _count_scalping_orders_today(self) -> int:
+        try:
+            from app.utils.time_utils import utc_now
+            today = utc_now().date().isoformat()
+            orders = self.repository.fetch_demo_orders(limit=200)
+            return sum(
+                1 for o in orders
+                if int(o.get("is_scalping") or 0) == 1
+                and str(o.get("sent_at") or "").startswith(today)
+            )
+        except Exception:
+            return 0
+
+    def _scalping_orders_breakdown(self) -> tuple[int, int]:
+        try:
+            orders = self.repository.fetch_demo_orders(limit=20)
+            scalping = [o for o in orders if int(o.get("is_scalping") or 0) == 1]
+            sent = sum(1 for o in scalping if o.get("status") == "sent")
+            failed = sum(1 for o in scalping if o.get("status") == "failed")
+            return sent, failed
+        except Exception:
+            return 0, 0
 
     # ---------- Phase 4 v2.3.0 commands ----------
 
@@ -1278,6 +1468,32 @@ Ahora puedes usar /aprendizaje y /paper.
                 f"{pos.get('volume')} lot @ {pos.get('price_open')} | "
                 f"SL {pos.get('sl')} | TP {pos.get('tp')} | PnL {pos.get('profit')}"
             )
+        return "\n".join(lines)
+
+    def demo_close_all_message(self) -> str:
+        from app.brokers.mt5_demo_trader import MT5DemoTrader
+        trader = MT5DemoTrader(self.settings)
+        try:
+            results = trader.close_all_positions()
+        finally:
+            trader.disconnect()
+        if not results:
+            return "No hay posiciones demo abiertas para cerrar."
+
+        closed = [result for result in results if result.ok]
+        failed = [result for result in results if not result.ok]
+        lines = [
+            f"Cierre demo MT5: {len(closed)}/{len(results)} posiciones cerradas."
+        ]
+        for result in results[:10]:
+            status = "OK" if result.ok else "FALLO"
+            ticket = result.ticket if result.ticket is not None else "?"
+            symbol = result.symbol or "?"
+            volume = f"{result.volume:g}" if result.volume is not None else "?"
+            detail = result.result_summary or result.reason
+            lines.append(f"{status} #{ticket} {symbol} {volume} lot | {detail}")
+        if failed:
+            lines.append("Revisa MT5 si alguna posicion quedo abierta.")
         return "\n".join(lines)
 
     def demo_halt_message(self) -> str:
