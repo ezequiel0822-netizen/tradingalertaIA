@@ -530,9 +530,9 @@ class Repository:
                     mfe_pct, mae_pct, original_stop_loss, trailing_active,
                     strategy_name, direction, time_horizon_hours,
                     size_notional, size_units, risk_pct, partial_closed,
-                    account_balance_at_open
+                    account_balance_at_open, is_scalping
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     trade["alert_id"],
@@ -566,6 +566,7 @@ class Repository:
                     trade.get("risk_pct"),
                     trade.get("partial_closed", 0),
                     trade.get("account_balance_at_open"),
+                    int(trade.get("is_scalping") or 0),  # v2.6.0 Phase 5.5 Bloque B
                 ),
             )
         return True
@@ -717,9 +718,9 @@ class Repository:
                     demo_request_id, paper_trade_id, symbol, direction,
                     volume, price, stop_loss, take_profit, retcode,
                     order_ticket, deal_ticket, status, strategy_name,
-                    result_summary, sent_at
+                    result_summary, sent_at, is_scalping
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     order["demo_request_id"],
@@ -737,6 +738,7 @@ class Repository:
                     order.get("strategy_name"),
                     order.get("result_summary"),
                     order["sent_at"],
+                    int(order.get("is_scalping") or 0),  # v2.6.0 Phase 5.5 Bloque B
                 ),
             )
         return int(cursor.lastrowid)
