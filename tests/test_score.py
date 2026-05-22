@@ -172,6 +172,18 @@ def _settings() -> Settings:
         enable_real_trading=False,
         enable_auto_confirm_demo=False,
         demo_max_total_risk_pct=10.0,
+        enable_scalping_engine=False,
+        scalping_allowed_symbols=["EURUSD", "GBPUSD"],
+        scalping_risk_per_trade_pct=1.0,
+        scalping_max_trades_per_day=30,
+        scalping_max_open_trades=3,
+        scalping_max_daily_loss_pct=3.0,
+        scalping_force_exit_minutes=5,
+        scalping_poll_interval_seconds=5,
+        scalping_heartbeat_every_n_trades=5,
+        scalping_sl_pips=8,
+        scalping_tp_pips=12,
+        scalping_range_lookback_bars=10,
     )
 
 

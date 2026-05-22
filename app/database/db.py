@@ -386,6 +386,11 @@ def _init_db_unsafe(db_path: Path) -> None:
         _ensure_column(connection, "paper_trades", "partial_closed", "INTEGER DEFAULT 0")
         _ensure_column(connection, "paper_trades", "account_balance_at_open", "REAL")
         _ensure_column(connection, "alerts", "strategy_name", "TEXT")
+        # Phase 5.5 Bloque B v2.6.0 — scalping flag para diferenciar trades.
+        _ensure_column(connection, "paper_trades", "is_scalping", "INTEGER DEFAULT 0")
+        _ensure_column(connection, "demo_orders", "is_scalping", "INTEGER DEFAULT 0")
+        _ensure_column(connection, "signal_outcomes", "is_scalping", "INTEGER DEFAULT 0")
+        _ensure_column(connection, "strategy_lessons", "is_scalping", "INTEGER DEFAULT 0")
 
 
 def _ensure_column(

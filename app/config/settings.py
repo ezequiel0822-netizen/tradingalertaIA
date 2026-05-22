@@ -265,6 +265,19 @@ class Settings:
     # Permite que MAX_TOTAL_RISK_PCT (que cuenta stocks paper) no bloquee
     # signals de forex/oro que sí ejecutan a MT5 demo.
     demo_max_total_risk_pct: float
+    # Phase 5.5 Bloque B v2.6.0 — Scalping engine (opt-in, default OFF)
+    enable_scalping_engine: bool
+    scalping_allowed_symbols: list[str]
+    scalping_risk_per_trade_pct: float
+    scalping_max_trades_per_day: int
+    scalping_max_open_trades: int
+    scalping_max_daily_loss_pct: float
+    scalping_force_exit_minutes: int
+    scalping_poll_interval_seconds: int
+    scalping_heartbeat_every_n_trades: int
+    scalping_sl_pips: int
+    scalping_tp_pips: int
+    scalping_range_lookback_bars: int
 
     def __repr__(self) -> str:
         parts: list[str] = []
@@ -334,7 +347,7 @@ def load_settings() -> Settings:
         obsidian_vault_path = safe_obsidian
 
     return Settings(
-        app_version=os.getenv("APP_VERSION", "v2.5.5"),
+        app_version=os.getenv("APP_VERSION", "v2.6.0"),
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
         telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID"),
         dexscreener_base_url=os.getenv(
@@ -603,4 +616,26 @@ def load_settings() -> Settings:
         enable_auto_confirm_demo=_get_bool("ENABLE_AUTO_CONFIRM_DEMO", False),
         # v2.5.5 — cap demo separado. Default 10% (conservador para demo).
         demo_max_total_risk_pct=_get_float("DEMO_MAX_TOTAL_RISK_PCT", 10.0),
+        # Phase 5.5 Bloque B v2.6.0 — Scalping engine. Todo opt-in default OFF.
+        # Si ENABLE_SCALPING_ENGINE=true, main.py arranca thread separado
+        # que polea cada SCALPING_POLL_INTERVAL_SECONDS contra MT5 demo.
+        # Real-money trading sigue bloqueado por ENABLE_REAL_TRADING=false.
+        enable_scalping_engine=_get_bool("ENABLE_SCALPING_ENGINE", False),
+        scalping_allowed_symbols=_get_list(
+            "SCALPING_ALLOWED_SYMBOLS", ["EURUSD", "GBPUSD"]
+        ),
+        scalping_risk_per_trade_pct=_get_float("SCALPING_RISK_PER_TRADE_PCT", 1.0),
+        scalping_max_trades_per_day=_get_int("SCALPING_MAX_TRADES_PER_DAY", 30),
+        scalping_max_open_trades=_get_int("SCALPING_MAX_OPEN_TRADES", 3),
+        scalping_max_daily_loss_pct=_get_float("SCALPING_MAX_DAILY_LOSS_PCT", 3.0),
+        scalping_force_exit_minutes=_get_int("SCALPING_FORCE_EXIT_MINUTES", 5),
+        scalping_poll_interval_seconds=_get_int(
+            "SCALPING_POLL_INTERVAL_SECONDS", 5
+        ),
+        scalping_heartbeat_every_n_trades=_get_int(
+            "SCALPING_HEARTBEAT_EVERY_N_TRADES", 5
+        ),
+        scalping_sl_pips=_get_int("SCALPING_SL_PIPS", 8),
+        scalping_tp_pips=_get_int("SCALPING_TP_PIPS", 12),
+        scalping_range_lookback_bars=_get_int("SCALPING_RANGE_LOOKBACK_BARS", 10),
     )
