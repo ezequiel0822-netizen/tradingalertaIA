@@ -77,10 +77,21 @@ class RiskManager:
                 )
 
         current_risk = self.portfolio_manager.total_risk_pct()
-        if current_risk + proposed_risk_pct > self.settings.max_total_risk_pct:
+        # v2.5.5: cap separado para forex/gold cuando demo trading está activo.
+        # Sin esto, stocks paper acumulan riesgo y bloquean signals forex/oro que
+        # SÍ tienen pretensión de ejecutar a MT5 demo via auto-confirm.
+        applicable_cap = self.settings.max_total_risk_pct
+        cap_name = "max_total_risk_pct"
+        if (
+            category in {"forex", "gold"}
+            and self.settings.enable_mt5_demo_trading
+        ):
+            applicable_cap = self.settings.demo_max_total_risk_pct
+            cap_name = "demo_max_total_risk_pct"
+        if current_risk + proposed_risk_pct > applicable_cap:
             return (
                 False,
-                f"max_total_risk_pct exceeded ({current_risk:.2f}+{proposed_risk_pct:.2f}>{self.settings.max_total_risk_pct})",
+                f"{cap_name} exceeded ({current_risk:.2f}+{proposed_risk_pct:.2f}>{applicable_cap})",
             )
 
         if self.settings.enable_kill_switch_auto:

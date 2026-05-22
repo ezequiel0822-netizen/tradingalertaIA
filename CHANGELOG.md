@@ -1,5 +1,25 @@
 # Changelog
 
+## Trading Alert AI v2.5.5
+
+Patches tacticos post-observacion overnight v2.5.4. Dos cambios focused: cap separado de riesgo para demo execution + nuevo comando `/health` en Telegram.
+
+**Cambio A — DEMO_MAX_TOTAL_RISK_PCT (default 10.0):**
+- Problema observado: `MAX_TOTAL_RISK_PCT=6.0` cuenta agregado de stocks paper + forex + gold. Si stocks paper consumen 5%, los signals forex/gold que SI ejecutan a MT5 demo via auto-confirm quedan bloqueados (5+1>6 → block).
+- Fix: `app/risk/risk_manager.py::check_can_open_trade` ahora usa `demo_max_total_risk_pct` cuando la categoria es forex o gold AND `enable_mt5_demo_trading=True`. Stocks/memecoins siguen bajo el cap default.
+- Settings nuevo `DEMO_MAX_TOTAL_RISK_PCT=10.0` (opt-out via bajarlo, opt-in via subirlo).
+- Tests nuevos en `tests/test_risk_manager.py` (4 escenarios: forex con demo permite, forex con demo bloquea al exceder, stocks no afectados, demo disabled usa cap viejo).
+
+**Cambio B — Comando `/health` (`/salud`) en Telegram:**
+- Panel rapido de salud del sistema. Muestra version + bot mode, MT5 (reader, broker, demo trading, auto-confirm, real trading bloqueado), paper trades open por categoria con caps, riesgo agregado con ambos caps aplicables, balance demo, P&L hoy, kill-switch state, demo trading halt state, contadores de auto-orders demo (sent/failed) + ultima auto-order con ticket + retcode.
+- Util para chequear el bot desde el celular sin abrir PowerShell ni SQL.
+- Aliases: `/health`, `/salud`. (`/estado` ya estaba tomado por `/status`.)
+- Tests nuevos en `tests/test_health_command.py` (4 tests).
+
+**Safety stack intacto:** real-money sigue `ENABLE_REAL_TRADING=false` hardcoded. Demo trading validations sin cambios. Kill-switch operativo. /demo_halt sigue activo.
+
+**Total tests:** 245 -> 253 verdes (+8).
+
 ## Trading Alert AI v2.5.4
 
 Phase 5.5 Bloque A: auto-confirm opt-in para ordenes demo MT5. Cuando `ENABLE_AUTO_CONFIRM_DEMO=true`, las ordenes se ejecutan automaticamente sin esperar `/confirm_demo_trade` desde Telegram. Acelera el ciclo de aprendizaje. Real-money trading sigue bloqueado.

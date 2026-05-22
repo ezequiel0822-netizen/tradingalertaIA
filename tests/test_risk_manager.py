@@ -117,3 +117,101 @@ def test_force_close_all_open_marks_trades() -> None:
     assert n == 2
     open_after = repo.fetch_paper_trades(status="open", limit=10)
     assert len(open_after) == 0
+
+
+# v2.5.5: cap separado de riesgo total para forex/gold con demo trading activo.
+# Cada `_seed_open(entry=100, stop=95, size_notional=2000)` representa 1% de
+# riesgo sobre una cuenta de 10000 USD ((100-95)*20 / 10000 * 100 = 1%).
+
+
+def test_demo_cap_allows_forex_when_demo_enabled() -> None:
+    """5% de riesgo en stocks paper + 1.5% forex propuesto = 6.5%.
+
+    Bajo el cap default 6 (max_total_risk_pct) sería bloqueado, pero el cap
+    demo es 10 y forex con demo activo lo usa → debería pasar.
+    """
+    rm, repo, _ = _mk(
+        {
+            "max_total_risk_pct": 6.0,
+            "demo_max_total_risk_pct": 10.0,
+            "enable_mt5_demo_trading": True,
+            "account_starting_balance": 10000.0,
+            # Subir cap de open trades para aislar el risk cap.
+            "max_open_trades_total": 50,
+            "max_open_trades_stock": 50,
+            "max_open_trades_forex": 50,
+            "max_open_trades_gold": 50,
+        }
+    )
+    for i in range(5):
+        _seed_open(repo, f"S{i}", "stock", 100, 95, 2000)
+    ok, reason = rm.check_can_open_trade("forex", 1.5)
+    assert ok is True, f"expected allowed under demo cap, got: {reason}"
+
+
+def test_demo_cap_blocks_forex_when_demo_cap_exceeded() -> None:
+    """9% de riesgo en stocks + 2% forex propuesto = 11% > demo cap 10 → block."""
+    rm, repo, _ = _mk(
+        {
+            "max_total_risk_pct": 6.0,
+            "demo_max_total_risk_pct": 10.0,
+            "enable_mt5_demo_trading": True,
+            "account_starting_balance": 10000.0,
+            # Subir cap de open trades para aislar el risk cap.
+            "max_open_trades_total": 50,
+            "max_open_trades_stock": 50,
+            "max_open_trades_forex": 50,
+            "max_open_trades_gold": 50,
+        }
+    )
+    for i in range(9):
+        _seed_open(repo, f"S{i}", "stock", 100, 95, 2000)
+    ok, reason = rm.check_can_open_trade("forex", 2.0)
+    assert ok is False
+    assert "demo_max_total_risk_pct" in reason
+
+
+def test_demo_cap_does_not_apply_to_stocks() -> None:
+    """Stocks siguen bajo max_total_risk_pct (6) aunque demo trading esté activo.
+
+    Solo forex/gold disfrutan del cap demo más amplio.
+    """
+    rm, repo, _ = _mk(
+        {
+            "max_total_risk_pct": 6.0,
+            "demo_max_total_risk_pct": 10.0,
+            "enable_mt5_demo_trading": True,
+            "account_starting_balance": 10000.0,
+            # Subir cap de open trades para aislar el risk cap.
+            "max_open_trades_total": 50,
+            "max_open_trades_stock": 50,
+            "max_open_trades_forex": 50,
+            "max_open_trades_gold": 50,
+        }
+    )
+    for i in range(5):
+        _seed_open(repo, f"S{i}", "stock", 100, 95, 2000)
+    ok, reason = rm.check_can_open_trade("stock", 1.5)
+    assert ok is False
+    assert "max_total_risk_pct" in reason
+
+
+def test_demo_cap_ignored_when_demo_disabled() -> None:
+    """Con ENABLE_MT5_DEMO_TRADING=false, forex usa el cap default igual que stocks."""
+    rm, repo, _ = _mk(
+        {
+            "max_total_risk_pct": 6.0,
+            "demo_max_total_risk_pct": 10.0,
+            "enable_mt5_demo_trading": False,
+            "account_starting_balance": 10000.0,
+            "max_open_trades_total": 50,
+            "max_open_trades_stock": 50,
+            "max_open_trades_forex": 50,
+            "max_open_trades_gold": 50,
+        }
+    )
+    for i in range(5):
+        _seed_open(repo, f"S{i}", "stock", 100, 95, 2000)
+    ok, reason = rm.check_can_open_trade("forex", 1.5)
+    assert ok is False
+    assert "max_total_risk_pct" in reason

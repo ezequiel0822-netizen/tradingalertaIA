@@ -117,6 +117,10 @@ class BasicTelegramAssistant:
         if normalized in {"/portfolio", "portfolio", "/portafolio", "portafolio"}:
             return self.portfolio_message()
 
+        # v2.5.5: panel de salud del sistema (MT5, trades, riesgo, kill-switch, auto-orders).
+        if normalized in {"/health", "health", "/salud", "salud"}:
+            return self.health_message()
+
         if normalized in {"/posiciones", "posiciones", "/positions", "positions"}:
             return self.positions_message()
 
@@ -791,6 +795,90 @@ Ahora puedes usar /aprendizaje y /paper.
         return labels.get(hours, f"{hours}h")
 
     # ---------- Fase 2.5 v2.0.0 trader engine commands ----------
+
+    def health_message(self) -> str:
+        """Panel de salud — v2.5.5.
+
+        Snapshot rápido del bot: trades abiertos, riesgo consumido, caps
+        aplicables, kill-switch, auto-confirm, y últimas auto-orders demo.
+        Útil cuando el bot corre autónomo y querés ver qué pasa desde Telegram.
+        """
+        from app.portfolio.portfolio_manager import PortfolioManager
+        pm = PortfolioManager(self.settings, self.repository)
+        counts = pm.count_open_by_category()
+        total_open = sum(counts.values()) if counts else 0
+        balance = pm.account_balance()
+        risk_used = pm.total_risk_pct(balance)
+        daily_pnl = pm.realized_pnl_today()
+
+        # Estado de switches
+        kill_until = self.repository.get_state("kill_switch_active_until") or ""
+        kill_reason = self.repository.get_state("kill_switch_reason") or ""
+        kill_str = (
+            f"ACTIVO hasta {kill_until} ({kill_reason})"
+            if kill_until
+            else "inactivo"
+        )
+        demo_halt = self.repository.get_state("demo_trading_halted", "false") == "true"
+
+        # Auto-orders demo
+        recent_orders = self.repository.fetch_demo_orders(limit=20)
+        sent_orders = [o for o in recent_orders if o.get("status") == "sent"]
+        failed_orders = [o for o in recent_orders if o.get("status") == "failed"]
+        last_order = recent_orders[0] if recent_orders else None
+
+        lines: list[str] = [
+            f"Trading Alert AI {self.settings.app_version}",
+            f"Bot mode: {self.settings.bot_mode}",
+            "",
+            "MT5:",
+            f"  reader habilitado: {'si' if self.settings.enable_mt5_reader else 'no'}",
+            f"  broker profile: {self.settings.mt5_broker_profile}",
+            f"  demo trading: {'ON' if self.settings.enable_mt5_demo_trading else 'OFF'}",
+            f"  auto-confirm: {'ON' if self.settings.enable_auto_confirm_demo else 'OFF'}",
+            f"  real trading: {'ON' if self.settings.enable_real_trading else 'BLOQUEADO'}",
+            "",
+            f"Paper trades open: {total_open}/{self.settings.max_open_trades_total}",
+        ]
+        per_cat_limits = {
+            "stock": self.settings.max_open_trades_stock,
+            "forex": self.settings.max_open_trades_forex,
+            "gold": self.settings.max_open_trades_gold,
+        }
+        for cat in sorted(counts.keys()) if counts else []:
+            n = counts[cat]
+            cat_lim = per_cat_limits.get(cat)
+            lim_str = f"/{cat_lim}" if cat_lim is not None else ""
+            lines.append(f"  {cat}: {n}{lim_str}")
+        lines.extend(
+            [
+                "",
+                f"Riesgo agregado: {risk_used:.2f}%",
+                f"  cap default: {self.settings.max_total_risk_pct:.1f}% (stocks/memecoin)",
+                f"  cap demo: {self.settings.demo_max_total_risk_pct:.1f}% (forex/gold con demo trading)",
+                f"Balance demo: {balance:,.2f} USD",
+                f"P&L hoy: {daily_pnl:+.2f}%",
+                "",
+                f"Kill switch: {kill_str}",
+                f"Demo trading halt: {'ACTIVO' if demo_halt else 'inactivo'}",
+                "",
+                f"Auto-orders demo (ultimas 20): {len(sent_orders)} sent, {len(failed_orders)} failed",
+            ]
+        )
+        if last_order:
+            sym = last_order.get("symbol") or "?"
+            status = last_order.get("status") or "?"
+            ticket = last_order.get("order_ticket") or "?"
+            retcode = last_order.get("retcode") or "?"
+            sent_at = last_order.get("sent_at") or "?"
+            lines.append(
+                f"Ultima auto-order: {status} {sym} ticket={ticket} retcode={retcode} ({sent_at})"
+            )
+        else:
+            lines.append("Ultima auto-order: ninguna registrada todavia")
+        lines.append("")
+        lines.append(DISCLAIMER)
+        return "\n".join(lines)
 
     def portfolio_message(self) -> str:
         from app.portfolio.portfolio_manager import PortfolioManager

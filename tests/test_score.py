@@ -171,6 +171,7 @@ def _settings() -> Settings:
         demo_trade_request_ttl_minutes=15,
         enable_real_trading=False,
         enable_auto_confirm_demo=False,
+        demo_max_total_risk_pct=10.0,
     )
 
 

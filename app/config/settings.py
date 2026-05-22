@@ -261,6 +261,10 @@ class Settings:
     enable_real_trading: bool
     # Phase 5.5 v2.5.4 — auto-confirm demo orders (opt-in)
     enable_auto_confirm_demo: bool
+    # v2.5.5 — cap separado de riesgo total para demo (forex/gold).
+    # Permite que MAX_TOTAL_RISK_PCT (que cuenta stocks paper) no bloquee
+    # signals de forex/oro que sí ejecutan a MT5 demo.
+    demo_max_total_risk_pct: float
 
     def __repr__(self) -> str:
         parts: list[str] = []
@@ -330,7 +334,7 @@ def load_settings() -> Settings:
         obsidian_vault_path = safe_obsidian
 
     return Settings(
-        app_version=os.getenv("APP_VERSION", "v2.5.4"),
+        app_version=os.getenv("APP_VERSION", "v2.5.5"),
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
         telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID"),
         dexscreener_base_url=os.getenv(
@@ -597,4 +601,6 @@ def load_settings() -> Settings:
         # Cuando true, demo orders se mandan a MT5 sin pasar por /confirm_demo_trade.
         # Real-money trading sigue bloqueado (ENABLE_REAL_TRADING=false hardcoded).
         enable_auto_confirm_demo=_get_bool("ENABLE_AUTO_CONFIRM_DEMO", False),
+        # v2.5.5 — cap demo separado. Default 10% (conservador para demo).
+        demo_max_total_risk_pct=_get_float("DEMO_MAX_TOTAL_RISK_PCT", 10.0),
     )
