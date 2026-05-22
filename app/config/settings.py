@@ -259,6 +259,8 @@ class Settings:
     demo_allowed_symbols: list[str]
     demo_trade_request_ttl_minutes: int
     enable_real_trading: bool
+    # Phase 5.5 v2.5.4 — auto-confirm demo orders (opt-in)
+    enable_auto_confirm_demo: bool
 
     def __repr__(self) -> str:
         parts: list[str] = []
@@ -328,7 +330,7 @@ def load_settings() -> Settings:
         obsidian_vault_path = safe_obsidian
 
     return Settings(
-        app_version=os.getenv("APP_VERSION", "v2.5.3"),
+        app_version=os.getenv("APP_VERSION", "v2.5.4"),
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
         telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID"),
         dexscreener_base_url=os.getenv(
@@ -591,4 +593,8 @@ def load_settings() -> Settings:
             "DEMO_TRADE_REQUEST_TTL_MINUTES", 15
         ),
         enable_real_trading=_get_bool("ENABLE_REAL_TRADING", False),
+        # Phase 5.5 v2.5.4 — auto-confirm demo orders. Default OFF (opt-in).
+        # Cuando true, demo orders se mandan a MT5 sin pasar por /confirm_demo_trade.
+        # Real-money trading sigue bloqueado (ENABLE_REAL_TRADING=false hardcoded).
+        enable_auto_confirm_demo=_get_bool("ENABLE_AUTO_CONFIRM_DEMO", False),
     )

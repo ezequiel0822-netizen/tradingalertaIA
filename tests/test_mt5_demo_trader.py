@@ -19,6 +19,7 @@ def _demo_settings(**overrides):
         "demo_max_lot": 0.01,
         "demo_allowed_symbols": ["eurusd", "xauusd"],
         "enable_real_trading": False,
+        "enable_auto_confirm_demo": False,
         "mt5_login": 123456,
         "mt5_password": "demo-password",
         "mt5_server": "ICMarkets-Demo",

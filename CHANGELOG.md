@@ -1,5 +1,18 @@
 # Changelog
 
+## Trading Alert AI v2.5.4
+
+Phase 5.5 Bloque A: auto-confirm opt-in para ordenes demo MT5. Cuando `ENABLE_AUTO_CONFIRM_DEMO=true`, las ordenes se ejecutan automaticamente sin esperar `/confirm_demo_trade` desde Telegram. Acelera el ciclo de aprendizaje. Real-money trading sigue bloqueado.
+
+- Nuevo setting `ENABLE_AUTO_CONFIRM_DEMO=false` (default OFF, opt-in).
+- `app/scheduler/jobs.py::_auto_execute_demo_request`: ejecuta `send_prepared_request` inmediato despues de crear la request en `demo_trade_requests`. Persiste status `sent` o `failed` y crea fila en `demo_orders` para auditoria.
+- Notificacion Telegram diferenciada: "Auto-orden demo enviada #N" en exito o "Auto-orden demo FALLIDA #N" en rechazo. Permite distinguir ejecuciones automaticas de cualquier otra notificacion.
+- Manual confirm (`/confirm_demo_trade`) sigue funcionando como fallback. Bajando el flag a `false` se vuelve al modo Phase 5 original sin redeploy.
+- Safety stack intacto: `ENABLE_REAL_TRADING=false` (hardcoded), validaciones demo-only en `mt5_demo_trader` (cuenta demo, `trade_allowed`, `trade_expert`, mandatory SL, simbolos whitelist, volumen normalizado, riesgo cap), kill-switch `/demo_halt` sigue activo.
+- Tests nuevos en `tests/test_auto_confirm_demo.py` (4 tests). Total **244 verdes** (240 -> 244).
+
+Proximo (Bloque B, sesion separada): Scalping Engine en hilo dedicado con polling 5s + nueva strategy M1 + caps especificos (SCALPING_RISK_PER_TRADE_PCT, SCALPING_MAX_TRADES_PER_DAY, etc.).
+
 ## Trading Alert AI v2.5.3
 
 Patch de candidatos demo: `/demo_candidates` ahora valida cada paper trade contra el precio actual de MT5 antes de mostrarlo. Los setups vencidos, por ejemplo longs cuyo TP ya quedo debajo del precio actual, se ocultan y se reportan como descartes en vez de dejar que fallen repetidamente en `/demo_prepare`.

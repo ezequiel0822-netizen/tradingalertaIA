@@ -886,7 +886,12 @@ class TradingAlertJob:
             return  # solo 1 trade por snapshot (la primera signal valida)
 
     def _try_prepare_demo_order(self, paper_trade: dict) -> None:
-        """Phase 5: create a pending MT5 demo order request, never auto-send."""
+        """Phase 5: create a pending MT5 demo order request.
+
+        Phase 5.5 v2.5.4: si enable_auto_confirm_demo=True, la request se
+        ejecuta automáticamente vía _auto_execute_demo_request en lugar de
+        esperar /confirm_demo_trade por Telegram. Real-money sigue bloqueado.
+        """
         if not self.settings.enable_mt5_demo_trading:
             return
         if not self.settings.demo_order_require_confirmation:
@@ -896,10 +901,12 @@ class TradingAlertJob:
             return
         if str(paper_trade.get("category") or "").lower() not in {"forex", "gold"}:
             return
-        try:
-            from app.brokers.mt5_demo_trader import MT5DemoTrader
 
-            trader = MT5DemoTrader(self.settings, self.mt5_reader)
+        from app.brokers.mt5_demo_trader import MT5DemoTrader
+
+        trader = MT5DemoTrader(self.settings, self.mt5_reader)
+        open_positions = 0
+        try:
             open_positions = len(trader.positions())
             result = trader.prepare_from_paper_trade(paper_trade, open_positions)
         except Exception:
@@ -936,6 +943,18 @@ class TradingAlertJob:
                 "expires_at": expires_at.isoformat(),
             }
         )
+
+        # Phase 5.5 v2.5.4: auto-confirm path (opt-in)
+        if self.settings.enable_auto_confirm_demo:
+            try:
+                self._auto_execute_demo_request(trader, request_id, open_positions)
+            except Exception:
+                logger.exception(
+                    "Auto-confirm demo order failed for request %s", request_id
+                )
+            return
+
+        # Manual confirm path (Phase 5 original)
         try:
             self.notifier.send_message(
                 "Orden demo MT5 lista para confirmar\n"
@@ -947,3 +966,85 @@ class TradingAlertJob:
             )
         except Exception:
             logger.exception("Demo order request notification failed")
+
+    def _auto_execute_demo_request(
+        self, trader, request_id: int, open_positions: int
+    ) -> None:
+        """Phase 5.5 v2.5.4: ejecuta send_prepared_request sin pasar por Telegram.
+
+        Solo se invoca cuando enable_auto_confirm_demo=True. Validaciones
+        demo-only y mandatory SL siguen aplicando dentro de mt5_demo_trader.
+        Real-money trading sigue bloqueado por enable_real_trading=False.
+        """
+        request = self.repository.fetch_demo_trade_request(request_id)
+        if not request:
+            logger.error(
+                "Auto-confirm: request #%s not found after creation", request_id
+            )
+            return
+        try:
+            result = trader.send_prepared_request(request, open_positions)
+        except Exception:
+            logger.exception(
+                "Auto-confirm send_prepared_request raised for #%s", request_id
+            )
+            return
+
+        now_iso = utc_now().isoformat()
+        try:
+            self.repository.update_demo_trade_request(
+                request_id,
+                {
+                    "status": result.status,
+                    "confirmed_at": now_iso,
+                    "sent_at": now_iso if result.status == "sent" else None,
+                    "result_message": (result.result_summary or result.reason),
+                },
+            )
+            self.repository.create_demo_order(
+                {
+                    "demo_request_id": request_id,
+                    "paper_trade_id": request["paper_trade_id"],
+                    "symbol": request["symbol"],
+                    "direction": request["direction"],
+                    "volume": request["volume"],
+                    "price": result.price,
+                    "stop_loss": request["stop_loss"],
+                    "take_profit": request["take_profit"],
+                    "retcode": result.retcode,
+                    "order_ticket": result.order_ticket,
+                    "deal_ticket": result.deal_ticket,
+                    "status": result.status,
+                    "strategy_name": request.get("strategy_name"),
+                    "result_summary": (result.result_summary or result.reason),
+                    "sent_at": now_iso,
+                }
+            )
+        except Exception:
+            logger.exception(
+                "Auto-confirm DB persist failed for request #%s", request_id
+            )
+
+        try:
+            volume_str = f"{float(request['volume']):g}"
+            if result.ok:
+                self.notifier.send_message(
+                    f"Auto-orden demo enviada #{request_id}\n"
+                    f"{str(request['direction']).upper()} {request['symbol']} "
+                    f"{volume_str} lot\n"
+                    f"Order: {result.order_ticket or '?'} | "
+                    f"Deal: {result.deal_ticket or '?'}\n"
+                    f"Retcode: {result.retcode}\n"
+                    f"Estrategia: {request.get('strategy_name') or '?'}"
+                )
+            else:
+                self.notifier.send_message(
+                    f"Auto-orden demo FALLIDA #{request_id}\n"
+                    f"{str(request['direction']).upper()} {request['symbol']}\n"
+                    f"Motivo: {result.reason}\n"
+                    f"Detalle: {result.result_summary or 'sin detalle'}"
+                )
+        except Exception:
+            logger.exception(
+                "Auto-confirm Telegram notification failed for #%s", request_id
+            )
