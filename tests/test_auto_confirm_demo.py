@@ -78,10 +78,29 @@ class _StubJob:
 
 
 def test_enable_auto_confirm_demo_default_false(monkeypatch) -> None:
-    """Sin la variable de entorno, el flag default es False (opt-in safety)."""
+    """Sin la variable de entorno y sin .env del usuario, el flag default es False.
+
+    Necesitamos mock de `load_dotenv` porque python-dotenv lee el `.env` del
+    usuario aunque hagamos `delenv` (load_dotenv lo carga de vuelta). Acá
+    queremos testear el comportamiento del helper `_get_bool(default=False)`
+    cuando no existe el setting en ningún lado.
+    """
+    monkeypatch.setattr(
+        "app.config.settings.load_dotenv", lambda *args, **kwargs: None
+    )
     monkeypatch.delenv("ENABLE_AUTO_CONFIRM_DEMO", raising=False)
     settings = load_settings()
     assert settings.enable_auto_confirm_demo is False
+
+
+def test_enable_auto_confirm_demo_reads_env_true(monkeypatch) -> None:
+    """Con la variable seteada a 'true' explícitamente, el flag es True."""
+    monkeypatch.setattr(
+        "app.config.settings.load_dotenv", lambda *args, **kwargs: None
+    )
+    monkeypatch.setenv("ENABLE_AUTO_CONFIRM_DEMO", "true")
+    settings = load_settings()
+    assert settings.enable_auto_confirm_demo is True
 
 
 def test_manual_path_notifies_when_auto_disabled(monkeypatch) -> None:
