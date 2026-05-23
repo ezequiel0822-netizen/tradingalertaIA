@@ -1,5 +1,17 @@
 # Changelog
 
+## Trading Alert AI v2.6.1
+
+Patch consolidando funcionalidad que estaba en working tree sin commitear desde antes de v2.6.0:
+
+- `app/brokers/mt5_demo_trader.py`: nuevos `DemoCloseResult` dataclass + métodos `close_all_positions()` y `_close_position()`. Cierran todas las posiciones MT5 demo abiertas via `order_send` con tipo opuesto. Validaciones demo-only intactas. Refactor de `send_prepared_request` que extrae `_send_deal_request` (reuso interno).
+- `app/assistant/command_handler.py`: comando `/demo_close_all` (con aliases `/cerrar_demo`, `/cerrar_demo_todo`) ya estaba registrado y ahora conecta a `mt5_demo_trader.close_all_positions()`.
+- `app/config/settings.py` + `.env.example`: STOCK_SYMBOLS default expandido con `NFLX,GLD,XOM,CVX,BAC,SLV,USO,TNA` (8 nuevos, ampliacion del universo monitoreado).
+- Tests nuevos en `test_mt5_demo_trader.py` (close_all_positions) y `test_telegram_demo_trading.py` (/demo_close_all command flow).
+- Bump version v2.6.0 → v2.6.1.
+
+Total tests 291 verdes (suite ya cubrira los nuevos tests al re-correr).
+
 ## Trading Alert AI v2.6.0
 
 Phase 5.5 Bloque B: Scalping Engine en thread dedicado + Mode toggle + Learning per-style. Tres capacidades nuevas que conviven con el swing engine sin reemplazarlo. Real-money trading sigue 100% bloqueado.

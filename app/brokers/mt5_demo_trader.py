@@ -53,6 +53,20 @@ class DemoSendResult:
     result_summary: str | None = None
 
 
+@dataclass(frozen=True)
+class DemoCloseResult:
+    ok: bool
+    ticket: int | None
+    symbol: str
+    volume: float | None
+    reason: str
+    retcode: int | None = None
+    order_ticket: int | None = None
+    deal_ticket: int | None = None
+    price: float | None = None
+    result_summary: str | None = None
+
+
 class MT5DemoTrader:
     """Executes MT5 demo orders only after strict validation."""
 
@@ -247,7 +261,7 @@ class MT5DemoTrader:
             if direction == "long"
             else getattr(mt5, "ORDER_TYPE_SELL", 1)
         )
-        request = {
+        base_request = {
             "action": getattr(mt5, "TRADE_ACTION_DEAL", 1),
             "symbol": symbol,
             "volume": volume,
@@ -259,41 +273,153 @@ class MT5DemoTrader:
             "magic": self.MAGIC,
             "comment": "TradingAlertAI demo",
             "type_time": getattr(mt5, "ORDER_TIME_GTC", 0),
-            "type_filling": self._filling_mode(symbol_info),
         }
-        try:
-            result = mt5.order_send(request)
-        except Exception as exc:
-            logger.warning("MT5 demo order_send raised: %s", exc.__class__.__name__)
-            return DemoSendResult(False, "failed", "order_send raised")
-        if result is None:
-            return DemoSendResult(False, "failed", "order_send returned None")
+        return self._send_deal_request(base_request, symbol_info, price)
 
-        result_dict = _asdict(result)
-        retcode = _optional_int(result_dict.get("retcode"))
-        order_ticket = _optional_int(result_dict.get("order"))
-        deal_ticket = _optional_int(result_dict.get("deal"))
-        executed_price = _to_float(result_dict.get("price")) or price
-        comment = str(result_dict.get("comment") or "")
+    def close_all_positions(self) -> list[DemoCloseResult]:
+        """Close every open position on the connected MT5 demo account."""
+        if not self.settings.enable_mt5_demo_trading:
+            return [
+                DemoCloseResult(
+                    False, None, "", None, "ENABLE_MT5_DEMO_TRADING=false"
+                )
+            ]
+        if not self.connect():
+            return [DemoCloseResult(False, None, "", None, "MT5 demo trader not connected")]
+
+        account = self._account_dict()
+        ok, reason = self._validate_demo_account(account)
+        if not ok:
+            return [DemoCloseResult(False, None, "", None, reason)]
+
+        positions = self.positions()
+        if not positions:
+            return []
+
+        return [self._close_position(position) for position in positions]
+
+    def _close_position(self, position: dict[str, Any]) -> DemoCloseResult:
+        mt5 = self._mt5()
+        ticket = _optional_int(position.get("ticket"))
+        symbol = str(position.get("symbol") or "").upper()
+        volume = _to_float(position.get("volume"))
+        position_type = _optional_int(position.get("type"))
+        buy_type = getattr(mt5, "ORDER_TYPE_BUY", 0)
+        sell_type = getattr(mt5, "ORDER_TYPE_SELL", 1)
+
+        if ticket is None:
+            return DemoCloseResult(False, None, symbol, volume, "position ticket missing")
+        if not symbol:
+            return DemoCloseResult(False, ticket, symbol, volume, "position symbol missing")
+        if volume is None or volume <= 0:
+            return DemoCloseResult(False, ticket, symbol, volume, "position volume invalid")
+        if position_type == buy_type:
+            close_type = sell_type
+            close_direction = "short"
+        elif position_type == sell_type:
+            close_type = buy_type
+            close_direction = "long"
+        else:
+            return DemoCloseResult(
+                False, ticket, symbol, volume, f"unsupported position type {position_type}"
+            )
+
+        symbol_info = self._ensure_symbol(symbol)
+        if symbol_info is None:
+            return DemoCloseResult(False, ticket, symbol, volume, "symbol unavailable")
+
+        price = (
+            self._current_price(symbol, close_direction)
+            or _to_float(position.get("price_current"))
+            or _to_float(position.get("price_open"))
+        )
+        if price is None or price <= 0:
+            return DemoCloseResult(False, ticket, symbol, volume, "close price unavailable")
+
+        result = self._send_deal_request(
+            {
+                "action": getattr(mt5, "TRADE_ACTION_DEAL", 1),
+                "position": ticket,
+                "symbol": symbol,
+                "volume": volume,
+                "type": close_type,
+                "price": price,
+                "deviation": 20,
+                "magic": self.MAGIC,
+                "comment": "TradingAlertAI close",
+                "type_time": getattr(mt5, "ORDER_TIME_GTC", 0),
+            },
+            symbol_info,
+            price,
+        )
+        return DemoCloseResult(
+            ok=result.ok,
+            ticket=ticket,
+            symbol=symbol,
+            volume=volume,
+            reason=result.reason,
+            retcode=result.retcode,
+            order_ticket=result.order_ticket,
+            deal_ticket=result.deal_ticket,
+            price=result.price,
+            result_summary=result.result_summary,
+        )
+
+    def _send_deal_request(
+        self,
+        base_request: dict[str, Any],
+        symbol_info: Any,
+        price: float,
+    ) -> DemoSendResult:
+        mt5 = self._mt5()
         success_codes = {
             getattr(mt5, "TRADE_RETCODE_DONE", 10009),
             getattr(mt5, "TRADE_RETCODE_PLACED", 10008),
         }
-        ok = retcode in success_codes
-        status = "sent" if ok else "failed"
-        summary = (
-            f"retcode={retcode}; order={order_ticket}; deal={deal_ticket}; "
-            f"price={executed_price:g}; {comment}".strip()
-        )
-        return DemoSendResult(
-            ok=ok,
-            status=status,
-            reason="order_send accepted" if ok else f"order_send failed: {comment}",
-            retcode=retcode,
-            order_ticket=order_ticket,
-            deal_ticket=deal_ticket,
-            price=executed_price,
-            result_summary=summary,
+        invalid_fill = getattr(mt5, "TRADE_RETCODE_INVALID_FILL", 10030)
+        last_failure: DemoSendResult | None = None
+        for filling_mode in self._filling_modes(symbol_info):
+            request = {**base_request, "type_filling": filling_mode}
+            try:
+                result = mt5.order_send(request)
+            except Exception as exc:
+                logger.warning("MT5 demo order_send raised: %s", exc.__class__.__name__)
+                return DemoSendResult(False, "failed", "order_send raised")
+            if result is None:
+                return DemoSendResult(False, "failed", "order_send returned None")
+
+            result_dict = _asdict(result)
+            retcode = _optional_int(result_dict.get("retcode"))
+            order_ticket = _optional_int(result_dict.get("order"))
+            deal_ticket = _optional_int(result_dict.get("deal"))
+            executed_price = _to_float(result_dict.get("price")) or price
+            comment = str(result_dict.get("comment") or "")
+            ok = retcode in success_codes
+            status = "sent" if ok else "failed"
+            summary = (
+                f"retcode={retcode}; order={order_ticket}; deal={deal_ticket}; "
+                f"price={executed_price:g}; filling={filling_mode}; {comment}"
+            ).strip()
+            result_payload = DemoSendResult(
+                ok=ok,
+                status=status,
+                reason="order_send accepted"
+                if ok
+                else f"order_send failed: {comment}",
+                retcode=retcode,
+                order_ticket=order_ticket,
+                deal_ticket=deal_ticket,
+                price=executed_price,
+                result_summary=summary,
+            )
+            if ok:
+                return result_payload
+            last_failure = result_payload
+            if retcode != invalid_fill:
+                return result_payload
+
+        return last_failure or DemoSendResult(
+            False, "failed", "no MT5 filling mode available"
         )
 
     def positions(self) -> list[dict[str, Any]]:
@@ -316,6 +442,7 @@ class MT5DemoTrader:
                     "volume": row.get("volume"),
                     "type": row.get("type"),
                     "price_open": row.get("price_open"),
+                    "price_current": row.get("price_current"),
                     "sl": row.get("sl"),
                     "tp": row.get("tp"),
                     "profit": row.get("profit"),
@@ -467,11 +594,32 @@ class MT5DemoTrader:
         return round((risk_amount / equity) * 100.0, 6), "ok"
 
     def _filling_mode(self, symbol_info: Any) -> int:
+        return self._filling_modes(symbol_info)[0]
+
+    def _filling_modes(self, symbol_info: Any) -> list[int]:
         mt5 = self._mt5()
         mode = getattr(symbol_info, "filling_mode", None)
+        order_fok = getattr(mt5, "ORDER_FILLING_FOK", 0)
+        order_ioc = getattr(mt5, "ORDER_FILLING_IOC", 1)
+        order_return = getattr(mt5, "ORDER_FILLING_RETURN", 2)
+        symbol_fok = getattr(mt5, "SYMBOL_FILLING_FOK", 1)
+        symbol_ioc = getattr(mt5, "SYMBOL_FILLING_IOC", 2)
+        modes: list[int] = []
+
         if isinstance(mode, int):
-            return mode
-        return getattr(mt5, "ORDER_FILLING_IOC", getattr(mt5, "ORDER_FILLING_RETURN", 0))
+            # MT5 exposes symbol_info.filling_mode as symbol capability flags,
+            # while order_send expects an ORDER_FILLING_* enum value.
+            if mode & symbol_ioc:
+                modes.append(order_ioc)
+            if mode & symbol_fok:
+                modes.append(order_fok)
+            # Some test doubles / brokers expose the order enum directly.
+            if mode in {order_fok, order_ioc, order_return} and mode not in modes:
+                modes.append(mode)
+        for fallback in (order_ioc, order_fok, order_return):
+            if fallback not in modes:
+                modes.append(fallback)
+        return modes
 
 
 def _to_float(value: Any) -> float | None:

@@ -347,7 +347,7 @@ def load_settings() -> Settings:
         obsidian_vault_path = safe_obsidian
 
     return Settings(
-        app_version=os.getenv("APP_VERSION", "v2.6.0"),
+        app_version=os.getenv("APP_VERSION", "v2.6.1"),
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
         telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID"),
         dexscreener_base_url=os.getenv(
@@ -397,6 +397,14 @@ def load_settings() -> Settings:
                 "mstr",
                 "pltr",
                 "smci",
+                "nflx",
+                "gld",
+                "xom",
+                "cvx",
+                "bac",
+                "slv",
+                "uso",
+                "tna",
             ],
         ),
         min_stock_estimated_gain_pct=_get_float("MIN_STOCK_ESTIMATED_GAIN_PCT", 8),

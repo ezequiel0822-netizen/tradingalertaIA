@@ -100,3 +100,31 @@ def test_prepare_and_confirm_demo_trade(monkeypatch) -> None:
     orders = repo.fetch_demo_orders()
     assert len(orders) == 1
     assert orders[0]["status"] == "sent"
+
+
+def test_demo_close_all_command_closes_mt5_positions(monkeypatch) -> None:
+    repo = _repo()
+    fake = _fake_mt5(
+        positions=[
+            SimpleNamespace(
+                ticket=1001,
+                symbol="EURUSD",
+                volume=0.01,
+                type=0,
+                price_open=1.1000,
+                price_current=1.1010,
+                sl=1.0950,
+                tp=1.1100,
+                profit=1.5,
+            )
+        ]
+    )
+    monkeypatch.setitem(sys.modules, "MetaTrader5", fake)
+    assistant = BasicTelegramAssistant(_demo_settings(), repo)
+
+    msg = assistant.handle("/demo_close_all")
+
+    assert "Cierre demo MT5: 1/1 posiciones cerradas" in msg
+    sent = fake.order_send.call_args.args[0]
+    assert sent["position"] == 1001
+    assert sent["type"] == fake.ORDER_TYPE_SELL
