@@ -107,6 +107,7 @@ def test_get_rates_returns_candles(monkeypatch) -> None:
     fake = types.ModuleType("MetaTrader5")
     fake.initialize = MagicMock(return_value=True)
     fake.shutdown = MagicMock()
+    fake.symbol_select = MagicMock(return_value=True)
     rates_data = [
         {"time": 1, "open": 1.0, "high": 1.1, "low": 0.9, "close": 1.05, "tick_volume": 100},
         {"time": 2, "open": 1.05, "high": 1.15, "low": 1.0, "close": 1.1, "tick_volume": 150},
@@ -121,6 +122,58 @@ def test_get_rates_returns_candles(monkeypatch) -> None:
     assert len(candles) == 2
     assert candles[0]["close"] == 1.05
     assert candles[1]["volume"] == 150
+
+
+def test_get_rates_calls_symbol_select_before_copy_rates(monkeypatch) -> None:
+    """v2.6.5 regression: get_rates DEBE llamar symbol_select(symbol, True)
+    antes de copy_rates_from_pos.
+
+    Bug original: si símbolo no estaba en Market Watch del MT5 desktop,
+    copy_rates_from_pos devolvía None silenciosamente → "0 velas M1" en
+    scalping. User tenía que agregar manualmente cada símbolo a Market Watch.
+    Ahora el bot lo hace automáticamente.
+    """
+    settings = _enable_mt5(_settings())
+    fake = types.ModuleType("MetaTrader5")
+    fake.initialize = MagicMock(return_value=True)
+    fake.shutdown = MagicMock()
+    fake.symbol_select = MagicMock(return_value=True)
+    fake.copy_rates_from_pos = MagicMock(return_value=[])
+    monkeypatch.setitem(sys.modules, "MetaTrader5", fake)
+
+    reader = MT5Reader(settings)
+    reader.connect()
+    reader.get_rates("USDJPY", 1, 5)
+
+    # Verificar que symbol_select fue llamado con (symbol, True) ANTES de copy_rates
+    assert fake.symbol_select.called, "symbol_select debe llamarse antes de copy_rates_from_pos"
+    call_args = fake.symbol_select.call_args
+    assert call_args.args[0] == "USDJPY", f"Esperaba 'USDJPY', recibió {call_args.args[0]!r}"
+    assert call_args.args[1] is True, "Segundo arg debe ser True (selecciona el símbolo)"
+
+
+def test_get_rates_continues_if_symbol_select_fails(monkeypatch) -> None:
+    """v2.6.5: si symbol_select tira excepción, get_rates sigue intentando
+    copy_rates_from_pos. Algunos brokers pueden rechazar symbol_select pero
+    aceptar copy_rates.
+    """
+    settings = _enable_mt5(_settings())
+    fake = types.ModuleType("MetaTrader5")
+    fake.initialize = MagicMock(return_value=True)
+    fake.shutdown = MagicMock()
+    fake.symbol_select = MagicMock(side_effect=Exception("broker rejected"))
+    rates_data = [
+        {"time": 1, "open": 1.0, "high": 1.1, "low": 0.9, "close": 1.05, "tick_volume": 100},
+    ]
+    fake.copy_rates_from_pos = MagicMock(return_value=rates_data)
+    monkeypatch.setitem(sys.modules, "MetaTrader5", fake)
+
+    reader = MT5Reader(settings)
+    reader.connect()
+    candles = reader.get_rates("EURUSD", 1, 5)
+    # No debe crashear, debe seguir y devolver las candles
+    assert candles is not None
+    assert len(candles) == 1
 
 
 def test_no_password_in_logs(monkeypatch, caplog) -> None:

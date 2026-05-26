@@ -1,5 +1,39 @@
 # Changelog
 
+## Trading Alert AI v2.6.5
+
+3 bug fixes descubiertos durante validacion live overnight 2026-05-25/26. Total 295 -> 307 tests verdes.
+
+**Bug A FIX — `realized_pnl_today` mal calculado (CRITICO).**
+
+ANTES: sumaba `unrealized_return_pct` per-trade directamente. Memecoin USWC -82% en notional chico daba "-82% portfolio drawdown" cuando la perdida real era <$1k de un balance $100k. Disparaba falsos kill switches.
+
+AHORA: convierte cada trade a USD usando `size_notional`, suma USD ganados/perdidos, divide por balance actual. Trades sin notional (paper trades memecoin que no se ejecutan a MT5) se ignoran porque no afectan balance real.
+
+- `app/portfolio/portfolio_manager.py`: `realized_pnl_today` refactor completo.
+- 5 tests nuevos en `tests/test_portfolio_manager.py` incluyendo el escenario del bug.
+
+**Bug B FIX — `mt5_reader.get_rates` necesitaba `symbol_select` defensive.**
+
+Si un simbolo no esta en MT5 Market Watch, `copy_rates_from_pos` devuelve None silenciosamente. Pasaba al agregar USDJPY a SCALPING_ALLOWED_SYMBOLS sin tenerlo visible. Usuario tenia que agregarlo manualmente.
+
+- `app/brokers/mt5_reader.py`: `get_rates` llama `symbol_select(symbol, True)` antes de `copy_rates_from_pos`. Auto-agrega al Market Watch.
+- 2 tests nuevos: verifica symbol_select se llama; verifica que continua si falla.
+
+**Bug C FIX — `account_balance` no refrescaba MT5 equity.**
+
+Cuando bot corre horas, `get_account_info` puede devolver None silencioso (sesion stale). Caia al `ACCOUNT_STARTING_BALANCE` del .env. Resultado: `/health` mostraba 1M cuando MT5 real era 100k.
+
+AHORA: si get_account_info devuelve None, hace disconnect + reconnect 1 vez y reintenta. Persiste el equity fresco en `bot_state.account_balance` para que proximo arranque tenga valor real, no starting.
+
+- `app/portfolio/portfolio_manager.py`: nuevo `_fetch_mt5_equity()` con retry, `account_balance` persiste a bot_state.
+- 5 tests nuevos cubriendo retry, persist, fallback chains.
+
+**Cambios:**
+- `app/config/settings.py` + `.env.example`: bump v2.6.4 -> v2.6.5.
+
+Real-money trading sigue 100% bloqueado.
+
 ## Trading Alert AI v2.6.4
 
 **BUG FIX — mt5_reader.get_rates crasheaba contra MT5 real con `AttributeError: 'numpy.void' object has no attribute 'get'`.**

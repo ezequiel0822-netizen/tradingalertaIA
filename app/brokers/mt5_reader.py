@@ -134,6 +134,18 @@ class MT5Reader:
     ) -> list[dict] | None:
         if not self.is_connected():
             return None
+        # v2.6.5: ensure symbol is selected in Market Watch before fetching rates.
+        # MT5 copy_rates_from_pos devuelve None silenciosamente para símbolos no
+        # seleccionados. Llamar symbol_select(symbol, True) auto-agrega el
+        # símbolo al Market Watch si no estaba. Previene el bug "0 velas M1"
+        # cuando el usuario agrega símbolos a SCALPING_ALLOWED_SYMBOLS sin
+        # tenerlos visibles en MT5 desktop.
+        try:
+            self._mt5.symbol_select(symbol, True)  # type: ignore[union-attr]
+        except Exception:
+            # No bloqueamos por error en symbol_select — algunos brokers pueden
+            # rechazar pero copy_rates_from_pos podría funcionar igual.
+            pass
         try:
             rates = self._mt5.copy_rates_from_pos(symbol, timeframe, 0, count)  # type: ignore[union-attr]
         except Exception:
