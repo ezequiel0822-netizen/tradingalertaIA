@@ -84,6 +84,34 @@ def _mock_trader_success():
 # ---------------- Tests ----------------
 
 
+def test_fetch_m1_candles_uses_int_timeframe_not_string() -> None:
+    """v2.6.3 regression: get_rates DEBE recibir timeframe=int(1), no string 'M1'.
+
+    Bug original: pasábamos timeframe='M1' string. MetaTrader5 copy_rates_from_pos
+    espera int (TIMEFRAME_M1=1). Pasar string causaba excepción silenciosa →
+    candles vacíos → 1909 cycles sin scalping signal en producción.
+    """
+    repo = _repo()
+    notifier = MagicMock()
+    reader = _mock_mt5_reader(_candles_with_breakout("long"), 1.1020, 1.1019)
+    engine = ScalpingEngine(_settings_scalping(), repo, notifier, reader)
+
+    engine._fetch_m1_candles("EURUSD", count=15)
+
+    # Verificar que get_rates fue llamado y el timeframe es int (NO string)
+    assert reader.get_rates.called
+    call = reader.get_rates.call_args
+    # Acepta posicional o keyword
+    if "timeframe" in call.kwargs:
+        timeframe = call.kwargs["timeframe"]
+    else:
+        timeframe = call.args[1] if len(call.args) > 1 else None
+    assert isinstance(timeframe, int), (
+        f"timeframe debe ser int (MT5_TIMEFRAME_M1=1), recibió {type(timeframe).__name__}={timeframe!r}"
+    )
+    assert timeframe == 1, f"timeframe debe ser 1 (M1), recibió {timeframe}"
+
+
 def test_engine_thread_lifecycle() -> None:
     """start() arranca thread, stop() lo termina limpio."""
     repo = _repo()

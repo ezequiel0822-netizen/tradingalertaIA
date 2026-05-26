@@ -24,6 +24,15 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+
+# v2.6.3 — MetaTrader5 timeframe constants (numeric codes).
+# mt5_reader.get_rates espera timeframe: int, NO string. Pasar "M1" antes
+# devolvía lista vacía silenciosamente porque copy_rates_from_pos fallaba.
+# Ref: https://www.mql5.com/en/docs/integration/python_metatrader5/mt5copyratesfrompos_py
+MT5_TIMEFRAME_M1 = 1
+MT5_TIMEFRAME_M5 = 5
+MT5_TIMEFRAME_M15 = 15
+
 from app.config.settings import Settings
 from app.database.repository import Repository
 from app.strategies.scalping_breakout import (
@@ -429,8 +438,9 @@ class ScalpingEngine:
         return signal
 
     def _fetch_m1_candles(self, symbol: str, count: int) -> list[dict]:
+        """v2.6.3: pasa MT5_TIMEFRAME_M1 (int=1), no string "M1"."""
         try:
-            return self.mt5_reader.get_rates(symbol, timeframe="M1", count=count) or []
+            return self.mt5_reader.get_rates(symbol, MT5_TIMEFRAME_M1, count) or []
         except Exception:
             logger.exception("Failed to fetch M1 candles for %s", symbol)
             return []

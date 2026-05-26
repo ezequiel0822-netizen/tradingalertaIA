@@ -1,5 +1,27 @@
 # Changelog
 
+## Trading Alert AI v2.6.3
+
+**BUG FIX — scalping engine no recibía candles M1.**
+
+Caused by `_fetch_m1_candles` pasando `timeframe="M1"` (string) a `mt5_reader.get_rates()` que espera `timeframe: int` (MT5 constant `TIMEFRAME_M1 = 1`). El call a `copy_rates_from_pos` fallaba silenciosamente, devolvía None → mi código convertía a `[]` → strategy nunca veía data → 0 signals en 1909 cycles consecutivos.
+
+Detectado en producción gracias al diagnostic instrumentation de v2.6.2:
+```
+WARNING | ScalpingEngine: 0 velas M1 para EURUSD (mt5_reader.get_rates devolvió vacío)
+```
+
+Sin esos warnings (pre-v2.6.2) el engine fallaba en silencio total.
+
+**Cambios:**
+- `app/scheduler/scalping_engine.py`: nueva constante `MT5_TIMEFRAME_M1 = 1` al tope del módulo (también M5=5 y M15=15 para uso futuro). `_fetch_m1_candles` ahora pasa `MT5_TIMEFRAME_M1` en lugar de `"M1"`.
+- Nuevo test regression `test_fetch_m1_candles_uses_int_timeframe_not_string` que verifica explícitamente que `get_rates` recibe int en arg timeframe, no string. Previene re-introducción del bug.
+- Bump version v2.6.2 → v2.6.3.
+
+Total tests 293 → 294 verdes.
+
+Real-money sigue 100% bloqueado.
+
 ## Trading Alert AI v2.6.2
 
 Patch diagnóstico para el ScalpingEngine. Antes era "silent failure mode" —
