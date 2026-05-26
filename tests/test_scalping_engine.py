@@ -197,6 +197,58 @@ def test_engine_blocks_when_max_open_cap_reached() -> None:
     assert result.trades_opened == 0
 
 
+def test_throttled_warning_logs_once_per_interval(caplog) -> None:
+    """v2.6.2: _throttled_warning loguea WARNING primer hit, DEBUG los siguientes."""
+    import logging as logging_mod
+    repo = _repo()
+    notifier = MagicMock()
+    reader = _mock_mt5_reader(_candles_with_breakout("long"), 1.1020, 1.1019)
+    engine = ScalpingEngine(_settings_scalping(), repo, notifier, reader)
+
+    caplog.set_level(logging_mod.DEBUG, logger="app.scheduler.scalping_engine")
+
+    # Primer hit -> WARNING
+    engine._throttled_warning("EURUSD", "test_reason", "msg uno")
+    # Segundo hit inmediato -> DEBUG (throttled)
+    engine._throttled_warning("EURUSD", "test_reason", "msg dos")
+
+    warnings = [r for r in caplog.records if r.levelno == logging_mod.WARNING]
+    debugs = [r for r in caplog.records if r.levelno == logging_mod.DEBUG and "msg" in r.getMessage()]
+    assert len(warnings) == 1
+    assert "msg uno" in warnings[0].getMessage()
+    assert len(debugs) >= 1
+
+
+def test_log_heartbeat_emits_summary_when_due(caplog) -> None:
+    """v2.6.2: _emit_log_heartbeat_if_due loguea INFO con contadores acumulados."""
+    import logging as logging_mod
+    import time as _time
+    repo = _repo()
+    notifier = MagicMock()
+    reader = _mock_mt5_reader(_candles_with_breakout("long"), 1.1020, 1.1019)
+    engine = ScalpingEngine(_settings_scalping(), repo, notifier, reader)
+
+    caplog.set_level(logging_mod.INFO, logger="app.scheduler.scalping_engine")
+    # Forzar que el heartbeat se considere "due" seteando timestamp viejo
+    engine._last_log_heartbeat_ts = _time.time() - 120  # 2 min atras
+    engine._stats_signals_eval = 5
+    engine._stats_trades_opened = 1
+    engine._stats_cap_blocks = 2
+
+    engine._emit_log_heartbeat_if_due()
+
+    heartbeats = [r for r in caplog.records if "ScalpingEngine heartbeat" in r.getMessage()]
+    assert len(heartbeats) == 1
+    msg = heartbeats[0].getMessage()
+    assert "eval=5" in msg
+    assert "opened=1" in msg
+    assert "cap_blocks=2" in msg
+
+    # Verificar que stats se resetean despues del heartbeat
+    assert engine._stats_signals_eval == 0
+    assert engine._stats_trades_opened == 0
+
+
 def test_force_exit_closes_old_paper_trades() -> None:
     """Trade abierto hace > scalping_force_exit_minutes → cerrado en cycle."""
     repo = _repo()

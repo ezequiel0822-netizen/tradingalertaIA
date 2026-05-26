@@ -77,6 +77,18 @@ class ScalpingEngine:
         self._last_signal_ts: dict[str, float] = {}
         self._trades_since_heartbeat = 0
         self._cycle_count = 0
+        # v2.6.2 diagnostic instrumentation
+        self._last_log_heartbeat_ts: float = 0.0
+        self._log_heartbeat_interval_seconds: float = 60.0
+        self._warning_throttle: dict[tuple[str, str], float] = {}
+        self._warning_throttle_seconds: float = 60.0
+        # Accumulators reset cada heartbeat para evitar drift de stats
+        self._stats_signals_eval = 0
+        self._stats_trades_opened = 0
+        self._stats_force_exited = 0
+        self._stats_cap_blocks = 0
+        self._stats_errors = 0
+        self._stats_last_block_reason: str | None = None
 
     # ---------------- Lifecycle ----------------
 
@@ -111,13 +123,73 @@ class ScalpingEngine:
 
     def _run_loop(self) -> None:
         interval = max(1, int(self.settings.scalping_poll_interval_seconds))
+        # Inicial heartbeat ts en el arranque para que primer log salga ~60s despues
+        self._last_log_heartbeat_ts = time.time()
         while not self._stop_event.is_set():
             try:
-                self._run_one_cycle()
+                result = self._run_one_cycle()
+                self._accumulate_stats(result)
+                self._emit_log_heartbeat_if_due()
             except Exception:
                 logger.exception("ScalpingEngine cycle failed; continuing next cycle")
             # Sleep tolerante a stop_event mid-sleep
             self._stop_event.wait(timeout=interval)
+
+    def _accumulate_stats(self, result: ScalpingCycleResult) -> None:
+        """v2.6.2: acumula contadores para el log heartbeat periodico."""
+        self._stats_signals_eval += result.signals_evaluated
+        self._stats_trades_opened += result.trades_opened
+        self._stats_force_exited += result.trades_force_exited
+        self._stats_cap_blocks += result.cap_blocks
+        self._stats_errors += result.errors
+
+    def _emit_log_heartbeat_if_due(self) -> None:
+        """v2.6.2: cada 60s loguea resumen INFO con stats acumulados.
+
+        Sin esto el scalping engine es invisible (silent failure mode si nada dispara).
+        """
+        now = time.time()
+        if now - self._last_log_heartbeat_ts < self._log_heartbeat_interval_seconds:
+            return
+        last_reason = (
+            f" last_block={self._stats_last_block_reason}"
+            if self._stats_last_block_reason
+            else ""
+        )
+        logger.info(
+            "ScalpingEngine heartbeat: cycles_total=%d eval=%d opened=%d "
+            "force_exited=%d cap_blocks=%d errors=%d%s",
+            self._cycle_count,
+            self._stats_signals_eval,
+            self._stats_trades_opened,
+            self._stats_force_exited,
+            self._stats_cap_blocks,
+            self._stats_errors,
+            last_reason,
+        )
+        # Reset accumulators y timestamp
+        self._stats_signals_eval = 0
+        self._stats_trades_opened = 0
+        self._stats_force_exited = 0
+        self._stats_cap_blocks = 0
+        self._stats_errors = 0
+        self._stats_last_block_reason = None
+        self._last_log_heartbeat_ts = now
+
+    def _throttled_warning(self, symbol: str, reason: str, msg: str, *args) -> None:
+        """v2.6.2: loguea WARNING primer hit por (symbol, reason), DEBUG los siguientes.
+
+        Cada 60s se permite re-warning del mismo motivo para confirmar persistencia.
+        Evita spam de mismo warning cada 5s.
+        """
+        key = (symbol, reason)
+        now = time.time()
+        last = self._warning_throttle.get(key, 0.0)
+        if now - last >= self._warning_throttle_seconds:
+            logger.warning(msg, *args)
+            self._warning_throttle[key] = now
+        else:
+            logger.debug(msg, *args)
 
     def _run_one_cycle(self) -> ScalpingCycleResult:
         """Un ciclo completo: lifecycle (force-exit) + signal eval + execute."""
@@ -142,6 +214,7 @@ class ScalpingEngine:
         ok, reason = self._check_caps()
         if not ok:
             result.cap_blocks += 1
+            self._stats_last_block_reason = reason  # v2.6.2: para heartbeat log
             logger.debug("Scalping cap block: %s", reason)
             return result
 
@@ -279,25 +352,50 @@ class ScalpingEngine:
     # ---------------- Signal evaluation ----------------
 
     def _evaluate_signal_for_symbol(self, symbol: str) -> ScalpingSignal | None:
-        """Construye ScalpingContext y evalúa la strategy."""
+        """Construye ScalpingContext y evalúa la strategy.
+
+        v2.6.2: cada return None tiene log throttled para diagnosticar
+        silent failures (antes era opaco — el engine corría sin emitir
+        signals y nadie sabía por qué).
+        """
         if self.mt5_reader is None or not getattr(self.mt5_reader, "is_connected", lambda: False)():
+            self._throttled_warning(
+                symbol, "mt5_disconnected",
+                "ScalpingEngine: MT5 reader no conectado para %s", symbol,
+            )
             return None
         # M1 candles
         lookback = int(self.settings.scalping_range_lookback_bars) + 5
         candles = self._fetch_m1_candles(symbol, lookback)
         if not candles:
+            self._throttled_warning(
+                symbol, "no_candles",
+                "ScalpingEngine: 0 velas M1 para %s (mt5_reader.get_rates devolvió vacío)", symbol,
+            )
             return None
         # Tick actual
         tick = self.mt5_reader.get_tick(symbol)
         if not tick:
+            self._throttled_warning(
+                symbol, "no_tick",
+                "ScalpingEngine: get_tick devolvió None para %s", symbol,
+            )
             return None
         ask = float(tick.get("ask") or 0)
         bid = float(tick.get("bid") or 0)
         if ask <= 0 or bid <= 0:
+            self._throttled_warning(
+                symbol, "invalid_tick",
+                "ScalpingEngine: tick inválido para %s (ask=%s bid=%s)", symbol, ask, bid,
+            )
             return None
         # Pip size desde symbol_info
         pip_size = self._compute_pip_size(symbol)
         if pip_size <= 0:
+            self._throttled_warning(
+                symbol, "no_pip_size",
+                "ScalpingEngine: no pude calcular pip_size para %s (symbol_info incompleto)", symbol,
+            )
             return None
         ctx = ScalpingContext(
             symbol=symbol,
@@ -307,7 +405,28 @@ class ScalpingEngine:
             pip_size=pip_size,
             last_signal_ts=self._last_signal_ts.get(symbol),
         )
-        return self.strategy.evaluate(ctx, self.settings, now_ts=time.time())
+        signal = self.strategy.evaluate(ctx, self.settings, now_ts=time.time())
+
+        # v2.6.2: si no hubo breakout, log diagnóstico throttled mostrando rango actual.
+        # Esto te permite ver cuán cerca/lejos está el precio del breakout y decidir
+        # si bajar el buffer o lookback.
+        if signal is None and len(candles) > int(self.settings.scalping_range_lookback_bars):
+            range_candles = candles[-(int(self.settings.scalping_range_lookback_bars) + 1):-1]
+            try:
+                rh = max(float(c.get("high") or 0) for c in range_candles)
+                rl = min(float(c.get("low") or 0) for c in range_candles)
+                width_pips = (rh - rl) / pip_size if pip_size > 0 else 0
+                self._throttled_warning(
+                    symbol, "no_breakout",
+                    "ScalpingEngine %s en rango: ask=%g bid=%g range=[%g, %g] width=%.1fpips "
+                    "(esperando ask>%g o bid<%g)",
+                    symbol, ask, bid, rl, rh, width_pips,
+                    rh * 1.00005, rl * 0.99995,
+                )
+            except (ValueError, TypeError):
+                pass
+
+        return signal
 
     def _fetch_m1_candles(self, symbol: str, count: int) -> list[dict]:
         try:

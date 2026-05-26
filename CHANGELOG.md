@@ -1,5 +1,40 @@
 # Changelog
 
+## Trading Alert AI v2.6.2
+
+Patch diagnóstico para el ScalpingEngine. Antes era "silent failure mode" —
+corría pero no logueaba nada, imposible saber si estaba evaluando signals,
+qué le faltaba, o por qué nunca disparaba. Después de 10 min de runtime en
+producción confirmamos 0 logs del engine y 0 trades scalping.
+
+**Nuevas instrumentaciones (`app/scheduler/scalping_engine.py`):**
+
+- `_emit_log_heartbeat_if_due`: cada 60s loguea INFO con resumen:
+  `ScalpingEngine heartbeat: cycles_total=N eval=K opened=X force_exited=Y cap_blocks=Z errors=E last_block=...`
+- `_throttled_warning`: cada return-None path de `_evaluate_signal_for_symbol`
+  loguea WARNING la primera vez y DEBUG las siguientes 60s (anti-spam).
+  Cubre: mt5_disconnected, no_candles, no_tick, invalid_tick, no_pip_size.
+- Diagnóstico "en rango": cuando strategy devuelve None pero todo lo demás
+  está OK, loguea WARNING throttled con range_low, range_high, ask, bid y
+  width en pips. Permite ver cuán cerca está el precio del breakout.
+
+**Cómo usar:**
+Después de reiniciar el bot, en los logs PowerShell aparecen líneas tipo:
+```
+INFO | app.scheduler.scalping_engine | ScalpingEngine heartbeat: cycles_total=12 eval=24 opened=0 force_exited=0 cap_blocks=0 errors=0
+WARNING | app.scheduler.scalping_engine | ScalpingEngine EURUSD en rango: ask=1.10050 bid=1.10048 range=[1.10000, 1.10080] width=8.0pips (esperando ask>1.10086 o bid<1.09995)
+```
+
+Si después de 5 min ves `eval=0`, el problema es upstream (MT5 reader o caps).
+Si ves `eval>0 opened=0` con warnings "en rango", el mercado está apretado y
+hay que loosen el buffer del breakout.
+
+**Bump version v2.6.1 → v2.6.2.**
+
+Total tests 291 → 293 verdes (2 nuevos: throttled_warning + heartbeat behavior).
+
+Real-money trading sigue 100% bloqueado.
+
 ## Trading Alert AI v2.6.1
 
 Patch consolidando funcionalidad que estaba en working tree sin commitear desde antes de v2.6.0:
