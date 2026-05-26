@@ -1,5 +1,22 @@
 # Changelog
 
+## Trading Alert AI v2.6.4
+
+**BUG FIX — mt5_reader.get_rates crasheaba contra MT5 real con `AttributeError: 'numpy.void' object has no attribute 'get'`.**
+
+`copy_rates_from_pos` devuelve un numpy structured array donde cada elemento es un `numpy.void`. Soporta bracket access (`r["tick_volume"]`) pero NO el método `.get()`. Mi código antiguo usaba `r.get("tick_volume", 0)` que tira AttributeError. Las otras 5 líneas (`r["time"]`, `r["open"]`, etc.) ya usaban bracket access, solo volume estaba mal.
+
+**Detectado en producción** justo después del fix v2.6.3 (que destrabó el primer call real a `copy_rates_from_pos`). Antes de v2.6.3 nunca llegaba a esta línea (fallaba antes por el timeframe string).
+
+**Cambios:**
+- `app/brokers/mt5_reader.py`: nuevo helper `_safe_tick_volume(r)` al nivel del módulo. Usa bracket access con try/except, maneja numpy.void, dict, None, valores ausentes. Reemplaza 2 ocurrencias del bug (`get_rates` y `get_historical_range`).
+- Test regression `test_safe_tick_volume_handles_numpy_void_like_objects` con 5 escenarios (dict, void-like con __getitem__ pero sin .get, campo ausente, None object, None field).
+- Bump version v2.6.3 → v2.6.4.
+
+Total tests 294 → 295 verdes.
+
+Real-money sigue 100% bloqueado.
+
 ## Trading Alert AI v2.6.3
 
 **BUG FIX — scalping engine no recibía candles M1.**

@@ -35,6 +35,25 @@ class MT5Timeframe:
     W1 = 10080
 
 
+def _safe_tick_volume(r: Any) -> float:
+    """Extrae tick_volume de un registro de copy_rates_from_pos.
+
+    v2.6.4: copy_rates_from_pos devuelve numpy structured array; cada elemento
+    es numpy.void que soporta bracket access r["tick_volume"] pero NO r.get().
+    Tests pueden pasar dict (que soporta ambos) — esta función maneja ambos.
+    """
+    try:
+        value = r["tick_volume"]
+    except (ValueError, IndexError, KeyError, TypeError):
+        return 0.0
+    if value is None:
+        return 0.0
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return 0.0
+
+
 class MT5Reader:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
@@ -130,7 +149,7 @@ class MT5Reader:
                     "high": float(r["high"]),
                     "low": float(r["low"]),
                     "close": float(r["close"]),
-                    "volume": float(r.get("tick_volume", 0) or 0),
+                    "volume": _safe_tick_volume(r),
                 }
             )
         return candles
@@ -238,7 +257,7 @@ class MT5Reader:
                     "high": float(r["high"]),
                     "low": float(r["low"]),
                     "close": float(r["close"]),
-                    "volume": float(r.get("tick_volume", 0) or 0),
+                    "volume": _safe_tick_volume(r),
                 }
             )
         return candles

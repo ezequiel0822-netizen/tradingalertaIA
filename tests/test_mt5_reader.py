@@ -29,6 +29,40 @@ def test_disabled_returns_falsy() -> None:
     assert reader.get_account_info() is None
 
 
+def test_safe_tick_volume_handles_numpy_void_like_objects() -> None:
+    """v2.6.4 regression: numpy.void no tiene .get(), solo __getitem__.
+
+    Antes mt5_reader.get_rates crasheaba con
+    `AttributeError: 'numpy.void' object has no attribute 'get'`
+    contra MT5 real. El helper _safe_tick_volume usa bracket access con
+    try/except, manejando ambos casos.
+    """
+    from app.brokers.mt5_reader import _safe_tick_volume
+
+    # Caso 1: dict normal (lo que usan los tests con mocks)
+    assert _safe_tick_volume({"tick_volume": 100}) == 100.0
+
+    # Caso 2: numpy.void-like (solo __getitem__, NO .get)
+    class FakeVoid:
+        def __init__(self, data: dict) -> None:
+            self._data = data
+
+        def __getitem__(self, key: str):
+            return self._data[key]
+        # Intencionalmente NO definimos .get() para reproducir numpy.void
+
+    assert _safe_tick_volume(FakeVoid({"tick_volume": 250})) == 250.0
+
+    # Caso 3: campo ausente
+    assert _safe_tick_volume(FakeVoid({"time": 1})) == 0.0
+
+    # Caso 4: None directo (defensive)
+    assert _safe_tick_volume(None) == 0.0
+
+    # Caso 5: valor None en el campo
+    assert _safe_tick_volume({"tick_volume": None}) == 0.0
+
+
 def test_import_failure_soft_fails(monkeypatch) -> None:
     settings = _enable_mt5(_settings())
     monkeypatch.setitem(sys.modules, "MetaTrader5", None)
