@@ -278,6 +278,16 @@ class Settings:
     scalping_sl_pips: int
     scalping_tp_pips: int
     scalping_range_lookback_bars: int
+    # v2.6.6 — Multi-strategy scalping (breakout + mean_reversion).
+    # Cada strategy es opt-in via flag dedicado; default ambos ON cuando
+    # el engine está activo, pero el engine sigue OFF por default.
+    enable_scalping_breakout: bool
+    enable_scalping_mean_reversion: bool
+    scalping_mr_bollinger_period: int
+    scalping_mr_bollinger_std: float
+    scalping_mr_rsi_period: int
+    scalping_mr_rsi_overbought: int
+    scalping_mr_rsi_oversold: int
 
     def __repr__(self) -> str:
         parts: list[str] = []
@@ -347,7 +357,7 @@ def load_settings() -> Settings:
         obsidian_vault_path = safe_obsidian
 
     return Settings(
-        app_version=os.getenv("APP_VERSION", "v2.6.5"),
+        app_version=os.getenv("APP_VERSION", "v2.6.6"),
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
         telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID"),
         dexscreener_base_url=os.getenv(
@@ -646,4 +656,14 @@ def load_settings() -> Settings:
         scalping_sl_pips=_get_int("SCALPING_SL_PIPS", 8),
         scalping_tp_pips=_get_int("SCALPING_TP_PIPS", 12),
         scalping_range_lookback_bars=_get_int("SCALPING_RANGE_LOOKBACK_BARS", 10),
+        # v2.6.6 — Multi-strategy scalping. Ambas defaults ON (cuando engine activo).
+        # Bajar a false vía env para deshabilitar una strategy específica sin
+        # apagar el engine entero.
+        enable_scalping_breakout=_get_bool("ENABLE_SCALPING_BREAKOUT", True),
+        enable_scalping_mean_reversion=_get_bool("ENABLE_SCALPING_MEAN_REVERSION", True),
+        scalping_mr_bollinger_period=_get_int("SCALPING_MR_BOLLINGER_PERIOD", 20),
+        scalping_mr_bollinger_std=_get_float("SCALPING_MR_BOLLINGER_STD", 2.0),
+        scalping_mr_rsi_period=_get_int("SCALPING_MR_RSI_PERIOD", 14),
+        scalping_mr_rsi_overbought=_get_int("SCALPING_MR_RSI_OVERBOUGHT", 70),
+        scalping_mr_rsi_oversold=_get_int("SCALPING_MR_RSI_OVERSOLD", 30),
     )

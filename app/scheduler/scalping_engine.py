@@ -40,6 +40,7 @@ from app.strategies.scalping_breakout import (
     ScalpingContext,
     ScalpingSignal,
 )
+from app.strategies.scalping_mean_reversion import ScalpingMeanReversionStrategy
 from app.utils.scalping_state import is_scalping_halted
 from app.utils.time_utils import utc_now, utc_now_iso
 
@@ -80,7 +81,14 @@ class ScalpingEngine:
         self.notifier = notifier
         self.mt5_reader = mt5_reader
         self.trader = mt5_demo_trader  # se acepta inyectado o se crea lazy
-        self.strategy = ScalpingBreakoutStrategy()
+        # v2.6.6 — multi-strategy. Construye la lista según flags settings.
+        # Orden: breakout primero (momentum gana cuando hay momentum), mean
+        # reversion segundo (fallback para mercado rangebound).
+        self.strategies: list = []
+        if getattr(settings, "enable_scalping_breakout", True):
+            self.strategies.append(ScalpingBreakoutStrategy())
+        if getattr(settings, "enable_scalping_mean_reversion", True):
+            self.strategies.append(ScalpingMeanReversionStrategy())
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
         self._last_signal_ts: dict[str, float] = {}
@@ -373,8 +381,8 @@ class ScalpingEngine:
                 "ScalpingEngine: MT5 reader no conectado para %s", symbol,
             )
             return None
-        # M1 candles
-        lookback = int(self.settings.scalping_range_lookback_bars) + 5
+        # M1 candles — v2.6.6: cubre lookback de ambas strategies.
+        lookback = self._compute_candle_lookback()
         candles = self._fetch_m1_candles(symbol, lookback)
         if not candles:
             self._throttled_warning(
@@ -414,7 +422,14 @@ class ScalpingEngine:
             pip_size=pip_size,
             last_signal_ts=self._last_signal_ts.get(symbol),
         )
-        signal = self.strategy.evaluate(ctx, self.settings, now_ts=time.time())
+        # v2.6.6 — itera strategies registradas en orden; primer hit gana.
+        signal: ScalpingSignal | None = None
+        now_ts_eval = time.time()
+        for strategy in self.strategies:
+            candidate = strategy.evaluate(ctx, self.settings, now_ts=now_ts_eval)
+            if candidate is not None:
+                signal = candidate
+                break
 
         # v2.6.2: si no hubo breakout, log diagnóstico throttled mostrando rango actual.
         # Esto te permite ver cuán cerca/lejos está el precio del breakout y decidir
@@ -444,6 +459,20 @@ class ScalpingEngine:
         except Exception:
             logger.exception("Failed to fetch M1 candles for %s", symbol)
             return []
+
+    def _compute_candle_lookback(self) -> int:
+        """v2.6.6: cantidad de velas M1 necesarias para evaluar las strategies activas.
+
+        Breakout necesita `range_lookback_bars + 1` (range + vela actual).
+        Mean-reversion necesita `max(bollinger_period, rsi_period + 1)`.
+        Devolvemos el max + 5 de margen.
+        """
+        needed = int(self.settings.scalping_range_lookback_bars) + 1
+        if getattr(self.settings, "enable_scalping_mean_reversion", True):
+            bb = int(getattr(self.settings, "scalping_mr_bollinger_period", 20))
+            rsi = int(getattr(self.settings, "scalping_mr_rsi_period", 14)) + 1
+            needed = max(needed, bb, rsi)
+        return needed + 5
 
     def _compute_pip_size(self, symbol: str) -> float:
         """pip_size = point*10 si broker quotea 5-digit (forex moderno); point si 4-digit."""

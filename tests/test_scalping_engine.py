@@ -277,6 +277,56 @@ def test_log_heartbeat_emits_summary_when_due(caplog) -> None:
     assert engine._stats_trades_opened == 0
 
 
+def test_engine_registers_both_strategies_by_default() -> None:
+    """v2.6.6: con ambos flags ON, engine.strategies tiene [breakout, mean_reversion]."""
+    from app.strategies.scalping_breakout import ScalpingBreakoutStrategy
+    from app.strategies.scalping_mean_reversion import ScalpingMeanReversionStrategy
+
+    repo = _repo()
+    notifier = MagicMock()
+    reader = _mock_mt5_reader(_candles_with_breakout("long"), 1.1020, 1.1019)
+    engine = ScalpingEngine(_settings_scalping(), repo, notifier, reader)
+
+    assert len(engine.strategies) == 2
+    assert isinstance(engine.strategies[0], ScalpingBreakoutStrategy), (
+        "breakout debe ir primero — momentum-first, mean-reversion-fallback"
+    )
+    assert isinstance(engine.strategies[1], ScalpingMeanReversionStrategy)
+
+
+def test_engine_skips_disabled_strategies() -> None:
+    """v2.6.6: si ENABLE_SCALPING_BREAKOUT=false, solo MR queda en strategies."""
+    from app.strategies.scalping_mean_reversion import ScalpingMeanReversionStrategy
+
+    repo = _repo()
+    notifier = MagicMock()
+    reader = _mock_mt5_reader(_candles_with_breakout("long"), 1.1020, 1.1019)
+    settings = _settings_scalping(
+        enable_scalping_breakout=False,
+        enable_scalping_mean_reversion=True,
+    )
+    engine = ScalpingEngine(settings, repo, notifier, reader)
+
+    assert len(engine.strategies) == 1
+    assert isinstance(engine.strategies[0], ScalpingMeanReversionStrategy)
+
+
+def test_engine_can_disable_all_strategies() -> None:
+    """v2.6.6: con ambos flags OFF, strategies list está vacía y no opens nada."""
+    repo = _repo()
+    notifier = MagicMock()
+    reader = _mock_mt5_reader(_candles_with_breakout("long"), 1.1020, 1.1019)
+    settings = _settings_scalping(
+        enable_scalping_breakout=False,
+        enable_scalping_mean_reversion=False,
+    )
+    engine = ScalpingEngine(settings, repo, notifier, reader)
+
+    assert engine.strategies == []
+    result = engine._run_one_cycle()
+    assert result.trades_opened == 0
+
+
 def test_force_exit_closes_old_paper_trades() -> None:
     """Trade abierto hace > scalping_force_exit_minutes → cerrado en cycle."""
     repo = _repo()

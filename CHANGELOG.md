@@ -1,5 +1,52 @@
 # Changelog
 
+## Trading Alert AI v2.6.6
+
+Segunda strategy scalping + refactor del engine a multi-strategy. Cubre el escenario complementario al breakout (mean reversion en rangos laterales) para acumular outcomes scalping en condiciones de mercado donde el breakout fallaría.
+
+**Nueva strategy `scalping_mean_reversion` (`app/strategies/scalping_mean_reversion.py`).**
+
+Counter-trend basada en Bollinger Bands + RSI extremos sobre M1.
+- LONG cuando `current_bid <= BB_lower` Y `RSI <= rsi_oversold`.
+- SHORT cuando `current_ask >= BB_upper` Y `RSI >= rsi_overbought`.
+- BB period=20, std multiplier=2.0 (defaults estándar).
+- RSI period=14, SMA-based (sin Wilder smoothing — más simple, suficiente para M1).
+- SL/TP en pips fijos reutilizando `SCALPING_SL_PIPS` y `SCALPING_TP_PIPS`. Misma escala de riesgo que breakout permite comparar win rates honestamente.
+- Skip mercado plano: si `bb_upper - bb_lower < pip_size`, no opera (sin ventaja vs spread).
+- Cooldown 60s post-signal igual que breakout.
+
+**Refactor `ScalpingEngine` para multi-strategy (`app/scheduler/scalping_engine.py`).**
+
+Reemplaza el campo único `self.strategy` por `self.strategies: list` construida en `__init__` según los flags settings. `_evaluate_signal_for_symbol` itera la lista y emite el primer signal no-None (breakout primero, mean reversion como fallback).
+
+- Nuevo helper `_compute_candle_lookback()` calcula el max entre lookback del breakout y `max(BB_period, RSI_period+1)` cuando MR está activo. Garantiza que se fetchean suficientes velas M1 para ambos indicadores en una sola llamada.
+- Tests existentes del engine se mantienen verdes: con 11 velas mockeadas, MR(BB20) no tiene closes suficientes y devuelve None inmediato, dejando que breakout dispare como antes.
+
+**7 nuevos settings (`app/config/settings.py` + `tests/test_score.py`).**
+
+- `ENABLE_SCALPING_BREAKOUT` (default `true`) — kill-switch específico para la strategy original.
+- `ENABLE_SCALPING_MEAN_REVERSION` (default `true`) — opt-out de la nueva strategy.
+- `SCALPING_MR_BOLLINGER_PERIOD` (default `20`).
+- `SCALPING_MR_BOLLINGER_STD` (default `2.0`).
+- `SCALPING_MR_RSI_PERIOD` (default `14`).
+- `SCALPING_MR_RSI_OVERBOUGHT` (default `70`).
+- `SCALPING_MR_RSI_OVERSOLD` (default `30`).
+
+`ENABLE_SCALPING_ENGINE` sigue siendo opt-in (default `false`). Los flags por-strategy solo aplican cuando el engine está activo.
+
+**Tests.**
+
+- `tests/test_scalping_mean_reversion.py` (13 tests): signal LONG/SHORT en extremos, no signal mid-band, no signal cuando AND falla, cooldown, candles insuficientes, mercado plano, pip_size inválido, helpers `_bollinger` y `_rsi` correctos.
+- `tests/test_scalping_engine.py` (3 tests nuevos): `engine.strategies` registra ambas por default, deshabilita breakout via flag deja solo MR, deshabilitar ambas deja la lista vacía y no opens trades.
+
+Total 307 → 323 tests verdes.
+
+**Cambios.**
+
+- `app/config/settings.py` + `.env.example`: bump v2.6.5 → v2.6.6.
+
+Real-money trading sigue 100% bloqueado.
+
 ## Trading Alert AI v2.6.5
 
 3 bug fixes descubiertos durante validacion live overnight 2026-05-25/26. Total 295 -> 307 tests verdes.

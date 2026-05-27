@@ -184,6 +184,13 @@ def _settings() -> Settings:
         scalping_sl_pips=8,
         scalping_tp_pips=12,
         scalping_range_lookback_bars=10,
+        enable_scalping_breakout=True,
+        enable_scalping_mean_reversion=True,
+        scalping_mr_bollinger_period=20,
+        scalping_mr_bollinger_std=2.0,
+        scalping_mr_rsi_period=14,
+        scalping_mr_rsi_overbought=70,
+        scalping_mr_rsi_oversold=30,
     )
 
 
