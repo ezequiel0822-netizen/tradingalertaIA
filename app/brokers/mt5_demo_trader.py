@@ -298,6 +298,115 @@ class MT5DemoTrader:
 
         return [self._close_position(position) for position in positions]
 
+    def close_position_by_ticket(self, ticket: int) -> DemoCloseResult:
+        """v2.6.7: Cierra UNA posición específica por ticket. Usado por el reconciler.
+
+        Previene huérfanas: cuando el paper_trade cerró (closed_by_time, force_exit,
+        stopped_simulated por SL movido a breakeven post-TP1) pero la posición MT5
+        sigue abierta con su SL original.
+        """
+        if not self.settings.enable_mt5_demo_trading:
+            return DemoCloseResult(
+                False, ticket, "", None, "ENABLE_MT5_DEMO_TRADING=false"
+            )
+        if not self.connect():
+            return DemoCloseResult(
+                False, ticket, "", None, "MT5 demo trader not connected"
+            )
+        account = self._account_dict()
+        ok, reason = self._validate_demo_account(account)
+        if not ok:
+            return DemoCloseResult(False, ticket, "", None, reason)
+
+        positions = self.positions()
+        match = next(
+            (p for p in positions if _optional_int(p.get("ticket")) == int(ticket)),
+            None,
+        )
+        if match is None:
+            return DemoCloseResult(
+                False, ticket, "", None, f"position {ticket} not found in MT5"
+            )
+        return self._close_position(match)
+
+    def update_position_sl(
+        self, ticket: int, new_sl: float, new_tp: float | None = None
+    ) -> DemoSendResult:
+        """v2.6.7: Actualiza SL (y opcionalmente TP) de una posición abierta via TRADE_ACTION_SLTP.
+
+        Necesario cuando el lifecycle del bot mueve el SL del paper_trade (trailing,
+        breakeven post-TP1) — sin esto el SL real en MT5 queda en su valor original
+        y la posición puede ir mucho más en contra antes de cerrar.
+
+        Si new_tp es None, preserva el TP actual de la posición (TRADE_ACTION_SLTP
+        de MT5 requiere ambos valores).
+        """
+        if not self.settings.enable_mt5_demo_trading:
+            return DemoSendResult(False, "failed", "ENABLE_MT5_DEMO_TRADING=false")
+        if not self.connect():
+            return DemoSendResult(False, "failed", "MT5 demo trader not connected")
+        account = self._account_dict()
+        ok, reason = self._validate_demo_account(account)
+        if not ok:
+            return DemoSendResult(False, "failed", reason)
+
+        positions = self.positions()
+        match = next(
+            (p for p in positions if _optional_int(p.get("ticket")) == int(ticket)),
+            None,
+        )
+        if match is None:
+            return DemoSendResult(False, "failed", f"position {ticket} not found in MT5")
+
+        symbol = str(match.get("symbol") or "").upper()
+        mt5 = self._mt5()
+        request = {
+            "action": getattr(mt5, "TRADE_ACTION_SLTP", 6),
+            "position": int(ticket),
+            "symbol": symbol,
+            "sl": float(new_sl),
+            "magic": self.MAGIC,
+        }
+        if new_tp is not None:
+            request["tp"] = float(new_tp)
+        else:
+            existing_tp = _to_float(match.get("tp"))
+            if existing_tp is not None and existing_tp > 0:
+                request["tp"] = existing_tp
+
+        try:
+            result = mt5.order_send(request)
+        except Exception as exc:
+            logger.warning(
+                "MT5 demo update_position_sl raised: %s", exc.__class__.__name__
+            )
+            return DemoSendResult(False, "failed", "order_send raised")
+        if result is None:
+            return DemoSendResult(False, "failed", "order_send returned None")
+
+        result_dict = _asdict(result)
+        retcode = _optional_int(result_dict.get("retcode"))
+        comment = str(result_dict.get("comment") or "")
+        success_codes = {
+            getattr(mt5, "TRADE_RETCODE_DONE", 10009),
+            getattr(mt5, "TRADE_RETCODE_PLACED", 10008),
+        }
+        ok = retcode in success_codes
+        return DemoSendResult(
+            ok=ok,
+            status="sent" if ok else "failed",
+            reason=(
+                f"SL updated to {new_sl:g}" if ok else f"update_sl failed: {comment}"
+            ),
+            retcode=retcode,
+            order_ticket=_optional_int(result_dict.get("order")),
+            deal_ticket=_optional_int(result_dict.get("deal")),
+            price=None,
+            result_summary=(
+                f"position={ticket} new_sl={new_sl:g} retcode={retcode}"
+            ),
+        )
+
     def _close_position(self, position: dict[str, Any]) -> DemoCloseResult:
         mt5 = self._mt5()
         ticket = _optional_int(position.get("ticket"))

@@ -41,6 +41,7 @@ from app.intelligence.data_quality import run_full_check as run_data_quality_che
 from app.intelligence.macro_context import current_session, full_macro_context
 from app.learning.feature_extractor import extract_features
 from app.learning.lifecycle_manager import manage_open_positions
+from app.portfolio.mt5_reconciler import MT5Reconciler
 from app.portfolio.portfolio_manager import PortfolioManager
 from app.risk.position_sizer import calculate_position_size
 from app.risk.risk_manager import RiskManager
@@ -107,6 +108,20 @@ class TradingAlertJob:
         self.calendar_collector = EconomicCalendarCollector(settings)
         # Phase 4 v2.3.0: data quality check counter (no es por tiempo, es por ciclo)
         self._cycle_counter = 0
+        # v2.6.7: MT5 reconciler. Instancia única reusable; lazy del trader.
+        # Sólo se construye si demo trading está activo — evita instanciar
+        # MT5DemoTrader sin necesidad.
+        self._mt5_reconciler: MT5Reconciler | None = None
+        self._mt5_demo_trader = None  # instanciado lazy en _ensure_reconciler
+        if settings.enable_mt5_demo_trading:
+            try:
+                from app.brokers.mt5_demo_trader import MT5DemoTrader
+                self._mt5_demo_trader = MT5DemoTrader(settings, self.mt5_reader)
+                self._mt5_reconciler = MT5Reconciler(
+                    settings, self.repository, self._mt5_demo_trader, self.mt5_reader
+                )
+            except Exception:
+                logger.exception("MT5Reconciler init failed; continuing without")
 
     def run_forever(self) -> None:
         # Log solo el nombre del archivo (no path completo) para evitar filesystem leak.
@@ -182,6 +197,16 @@ class TradingAlertJob:
                     logger.info("Lifecycle: %s", lifecycle_summary)
             except Exception:
                 logger.exception("Lifecycle management failed")
+
+        # v2.6.7: MT5 reconciler — cierra huérfanas y sincroniza SLs.
+        # Corre DESPUÉS del lifecycle para que las decisiones del lifecycle
+        # (cerrar paper_trade por time, mover SL por trailing/breakeven) se
+        # reflejen en MT5 dentro del mismo ciclo. Soft-fail.
+        if self._mt5_reconciler is not None:
+            try:
+                self._mt5_reconciler.reconcile()
+            except Exception:
+                logger.exception("MT5Reconciler.reconcile() failed")
 
         snapshots = self._limit_snapshots(self._collect_snapshots())
         logger.info("Collected %s market snapshots", len(snapshots))

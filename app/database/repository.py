@@ -760,6 +760,68 @@ class Repository:
             ).fetchall()
         return [dict(row) for row in rows]
 
+    def fetch_latest_demo_order_for_paper_trade(
+        self, paper_trade_id: int
+    ) -> dict[str, Any] | None:
+        """v2.6.7: Devuelve el demo_order más reciente vinculado a un paper_trade.
+
+        Usado por MT5Reconciler para resolver paper_trade_id -> order_ticket
+        cuando matcheamos posiciones MT5 con paper_trades.
+        """
+        with get_connection(self.db_path) as connection:
+            row = connection.execute(
+                """
+                SELECT *
+                FROM demo_orders
+                WHERE paper_trade_id = ?
+                ORDER BY id DESC
+                LIMIT 1
+                """,
+                (int(paper_trade_id),),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def fetch_paper_trade_by_id(self, trade_id: int) -> dict[str, Any] | None:
+        """v2.6.7: lookup directo de paper_trade por id (reconciler-friendly)."""
+        with get_connection(self.db_path) as connection:
+            row = connection.execute(
+                "SELECT * FROM paper_trades WHERE id = ?",
+                (int(trade_id),),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def fetch_demo_orders_by_tickets(
+        self, tickets: list[int]
+    ) -> dict[int, dict[str, Any]]:
+        """v2.6.7: Bulk lookup. Para cada order_ticket en la lista, devuelve el
+        demo_order más reciente. Resultado: dict[ticket -> demo_order_row].
+
+        Usado por reconciler para resolver todas las posiciones MT5 en una sola query.
+        """
+        if not tickets:
+            return {}
+        # Tomamos el demo_order más reciente para cada ticket.
+        placeholders = ",".join("?" for _ in tickets)
+        with get_connection(self.db_path) as connection:
+            rows = connection.execute(
+                f"""
+                SELECT * FROM demo_orders
+                WHERE order_ticket IN ({placeholders})
+                ORDER BY id DESC
+                """,
+                tickets,
+            ).fetchall()
+        result: dict[int, dict[str, Any]] = {}
+        for row in rows:
+            ticket = row["order_ticket"]
+            if ticket is None:
+                continue
+            ticket_int = int(ticket)
+            # Como ORDER BY id DESC, el primer hit es el más reciente
+            if ticket_int not in result:
+                result[ticket_int] = dict(row)
+        return result
+
     def update_paper_trade(self, trade_id: int, updates: dict[str, Any]) -> None:
         allowed = {
             "latest_price",

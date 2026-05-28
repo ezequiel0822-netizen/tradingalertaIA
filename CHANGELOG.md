@@ -1,5 +1,59 @@
 # Changelog
 
+## Trading Alert AI v2.6.7
+
+Tapa el bug arquitectónico de posiciones MT5 demo huérfanas descubierto el 2026-05-27 (gap de −$9,606 entre paper PnL trackeado y balance MT5 real). Cada ciclo del bot, después del lifecycle, un reconciler limpia las posiciones MT5 cuyo paper_trade ya cerró y sincroniza los SL cuando el bot mueve el SL del paper_trade (trailing / breakeven post-TP1).
+
+**El bug.**
+
+Cuando el bot abre una orden a MT5 demo, crea un paper_trade vinculado. Si después el paper_trade cierra por una razón distinta a SL/TP real de MT5 (`closed_by_time`, `closed_force_exit_timeout` scalping, `stopped_simulated` cuando el bot movió SL a breakeven post-TP1 y el precio retrocedió, invalidation exit, etc), la posición MT5 sigue abierta con su SL ORIGINAL. El bot la "olvida" y sigue perdiendo dinero hasta que MT5 mismo hit SL real o intervención manual.
+
+El 2026-05-27 había 117+ órdenes USDCHF/XAUUSD enviadas a MT5 con sus paper_trades ya cerrados. El usuario las descubrió manualmente en MT5 desktop, las cerró, y reveló un gap de ~$9.6k que el bot no trackeaba.
+
+**`app/portfolio/mt5_reconciler.py` (NUEVO).**
+
+`MT5Reconciler.reconcile()` corre cada ciclo. Pipeline:
+1. `trader.positions()` — todas las posiciones MT5 abiertas.
+2. `repository.fetch_demo_orders_by_tickets()` — bulk lookup de demo_orders por ticket.
+3. Para cada posición:
+   - Sin `demo_order` matching → ignorar (puede ser trade manual del usuario).
+   - Con `demo_order` pero `paper_trade.status != 'open'` → **cerrar posición MT5 (huérfana)**.
+   - Con `paper_trade` abierto y SL diferente → **sincronizar SL (sólo TIGHTENING)**.
+4. Soft-fail por posición; error en una no afecta el resto. Devuelve `ReconcileSummary` con counts.
+
+Tolerancia SL: `SL_SYNC_TOLERANCE_PIPS=0.5` (no actualiza si diff < 0.5 pip — evita spam de updates por ruido de floating-point).
+
+Reglas de seguridad:
+- LONG: sólo actualiza SL si nuevo SL > MT5.sl (tighten arriba). Nunca relaja hacia abajo.
+- SHORT: sólo actualiza SL si nuevo SL < MT5.sl (tighten abajo). Nunca relaja hacia arriba.
+
+**`app/brokers/mt5_demo_trader.py` — 2 métodos nuevos.**
+
+- `close_position_by_ticket(ticket: int) -> DemoCloseResult` — cierra UNA posición por ticket. Reutiliza `_close_position()` interno. Validaciones demo-only intactas.
+- `update_position_sl(ticket, new_sl, new_tp=None) -> DemoSendResult` — `TRADE_ACTION_SLTP`. Si `new_tp=None`, preserva el TP actual de la posición (MT5 requiere ambos valores). Soft-fail con `order_send` raised.
+
+**`app/database/repository.py` — 3 helpers nuevos.**
+
+- `fetch_demo_orders_by_tickets(tickets) -> dict[ticket -> order_row]` — bulk lookup.
+- `fetch_latest_demo_order_for_paper_trade(paper_trade_id) -> order_row | None`.
+- `fetch_paper_trade_by_id(trade_id) -> trade_row | None`.
+
+**`app/scheduler/jobs.py` — hook.**
+
+`TradingAlertJob.__init__` construye `self._mt5_reconciler` si `enable_mt5_demo_trading=true`. `run_once()` llama `reconciler.reconcile()` después de `manage_open_positions()` (lifecycle decisions se reflejan en MT5 en el mismo ciclo). Soft-fail.
+
+**Tests (`tests/test_mt5_reconciler.py`, 15 casos).**
+
+- `close_position_by_ticket`: success, not_found, demo off (3 tests).
+- `update_position_sl`: success con `TRADE_ACTION_SLTP` correcto y preservación de TP, not_found (2 tests).
+- `MT5Reconciler`: demo disabled no-op, no positions, cierra huérfana, sincroniza SL tightening, no relaja LONG, no relaja SHORT, ignora unmatched (manual), soft-fail trader error, no-op cuando SL en sync, dataclass defaults (10 tests).
+
+**Cambios menores.**
+
+- `app/config/settings.py` + `.env.example`: bump v2.6.6 → v2.6.7.
+
+Total 323 → **338 tests verdes**. Real-money trading sigue 100% bloqueado.
+
 ## Trading Alert AI v2.6.6
 
 Segunda strategy scalping + refactor del engine a multi-strategy. Cubre el escenario complementario al breakout (mean reversion en rangos laterales) para acumular outcomes scalping en condiciones de mercado donde el breakout fallaría.
