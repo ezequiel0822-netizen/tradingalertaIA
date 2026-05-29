@@ -841,7 +841,9 @@ class TradingAlertJob:
                 )
                 continue
             ok, reason = self.risk_manager.check_can_open_trade(
-                snapshot.category, sizing.risk_pct_actual
+                snapshot.category,
+                sizing.risk_pct_actual,
+                symbol=snapshot.token_address or snapshot.symbol,
             )
             if not ok:
                 logger.info(
@@ -1045,6 +1047,18 @@ class TradingAlertJob:
                     "sent_at": now_iso,
                 }
             )
+            # v2.6.8: Corregir paper_trade.size_notional con notional MT5 real.
+            # Sin esto, /aprendizaje y realized_pnl_today usan el sizing teórico
+            # (basado en ACCOUNT_STARTING_BALANCE=1M) en vez del 0.1 lot real,
+            # inflando stats 100-1000× y disparando kill switch falsos.
+            if result.ok and result.price:
+                self._correct_paper_trade_notional(
+                    trader,
+                    paper_trade_id=int(request["paper_trade_id"]),
+                    symbol=str(request["symbol"]),
+                    volume=float(request["volume"]),
+                    entry_price=float(result.price),
+                )
         except Exception:
             logger.exception(
                 "Auto-confirm DB persist failed for request #%s", request_id
@@ -1072,4 +1086,50 @@ class TradingAlertJob:
         except Exception:
             logger.exception(
                 "Auto-confirm Telegram notification failed for #%s", request_id
+            )
+
+    def _correct_paper_trade_notional(
+        self,
+        trader,
+        paper_trade_id: int,
+        symbol: str,
+        volume: float,
+        entry_price: float,
+    ) -> None:
+        """v2.6.8: Después de demo_order exitoso, actualiza paper_trade.size_notional
+        con el notional MT5 real (volume × contract_size × price si quote=USD).
+
+        Esto reemplaza el sizing teórico del position_sizer (basado en
+        ACCOUNT_STARTING_BALANCE=1M) por la exposure verdadera de MT5 demo
+        (0.1 lot × contract × price ≈ $10-50k). Crítico para que
+        realized_pnl_today reporte drawdown real, no 100-1000× inflado.
+
+        Soft-fail: si MT5 no responde con symbol_info, no actualiza
+        (paper_trade queda con sizing teórico, pero no crashea).
+        """
+        try:
+            actual_notional = trader.compute_actual_notional_usd(
+                symbol, volume, entry_price
+            )
+            if actual_notional is None or actual_notional <= 0:
+                logger.debug(
+                    "v2.6.8: compute_actual_notional_usd returned None/zero "
+                    "for paper_trade=%s symbol=%s — keeping theoretical",
+                    paper_trade_id, symbol,
+                )
+                return
+            actual_units = trader.actual_units(symbol, volume)
+            updates: dict[str, Any] = {"size_notional": actual_notional}
+            if actual_units is not None and actual_units > 0:
+                updates["size_units"] = actual_units
+            self.repository.update_paper_trade(paper_trade_id, updates)
+            logger.info(
+                "v2.6.8: corrected paper_trade=%s size_notional -> %.2f USD "
+                "(MT5 actual via volume=%g × contract × price=%g)",
+                paper_trade_id, actual_notional, volume, entry_price,
+            )
+        except Exception:
+            logger.exception(
+                "v2.6.8: failed to correct paper_trade=%s notional",
+                paper_trade_id,
             )

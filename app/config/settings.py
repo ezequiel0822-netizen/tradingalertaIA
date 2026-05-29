@@ -287,6 +287,8 @@ class Settings:
     scalping_mr_bollinger_std: float
     scalping_mr_rsi_period: int
     scalping_mr_rsi_overbought: int
+    # v2.6.9 — per-symbol cooldown anti-feedback-loop
+    strategy_symbol_cooldown_minutes: int
     scalping_mr_rsi_oversold: int
 
     def __repr__(self) -> str:
@@ -357,7 +359,7 @@ def load_settings() -> Settings:
         obsidian_vault_path = safe_obsidian
 
     return Settings(
-        app_version=os.getenv("APP_VERSION", "v2.6.7"),
+        app_version=os.getenv("APP_VERSION", "v2.6.8"),
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
         telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID"),
         dexscreener_base_url=os.getenv(
@@ -666,4 +668,8 @@ def load_settings() -> Settings:
         scalping_mr_rsi_period=_get_int("SCALPING_MR_RSI_PERIOD", 14),
         scalping_mr_rsi_overbought=_get_int("SCALPING_MR_RSI_OVERBOUGHT", 70),
         scalping_mr_rsi_oversold=_get_int("SCALPING_MR_RSI_OVERSOLD", 30),
+        # v2.6.9 — per-symbol cooldown. 15 min default bloquea reentry agresivo
+        # del mismo símbolo desde swing strategies (descubierto 28-may: bot abrió
+        # 159 USDCHF en 20 min). Scalping tiene su propio cooldown (60s) en strategy.
+        strategy_symbol_cooldown_minutes=_get_int("STRATEGY_SYMBOL_COOLDOWN_MINUTES", 15),
     )

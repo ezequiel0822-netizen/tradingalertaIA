@@ -191,6 +191,7 @@ def _settings() -> Settings:
         scalping_mr_rsi_period=14,
         scalping_mr_rsi_overbought=70,
         scalping_mr_rsi_oversold=30,
+        strategy_symbol_cooldown_minutes=15,
     )
 
 

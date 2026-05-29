@@ -48,11 +48,31 @@ class RiskManager:
         return True, f"{reason} (hasta {until.isoformat()})"
 
     def check_can_open_trade(
-        self, category: str, proposed_risk_pct: float
+        self,
+        category: str,
+        proposed_risk_pct: float,
+        symbol: str | None = None,
     ) -> tuple[bool, str]:
         active, reason = self.is_kill_switch_active()
         if active:
             return False, f"kill switch active: {reason}"
+
+        # v2.6.9 — per-symbol cooldown anti-feedback-loop.
+        # Bug del 28-may: bot abrió 159 USDCHF orders en 20 min (~8/min) porque
+        # forex_session_breakout re-detectaba el mismo setup tras cada SL hit.
+        # Dedup global (DEDUP_WINDOW_MINUTES=360) protege alertas Telegram pero
+        # NO los trades. Este check rechaza si hay paper_trade del mismo símbolo
+        # opened en los últimos N minutos.
+        cooldown_min = int(getattr(self.settings, "strategy_symbol_cooldown_minutes", 0))
+        if symbol and cooldown_min > 0:
+            cutoff = utc_now() - timedelta(minutes=cooldown_min)
+            if self.repository.has_recent_paper_trade_for_symbol(
+                symbol, cutoff.isoformat()
+            ):
+                return (
+                    False,
+                    f"symbol_cooldown_active ({symbol}, last trade <{cooldown_min}min ago)",
+                )
 
         counts = self.portfolio_manager.count_open_by_category()
         total_open = sum(counts.values())

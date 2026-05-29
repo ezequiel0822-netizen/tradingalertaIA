@@ -596,6 +596,15 @@ class ScalpingEngine:
                     "is_scalping": 1,
                 }
             )
+            # v2.6.8: Corregir size_notional con MT5 real (igual que en jobs.py swing path)
+            if send_result.ok and send_result.price:
+                self._correct_paper_trade_notional(
+                    trader,
+                    paper_trade_id=paper_id,
+                    symbol=signal.symbol,
+                    volume=float(request_dict["volume"]),
+                    entry_price=float(send_result.price),
+                )
         except Exception:
             logger.exception("Scalping: failed to persist demo_order")
 
@@ -612,6 +621,43 @@ class ScalpingEngine:
                 paper_id, signal.symbol, send_result.reason,
             )
             return False
+
+    # ---------------- v2.6.8 notional correction ----------------
+
+    def _correct_paper_trade_notional(
+        self,
+        trader: Any,
+        paper_trade_id: int,
+        symbol: str,
+        volume: float,
+        entry_price: float,
+    ) -> None:
+        """v2.6.8: idem TradingAlertJob._correct_paper_trade_notional pero para
+        scalping path. Update paper_trade.size_notional con notional MT5 real.
+
+        Sin esto, paper_trades scalping también quedan con sizing teórico inflado.
+        Ver docstring de TradingAlertJob._correct_paper_trade_notional para detalles.
+        """
+        try:
+            actual_notional = trader.compute_actual_notional_usd(
+                symbol, volume, entry_price
+            )
+            if actual_notional is None or actual_notional <= 0:
+                return
+            actual_units = trader.actual_units(symbol, volume)
+            updates: dict[str, Any] = {"size_notional": actual_notional}
+            if actual_units is not None and actual_units > 0:
+                updates["size_units"] = actual_units
+            self.repository.update_paper_trade(paper_trade_id, updates)
+            logger.info(
+                "v2.6.8 scalping: corrected paper_trade=%s notional -> %.2f USD",
+                paper_trade_id, actual_notional,
+            )
+        except Exception:
+            logger.exception(
+                "v2.6.8 scalping: failed to correct paper_trade=%s notional",
+                paper_trade_id,
+            )
 
     # ---------------- Caps ----------------
 

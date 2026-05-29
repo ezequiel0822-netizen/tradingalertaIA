@@ -1,5 +1,53 @@
 # Changelog
 
+## Trading Alert AI v2.6.8
+
+Dos fixes adicionales descubiertos en el audit del 2026-05-28 (segundo día con `.env` conservador y reconciler v2.6.7 activo). Balance solo bajó −$114 (vs −$12k del día anterior), pero el audit reveló dos issues estructurales.
+
+**Fix #1 — `size_notional` inflado por sizing teórico (resuelve también el "v2.6.10" bug del realized_pnl_today).**
+
+El `position_sizer.calculate_position_size` usa `ACCOUNT_STARTING_BALANCE=1,000,000` (teórico) cuando MT5 no entrega balance live, y computa notional según `risk_pct × balance / (entry − stop)`. Para una entrada mean_reversion con SL de 7 pips en EURUSD, esto da notional de 10-16 MILLONES de USD. Pero MT5 ejecuta sólo `DEMO_MAX_LOT=0.1` que son ~$11,600 reales.
+
+Esa discrepancia inflaba 100-1000× tres cosas críticas:
+- `paper_trade.size_notional` (almacenado en DB).
+- `/aprendizaje` y `total_exposure_by_category` (stats agregadas).
+- `realized_pnl_today` USD-based: con notional 16M × −0.09% return = −$15k "calculado", cuando el daño REAL fue −$9. Esto disparó kill switch falsos: el 2026-05-28 con balance bajando solo −0.13% el kill switch fired con "−3.18% drawdown".
+
+**Solución (`app/brokers/mt5_demo_trader.py` + hooks en jobs y scalping).**
+
+Después de cada `demo_order` exitoso, recalcula y persiste:
+- `size_notional` = volume × contract_size × (entry_price si USD es QUOTE, sino 1).
+- `size_units` = volume × contract_size.
+
+Nuevos métodos `MT5DemoTrader.compute_actual_notional_usd()` y `actual_units()` consultan `symbol_info.trade_contract_size` y `currency_base`. El hook `_correct_paper_trade_notional()` está en `TradingAlertJob` (swing auto-confirm) y `ScalpingEngine` (scalping path), llamado inmediatamente tras `create_demo_order`.
+
+Resultado: stats refleja exposure REAL de MT5 (0.1 lot × contract_size × price), no la teórica. `realized_pnl_today` ya no infla kill switches.
+
+**Fix #2 — Per-symbol cooldown anti-feedback-loop.**
+
+El 2026-05-28 el bot abrió **159 USDCHF demo orders en 20 minutos** (~8/min) porque `forex_session_breakout` re-detectaba el mismo setup tras cada SL hit. El `DEDUP_WINDOW_MINUTES=360` protege alertas Telegram pero NO los trades.
+
+**Solución (`app/risk/risk_manager.py` + `app/database/repository.py`).**
+
+- Nuevo setting `STRATEGY_SYMBOL_COOLDOWN_MINUTES` (default `15`). Bajar a `0` para deshabilitar.
+- `RiskManager.check_can_open_trade(category, risk_pct, symbol=...)` ahora rechaza si existe un `paper_trade` del mismo símbolo abierto en los últimos N minutos.
+- Nueva query `Repository.has_recent_paper_trade_for_symbol(symbol, after_iso)`.
+- Caller actualizado en `app/scheduler/jobs.py` para pasar `symbol`.
+
+Scalping no necesita este check porque ya tiene cooldown propio (60s) en `ScalpingBreakoutStrategy` / `ScalpingMeanReversionStrategy`.
+
+**Tests (`tests/test_v268_v269.py`, 14 casos).**
+
+- v2.6.8 (5): `compute_actual_notional_usd` para USD-quote (EURUSD, XAUUSD), USD-base (USDJPY), inputs inválidos; `actual_units` correcto.
+- v2.6.9 (9): `has_recent_paper_trade_for_symbol` con/sin match, símbolo vacío, fuera de ventana; `RiskManager` bloquea cooldown activo, permite cooldown=0, permite sin symbol, permite símbolo distinto, permite tras expiración.
+
+**Cambios menores.**
+
+- `app/config/settings.py` + `.env.example`: bump v2.6.7 → v2.6.8.
+- `tests/test_score.py` + `tests/test_alert_rules.py`: nuevo kwarg `strategy_symbol_cooldown_minutes=15`.
+
+Total 338 → **352 tests verdes**. Real-money trading sigue 100% bloqueado.
+
 ## Trading Alert AI v2.6.7
 
 Tapa el bug arquitectónico de posiciones MT5 demo huérfanas descubierto el 2026-05-27 (gap de −$9,606 entre paper PnL trackeado y balance MT5 real). Cada ciclo del bot, después del lifecycle, un reconciler limpia las posiciones MT5 cuyo paper_trade ya cerró y sincroniza los SL cuando el bot mueve el SL del paper_trade (trailing / breakeven post-TP1).

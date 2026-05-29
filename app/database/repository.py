@@ -790,6 +790,29 @@ class Repository:
             ).fetchone()
         return dict(row) if row else None
 
+    def has_recent_paper_trade_for_symbol(
+        self, symbol: str, after_iso: str
+    ) -> bool:
+        """v2.6.9: Devuelve True si hay algún paper_trade del símbolo con
+        opened_at >= after_iso. Usado por risk_manager para implementar
+        per-symbol cooldown anti-feedback-loop.
+
+        Match case-sensitive sobre `symbol`. Caller debe normalizar a UPPER
+        si quiere case-insensitive (mayoría de signals son uppercase).
+        """
+        if not symbol:
+            return False
+        with get_connection(self.db_path) as connection:
+            row = connection.execute(
+                """
+                SELECT 1 FROM paper_trades
+                WHERE symbol = ? AND opened_at >= ?
+                LIMIT 1
+                """,
+                (symbol, after_iso),
+            ).fetchone()
+        return row is not None
+
     def fetch_demo_orders_by_tickets(
         self, tickets: list[int]
     ) -> dict[int, dict[str, Any]]:

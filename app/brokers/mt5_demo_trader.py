@@ -531,6 +531,65 @@ class MT5DemoTrader:
             False, "failed", "no MT5 filling mode available"
         )
 
+    def compute_actual_notional_usd(
+        self, symbol: str, volume: float, entry_price: float
+    ) -> float | None:
+        """v2.6.8: Computa el notional USD REAL de una posición MT5 demo.
+
+        Existe el bug arquitectónico de que el position_sizer del bot usa
+        `ACCOUNT_STARTING_BALANCE` (típicamente 1M teórico) para calcular
+        `paper_trade.size_notional`. Pero MT5 ejecuta sólo `DEMO_MAX_LOT=0.1`,
+        que son ~$10k de notional real, no $10M+. La discrepancia distorsiona
+        `/aprendizaje`, `total_exposure_by_category`, y peor de todo
+        `realized_pnl_today` (que disparó kill switch con -3.18% el 2026-05-28
+        cuando el daño real era -0.13%).
+
+        Este helper devuelve el notional USD verdadero basado en:
+        - volume × trade_contract_size (si USD es BASE, ej. USDJPY → volume × 100k)
+        - volume × trade_contract_size × entry_price (si USD es QUOTE,
+          ej. EURUSD → 0.1 × 100k × 1.16 = $11,600; XAUUSD → 0.1 × 100 × 4400 = $44k)
+
+        Para casos con base ni cuota USD (raros), aproxima con × entry_price.
+        Devuelve None si symbol_info no está disponible — caller debe NO actualizar.
+        """
+        if not self.connect():
+            return None
+        info = self._ensure_symbol(symbol)
+        if info is None:
+            return None
+        try:
+            contract_size = _to_float(getattr(info, "trade_contract_size", 0))
+            currency_base = str(getattr(info, "currency_base", "") or "")
+        except (TypeError, ValueError, AttributeError):
+            return None
+        if contract_size is None or contract_size <= 0:
+            return None
+        if volume is None or volume <= 0 or entry_price is None or entry_price <= 0:
+            return None
+        if currency_base.upper() == "USD":
+            return round(volume * contract_size, 2)
+        return round(volume * contract_size * entry_price, 2)
+
+    def actual_units(self, symbol: str, volume: float) -> float | None:
+        """v2.6.8: Devuelve volumen × contract_size — unidades reales del activo.
+
+        Para `paper_trade.size_units` consistente con `size_notional`.
+        """
+        if not self.connect():
+            return None
+        info = self._ensure_symbol(symbol)
+        if info is None:
+            return None
+        try:
+            contract_size = _to_float(getattr(info, "trade_contract_size", 0))
+        except (TypeError, ValueError, AttributeError):
+            return None
+        if contract_size is None or contract_size <= 0:
+            return None
+        if volume is None or volume <= 0:
+            return None
+        return round(volume * contract_size, 4)
+
     def positions(self) -> list[dict[str, Any]]:
         if not self.connect():
             return []
