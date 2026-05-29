@@ -67,6 +67,9 @@ class BasicTelegramAssistant:
         if normalized in {"/aprendizaje", "aprendizaje", "que aprendiste", "/learning"}:
             return self.learning_message()
 
+        if normalized in {"/gate_preview", "/preview_gate", "/learning_gate", "preview gate"}:
+            return self.gate_preview_message()
+
         if normalized in {"/paper", "paper", "simulacion", "/paper_trades"}:
             return self.paper_message()
 
@@ -484,6 +487,80 @@ Chains: {", ".join(self.settings.chains_to_monitor)}
         lines.extend(_render_block("SWING LESSONS", swing_lessons))
         lines.extend(_render_block("SCALPING LESSONS", scalping_lessons))
         lines.append("")
+        lines.append(DISCLAIMER)
+        return "\n".join(lines)
+
+    def gate_preview_message(self) -> str:
+        """v2.6.9: Preview de qué features serían filtradas si se activa
+        ENABLE_LEARNING_GATE=true con los thresholds actuales.
+
+        El gate filtra signals cuyo subset (category:/alert:/score:) tenga
+        win_rate < LEARNING_GATE_MIN_WIN_RATE con LEARNING_GATE_MIN_SAMPLES+
+        observaciones en LEARNING_GATE_SINCE_DAYS. Este comando permite
+        prever el impacto antes de flipear el toggle.
+        """
+        horizon = self.settings.learning_gate_horizon_hours
+        since = self.settings.learning_gate_since_days
+        min_samples = self.settings.learning_gate_min_samples
+        min_wr = self.settings.learning_gate_min_win_rate
+
+        lines = [
+            f"Learning Gate Preview ({self.settings.app_version})",
+            f"Settings: horizon={horizon}h | since={since}d",
+            f"min_samples={min_samples} | min_wr={min_wr*100:.0f}%",
+            f"ENABLE_LEARNING_GATE actual: {self.settings.enable_learning_gate}",
+            f"FORCE_FOR_MEMECOIN: {self.settings.force_learning_gate_for_memecoin}",
+            "",
+            "Top features por sharpe (samples >= min_samples):",
+            "",
+        ]
+
+        try:
+            ranked = rank_top_strategies(
+                repository=self.repository,
+                horizon_hours=horizon,
+                since_days=since,
+                min_samples=min_samples,
+                top_n=15,
+            )
+        except Exception as exc:
+            lines.append(f"Error: {exc.__class__.__name__}")
+            lines.append(DISCLAIMER)
+            return "\n".join(lines)
+
+        if not ranked:
+            lines.append("(no hay features con suficientes samples — gate no filtraria nada)")
+            lines.append("")
+            lines.append(DISCLAIMER)
+            return "\n".join(lines)
+
+        blocked = 0
+        passed = 0
+        for r in ranked[:15]:
+            if r.sample_count < min_samples:
+                mark = "?"
+                decision = "PASS(insuf)"
+            elif r.win_rate < min_wr:
+                mark = "X"
+                decision = "BLOCK"
+                blocked += 1
+            else:
+                mark = "Y"
+                decision = "PASS"
+                passed += 1
+            label = r.rule_label[:30]
+            lines.append(
+                f"{mark} {label:30s} n={r.sample_count:3d} "
+                f"wr={r.win_rate*100:5.1f}% ret={r.avg_return_pct:+5.1f}% [{decision}]"
+            )
+
+        lines.append("")
+        lines.append(f"Resumen si activas el gate: {blocked} bloqueados | {passed} pasan")
+        if blocked > passed and blocked > 0:
+            lines.append("ADVERTENCIA: muchos features serian bloqueados — bot operaria poco.")
+            lines.append("Considera bajar LEARNING_GATE_MIN_WIN_RATE o esperar mas data.")
+        lines.append("")
+        lines.append("Para activar: ENABLE_LEARNING_GATE=true en .env")
         lines.append(DISCLAIMER)
         return "\n".join(lines)
 

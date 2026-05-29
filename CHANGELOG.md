@@ -1,5 +1,47 @@
 # Changelog
 
+## Trading Alert AI v2.6.9
+
+Telegram command `/gate_preview` para visualizar qué features bloquearia `ENABLE_LEARNING_GATE=true` antes de flipear el toggle. Permite monitorear evolución de data desde el celular, sin necesidad de scripts ad-hoc.
+
+**Por qué.**
+
+Tras el audit del 2026-05-28 con `.env` conservador, surgió la pregunta de si activar el learning gate (filtro automático de signals con win_rate histórico bajo). El preview reveló que con la data actual (1-2 semanas), el gate bloquearía CASI TODAS las features porque los `OUTCOME_WIN_RETURN_*_PCT` son tan estrictos (memecoin +30%, stock +5%) que muy pocos outcomes cuentan como "wins", incluso features con avg_return positivo.
+
+Ej: `score:80-90` con 10 samples tiene win_rate=0% pero avg_return=+6.70% — la rule es profitable pero el gate la filtraria. Activar el gate ahora destruye el bot.
+
+El comando ayuda a:
+1. Verificar el balance bloqueados/pasa antes de activar.
+2. Detectar si el set de features pierde diversidad con el tiempo.
+3. Validar cuando hay suficiente data para activar con confianza.
+
+**`app/assistant/command_handler.py` — método nuevo.**
+
+`gate_preview_message()` corre `rank_top_strategies()` con los thresholds actuales y para cada feature decide PASS/BLOCK según `enable_learning_gate` semántica:
+- `samples < min_samples` → PASS (insuf).
+- `win_rate < min_wr` → BLOCK.
+- Sino → PASS.
+
+Output incluye: settings actuales, top 15 features con sample/wr/avg_ret/decision, resumen aggregado, warning si bloqueados > pasa.
+
+Aliases: `/gate_preview`, `/preview_gate`, `/learning_gate`, `preview gate`.
+
+Soft-fail: si `rank_top_strategies` tira excepción, devuelve mensaje con clase de error en vez de crashear el assistant.
+
+**Tests (`tests/test_gate_preview_command.py`, 5 casos).**
+
+- Responde a los 4 aliases.
+- Muestra settings actuales (transparencia).
+- DB vacía → mensaje "no filtraria nada" claro.
+- Incluye disclaimer estándar.
+- Soft-fail con repository error.
+
+**Cambios menores.**
+
+- `app/config/settings.py` + `.env.example`: bump v2.6.8 → v2.6.9.
+
+Total 352 → **357 tests verdes**. Real-money trading sigue 100% bloqueado.
+
 ## Trading Alert AI v2.6.8
 
 Dos fixes adicionales descubiertos en el audit del 2026-05-28 (segundo día con `.env` conservador y reconciler v2.6.7 activo). Balance solo bajó −$114 (vs −$12k del día anterior), pero el audit reveló dos issues estructurales.
