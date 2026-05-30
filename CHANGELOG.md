@@ -1,5 +1,29 @@
 # Changelog
 
+## Trading Alert AI v2.7.0 (branch claude/xenodochial-taussig-4206c6 — sin merge a main)
+
+Medición honesta del P&L realizado + gate de promoción que protege capital. Surge del análisis cuantitativo de los paper_trades: el motor de aprendizaje medía la cosa equivocada y ~86% del historial eran artifacts del feedback-loop.
+
+**Hallazgo raíz (Fix A).**
+
+`training_engine._update_paper_trades` era LONG-ONLY (`if latest <= stop`). Para un SHORT el stop está POR ENCIMA del entry, así que la condición se cumplía apenas se creaba el trade → cada short se marcaba `stopped_simulated` en el MISMO ciclo (vida ~12s, precio congelado en entry). Corría junto a `lifecycle_manager.manage_open_positions` (direction-aware) = doble-management conflictivo. Resultado: 86% del historial (forex/gold shorts) eran artifacts, no trades reales. Ahora es direction-aware: mata el instant-kill → los trades viven su horizonte → el dedup de posiciones abiertas frena el feedback-loop → los precios dejan de congelarse.
+
+**Fix C — precio fresco real para forex/gold.**
+
+`lifecycle_manager._fresh_price` pasaba el símbolo Yahoo crudo (`USDCHF=X`) a `get_tick`, que siempre fallaba → precio stale. Ahora mapea Yahoo→MT5 (`yahoo_to_mt5`) antes del tick.
+
+**Fix D — señal de aprendizaje HONESTA (realized-R).**
+
+Nuevo `app/learning/trade_outcomes.py`: retorno realizado direction-aware (con partial close), riesgo al entry, R-multiple, detección de artifacts (precio congelado) y `build_strategy_performance`. Nueva tabla `strategy_performance` (PK strategy_name+category) refrescada cada ciclo de learning. Comando Telegram `/expectancy`. A diferencia de signal_outcomes (drift de la alerta a horizonte fijo con umbrales absolutos → ~99% 'neutral'), mide el P&L realizado normalizado por riesgo — la única métrica conectada con el crecimiento de la cuenta.
+
+**Promotion gate (shadow mode) — protección de capital.**
+
+Nuevo `should_execute_live()` + 3 settings (`ENABLE_STRATEGY_PROMOTION_GATE` default ON, `STRATEGY_PROMOTION_MIN_SAMPLES`=30, `STRATEGY_PROMOTION_MIN_EXPECTANCY_R`=0.0). Una estrategia NO manda `order_send` a MT5 si tiene expectancy realizada negativa PROBADA (avg_r<=umbral con n>=min_samples). Las no probadas pasan (juntando data); las que demostraron edge negativo quedan paper-only (SHADOW). Hooks en `jobs._try_prepare_demo_order` (swing) y `scalping_engine._open_scalping_trade` (scalping). Filosofía 'inocente hasta probarse culpable'. NO toca la creación de paper_trades ni el real-money (sigue HARDCODED bloqueado).
+
+Default ON porque es un gate restrictivo (reduce riesgo), no una feature que lo agrega. Con la data actual deja `momentum` en SHADOW automáticamente (lo que el user ya hacía a mano) y deja al resto juntar muestra limpia. Visible en `/expectancy` como tag LIVE/SHADOW. Toggle: `ENABLE_STRATEGY_PROMOTION_GATE=false` revierte al comportamiento previo.
+
+Tests: 357 → 383 (+26). Data histórica NO mutada (la quarantine de artifacts es a query-time).
+
 ## Trading Alert AI v2.6.9
 
 Telegram command `/gate_preview` para visualizar qué features bloquearia `ENABLE_LEARNING_GATE=true` antes de flipear el toggle. Permite monitorear evolución de data desde el celular, sin necesidad de scripts ad-hoc.

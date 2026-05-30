@@ -192,6 +192,9 @@ def _settings() -> Settings:
         scalping_mr_rsi_overbought=70,
         scalping_mr_rsi_oversold=30,
         strategy_symbol_cooldown_minutes=15,
+        enable_strategy_promotion_gate=True,
+        strategy_promotion_min_samples=30,
+        strategy_promotion_min_expectancy_r=0.0,
     )
 
 

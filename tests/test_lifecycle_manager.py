@@ -113,3 +113,41 @@ def test_stop_hit_closes_trade_stopped() -> None:
     assert summary["stopped"] == 1
     row = repo.fetch_paper_trades(limit=1)[0]
     assert row["status"] == "stopped_simulated"
+
+
+class _FakeTickReader:
+    def __init__(self, bid: float) -> None:
+        self._bid = bid
+        self.seen_symbol: str | None = None
+
+    def is_connected(self) -> bool:
+        return True
+
+    def get_tick(self, symbol: str):
+        self.seen_symbol = symbol
+        return {"bid": self._bid, "ask": self._bid}
+
+
+def test_fresh_price_maps_yahoo_forex_symbol_to_mt5() -> None:
+    """Regresion v2.7.0: _fresh_price pasaba el símbolo Yahoo crudo ('USDCHF=X')
+    a get_tick, que siempre fallaba para forex/gold → caía a precio stale. Ahora
+    debe mapear a 'USDCHF' antes de pedir el tick."""
+    from app.learning.lifecycle_manager import _fresh_price
+
+    reader = _FakeTickReader(bid=0.9123)
+    repo = _repo()
+    trade = {"chain": "forex", "token_address": "USDCHF=X", "symbol": "USDCHF=X"}
+    price = _fresh_price(trade, repo, reader, "icmarkets")
+    assert reader.seen_symbol == "USDCHF"
+    assert price == 0.9123
+
+
+def test_fresh_price_maps_yahoo_gold_symbol_to_mt5() -> None:
+    from app.learning.lifecycle_manager import _fresh_price
+
+    reader = _FakeTickReader(bid=4520.5)
+    repo = _repo()
+    trade = {"chain": "gold", "token_address": "GC=F", "symbol": "GC=F"}
+    price = _fresh_price(trade, repo, reader, "icmarkets")
+    assert reader.seen_symbol == "XAUUSD"
+    assert price == 4520.5

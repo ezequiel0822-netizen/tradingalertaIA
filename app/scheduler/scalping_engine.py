@@ -548,6 +548,29 @@ class ScalpingEngine:
             logger.info("Scalping paper_trade abierto (sin MT5: demo off): %s %s", signal.direction, signal.symbol)
             return True
 
+        # v2.7.0 promotion gate: solo manda order_send a MT5 si la estrategia no tiene
+        # edge negativo probado. El paper_trade ya quedó creado (shadow/paper-only).
+        if self.settings.enable_strategy_promotion_gate:
+            from app.learning.trade_outcomes import should_execute_live
+
+            perf = self.repository.fetch_strategy_performance_for(
+                signal.strategy_name, category
+            )
+            ok_live, gate_reason = should_execute_live(
+                signal.strategy_name,
+                category,
+                perf,
+                self.settings.strategy_promotion_min_samples,
+                self.settings.strategy_promotion_min_expectancy_r,
+            )
+            if not ok_live:
+                logger.info(
+                    "Scalping promotion gate: paper-only %s reason=%s",
+                    signal.symbol,
+                    gate_reason,
+                )
+                return True
+
         # 3. Ejecutar a MT5 demo via trader. Construye request directo.
         paper_id = self._fetch_latest_scalping_trade_id(signal.symbol)
         if paper_id is None:

@@ -8,6 +8,7 @@ from app.config.settings import Settings
 from app.database.models import EstimateResult, TokenSnapshot
 from app.database.repository import Repository
 from app.learning.feature_extractor import extract_features
+from app.learning.trade_outcomes import build_strategy_performance
 from app.utils.time_utils import utc_now_iso
 
 
@@ -20,6 +21,7 @@ class LearningRunResult:
     summary: str
     horizons_created: int = 0
     horizons_updated: int = 0
+    strategy_perf_updated: int = 0
 
 
 def run_learning_cycle(settings: Settings, repository: Repository) -> LearningRunResult:
@@ -48,14 +50,17 @@ def run_learning_cycle(settings: Settings, repository: Repository) -> LearningRu
         repository.upsert_strategy_lesson(lesson)
 
     paper_trades_created = 0
+    strategy_perf_updated = 0
     if settings.enable_paper_trading:
         paper_trades_created += _create_paper_trades(settings, repository, alerts)
         _update_paper_trades(repository, settings)
+        strategy_perf_updated = _refresh_strategy_performance(repository, settings)
 
     summary = (
         f"Evaluadas {len(alerts)} señales; outcomes nuevos {outcomes_created}; "
         f"lecciones {len(lessons)}; paper trades nuevos {paper_trades_created}; "
-        f"horizontes nuevos {horizons_created} (refrescados {horizons_updated})."
+        f"horizontes nuevos {horizons_created} (refrescados {horizons_updated}); "
+        f"expectancy por estrategia (R) {strategy_perf_updated}."
     )
     repository.insert_training_run(
         {
@@ -76,6 +81,7 @@ def run_learning_cycle(settings: Settings, repository: Repository) -> LearningRu
         summary=summary,
         horizons_created=horizons_created,
         horizons_updated=horizons_updated,
+        strategy_perf_updated=strategy_perf_updated,
     )
 
 
@@ -265,13 +271,29 @@ def _create_paper_trades(
 def _update_paper_trades(
     repository: Repository, settings: Settings | None = None
 ) -> None:
+    """Mark-to-market + exit checks para paper trades abiertos.
+
+    v2.7.0 BUGFIX (direction-aware): este updater era LONG-ONLY. Para un trade
+    SHORT el stop está POR ENCIMA del entry, así que la condición long-only
+    `latest <= stop` era trivialmente verdadera apenas se creaba el trade →
+    cada short se marcaba `stopped_simulated` en el MISMO ciclo (run_learning_cycle
+    corre después de _try_open_paper_trades), con vida ~12s y precio congelado en
+    entry. Eso envenenó ~85% del historial de paper_trades (forex/gold shorts) y
+    alimentó el feedback loop (al cerrarse al instante, el dedup de posiciones
+    abiertas no protegía y se reabría el mismo setup). Ahora respeta `direction`,
+    igual que lifecycle_manager.manage_open_positions.
+    """
     for trade in repository.fetch_paper_trades(status="open", limit=200):
         token = repository.get_token(str(trade.get("chain")), str(trade.get("token_address")))
         latest = _to_float((token or {}).get("latest_price"))
         entry = _to_float(trade.get("entry_price"))
         if latest is None or entry is None or entry <= 0:
             continue
-        return_pct = ((latest - entry) / entry) * 100
+        direction = str(trade.get("direction") or "long")
+        if direction == "short":
+            return_pct = ((entry - latest) / entry) * 100
+        else:
+            return_pct = ((latest - entry) / entry) * 100
 
         prior_mfe = _to_float(trade.get("mfe_pct")) or 0.0
         prior_mae = _to_float(trade.get("mae_pct")) or 0.0
@@ -301,24 +323,76 @@ def _update_paper_trades(
                 trailing_active = 1
                 updates["trailing_active"] = 1
             if trailing_active:
-                new_stop = latest * (1 - distance / 100)
-                if stop is None or new_stop > stop:
-                    stop = new_stop
-                    updates["stop_loss"] = round(new_stop, 8)
+                if direction == "short":
+                    # short: el trailing BAJA el stop hacia el precio (nunca sube)
+                    new_stop = latest * (1 + distance / 100)
+                    if stop is None or new_stop < stop:
+                        stop = new_stop
+                        updates["stop_loss"] = round(new_stop, 8)
+                else:
+                    new_stop = latest * (1 - distance / 100)
+                    if stop is None or new_stop > stop:
+                        stop = new_stop
+                        updates["stop_loss"] = round(new_stop, 8)
 
         target_2 = _to_float(trade.get("take_profit_2"))
         status = "open"
         closed_at = None
-        if stop is not None and latest <= stop:
-            status = "stopped_simulated"
-            closed_at = utc_now_iso()
-        elif target_2 is not None and latest >= target_2:
-            status = "target_2_simulated"
-            closed_at = utc_now_iso()
+        if direction == "short":
+            if stop is not None and latest >= stop:
+                status = "stopped_simulated"
+                closed_at = utc_now_iso()
+            elif target_2 is not None and latest <= target_2:
+                status = "target_2_simulated"
+                closed_at = utc_now_iso()
+        else:
+            if stop is not None and latest <= stop:
+                status = "stopped_simulated"
+                closed_at = utc_now_iso()
+            elif target_2 is not None and latest >= target_2:
+                status = "target_2_simulated"
+                closed_at = utc_now_iso()
         updates["status"] = status
         updates["closed_at"] = closed_at
 
         repository.update_paper_trade(int(trade["id"]), updates)
+
+
+def _refresh_strategy_performance(repository: Repository, settings: Settings) -> int:
+    """v2.7.0: recomputa expectancy realizada en R por (strategy_name, category)
+    desde paper_trades cerrados, excluyendo artifacts del feedback-loop, y la
+    persiste en strategy_performance. Devuelve cuántas filas se upsertearon.
+
+    Señal HONESTA de aprendizaje: a diferencia de signal_outcomes (drift de la
+    alerta a horizonte fijo con umbrales absolutos, ~99% 'neutral'), mide el P&L
+    realizado del trade normalizado por el riesgo asumido al entry.
+    """
+    closed = repository.fetch_closed_paper_trades(limit=5000)
+    if not closed:
+        return 0
+    frac = float(getattr(settings, "partial_close_fraction", 0.5) or 0.5)
+    perfs = build_strategy_performance(closed, partial_fraction=frac)
+    now = utc_now_iso()
+    count = 0
+    for p in perfs:
+        repository.upsert_strategy_performance(
+            {
+                "strategy_name": p.strategy_name,
+                "category": p.category,
+                "trades": p.trades,
+                "wins": p.wins,
+                "losses": p.losses,
+                "scratches": p.scratches,
+                "win_rate": p.win_rate,
+                "avg_r": p.avg_r,
+                "avg_return_pct": p.avg_return_pct,
+                "sum_return_pct": p.sum_return_pct,
+                "artifacts_excluded": p.artifacts_excluded,
+                "updated_at": now,
+            }
+        )
+        count += 1
+    return count
 
 
 def _snapshot_from_alert(alert: dict[str, Any]) -> TokenSnapshot:

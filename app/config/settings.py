@@ -290,6 +290,13 @@ class Settings:
     # v2.6.9 — per-symbol cooldown anti-feedback-loop
     strategy_symbol_cooldown_minutes: int
     scalping_mr_rsi_oversold: int
+    # v2.7.0 — promotion gate: una estrategia ejecuta a MT5 solo si NO tiene
+    # expectancy realizada negativa probada (avg_r <= umbral con n>=min_samples).
+    # Protege capital: los losers probados quedan paper-only (shadow). Default ON
+    # porque es un gate restrictivo (reduce riesgo), no una feature que lo agrega.
+    enable_strategy_promotion_gate: bool
+    strategy_promotion_min_samples: int
+    strategy_promotion_min_expectancy_r: float
 
     def __repr__(self) -> str:
         parts: list[str] = []
@@ -672,4 +679,8 @@ def load_settings() -> Settings:
         # del mismo símbolo desde swing strategies (descubierto 28-may: bot abrió
         # 159 USDCHF en 20 min). Scalping tiene su propio cooldown (60s) en strategy.
         strategy_symbol_cooldown_minutes=_get_int("STRATEGY_SYMBOL_COOLDOWN_MINUTES", 15),
+        # v2.7.0 — promotion gate (default ON = protege capital bloqueando losers probados)
+        enable_strategy_promotion_gate=_get_bool("ENABLE_STRATEGY_PROMOTION_GATE", True),
+        strategy_promotion_min_samples=_get_int("STRATEGY_PROMOTION_MIN_SAMPLES", 30),
+        strategy_promotion_min_expectancy_r=_get_float("STRATEGY_PROMOTION_MIN_EXPECTANCY_R", 0.0),
     )

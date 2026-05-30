@@ -13,6 +13,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
+from app.brokers.mt5_symbol_map import yahoo_to_mt5
 from app.config.settings import Settings
 from app.database.repository import Repository
 from app.utils.time_utils import utc_now, utc_now_iso
@@ -37,9 +38,10 @@ def manage_open_positions(
     if not open_trades:
         return summary
 
+    broker_profile = getattr(settings, "mt5_broker_profile", "icmarkets")
     for trade in open_trades:
         summary["managed"] += 1
-        latest = _fresh_price(trade, repository, mt5_reader)
+        latest = _fresh_price(trade, repository, mt5_reader, broker_profile)
         entry = _to_float(trade.get("entry_price"))
         if latest is None or entry is None or entry <= 0:
             continue
@@ -163,14 +165,19 @@ def manage_open_positions(
 
 
 def _fresh_price(
-    trade: dict, repository: Repository, mt5_reader=None
+    trade: dict, repository: Repository, mt5_reader=None, broker_profile: str = "icmarkets"
 ) -> float | None:
     # 1. MT5 si conectado y aplica
     if mt5_reader is not None and getattr(mt5_reader, "is_connected", lambda: False)():
-        symbol = trade.get("token_address") or trade.get("symbol")
-        if symbol:
+        raw_symbol = trade.get("token_address") or trade.get("symbol")
+        if raw_symbol:
+            # v2.7.0: mapear Yahoo→MT5 (ej. 'USDCHF=X'→'USDCHF', 'GC=F'→'XAUUSD').
+            # Antes se pasaba el símbolo Yahoo crudo a get_tick → siempre fallaba
+            # para forex/gold y caía al fallback de precio stale (token.latest_price
+            # ≈ entry). Por eso los paper_trades forex/gold tenían precio congelado.
+            mt5_symbol = yahoo_to_mt5(str(raw_symbol), broker_profile) or str(raw_symbol)
             try:
-                tick = mt5_reader.get_tick(symbol)
+                tick = mt5_reader.get_tick(mt5_symbol)
                 if tick and tick.get("bid"):
                     return float(tick["bid"])
             except Exception:

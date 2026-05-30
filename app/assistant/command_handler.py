@@ -70,6 +70,9 @@ class BasicTelegramAssistant:
         if normalized in {"/gate_preview", "/preview_gate", "/learning_gate", "preview gate"}:
             return self.gate_preview_message()
 
+        if normalized in {"/expectancy", "expectancy", "/expectativa", "expectativa", "expectancy r"}:
+            return self.expectancy_message()
+
         if normalized in {"/paper", "paper", "simulacion", "/paper_trades"}:
             return self.paper_message()
 
@@ -487,6 +490,70 @@ Chains: {", ".join(self.settings.chains_to_monitor)}
         lines.extend(_render_block("SWING LESSONS", swing_lessons))
         lines.extend(_render_block("SCALPING LESSONS", scalping_lessons))
         lines.append("")
+        lines.append(DISCLAIMER)
+        return "\n".join(lines)
+
+    def expectancy_message(self) -> str:
+        """v2.7.0: expectancy REALIZADA por estrategia, en R-multiples, calculada
+        desde paper_trades cerrados (excluyendo artifacts del feedback-loop).
+
+        A diferencia de /aprendizaje y /gate_preview (que miden el drift de la
+        alerta con umbrales absolutos y dejan ~99% 'neutral'), esto mide el P&L
+        realizado del trade normalizado por el riesgo asumido al entry. avg_r > 0
+        significa edge positivo; es la métrica que se conecta con el crecimiento
+        de la cuenta. Se refresca en cada ciclo de learning.
+        """
+        rows = self.repository.fetch_strategy_performance(limit=50)
+        lines = [
+            f"Expectancy realizada por estrategia (R) — {self.settings.app_version}",
+            "R = retorno realizado / riesgo al entry. Excluye artifacts (precio congelado).",
+            "",
+        ]
+        if not rows:
+            lines.append(
+                "(sin datos todavia — se computa en cada ciclo de learning sobre "
+                "paper_trades cerrados)"
+            )
+            lines.append("")
+            lines.append(DISCLAIMER)
+            return "\n".join(lines)
+
+        from app.learning.trade_outcomes import should_execute_live
+
+        gate_on = bool(getattr(self.settings, "enable_strategy_promotion_gate", False))
+        min_n = int(getattr(self.settings, "strategy_promotion_min_samples", 30))
+        min_r = float(getattr(self.settings, "strategy_promotion_min_expectancy_r", 0.0))
+        for r in rows:
+            strat = str(r.get("strategy_name") or "?")
+            cat = str(r.get("category") or "?")
+            n = int(r.get("trades") or 0)
+            arts = int(r.get("artifacts_excluded") or 0)
+            if n == 0:
+                lines.append(
+                    f"[--] {strat}/{cat}: 0 trades reales ({arts} artifacts descartados)"
+                )
+                continue
+            avg_r = float(r.get("avg_r") or 0.0)
+            wr = float(r.get("win_rate") or 0.0) * 100
+            wins = int(r.get("wins") or 0)
+            losses = int(r.get("losses") or 0)
+            scratches = int(r.get("scratches") or 0)
+            edge = "[+]" if avg_r > 0.05 else ("[-]" if avg_r < -0.05 else "[=]")
+            art_str = f" | {arts} artifacts excl." if arts else ""
+            gate_tag = ""
+            if gate_on:
+                ok_live, _ = should_execute_live(strat, cat, r, min_n, min_r)
+                gate_tag = " | LIVE" if ok_live else " | SHADOW"
+            lines.append(
+                f"{edge} {strat}/{cat}: n={n} | avgR={avg_r:+.2f} | "
+                f"win {wr:.0f}% ({wins}W/{losses}L/{scratches}S){art_str}{gate_tag}"
+            )
+
+        lines.append("")
+        lines.append(
+            "avgR>0 = edge positivo (n>=30-50 para confiar). "
+            "LIVE=ejecuta a MT5; SHADOW=paper-only por edge negativo probado."
+        )
         lines.append(DISCLAIMER)
         return "\n".join(lines)
 

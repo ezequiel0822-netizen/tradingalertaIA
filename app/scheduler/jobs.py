@@ -41,6 +41,7 @@ from app.intelligence.data_quality import run_full_check as run_data_quality_che
 from app.intelligence.macro_context import current_session, full_macro_context
 from app.learning.feature_extractor import extract_features
 from app.learning.lifecycle_manager import manage_open_positions
+from app.learning.trade_outcomes import should_execute_live
 from app.portfolio.mt5_reconciler import MT5Reconciler
 from app.portfolio.portfolio_manager import PortfolioManager
 from app.risk.position_sizer import calculate_position_size
@@ -928,6 +929,29 @@ class TradingAlertJob:
             return
         if str(paper_trade.get("category") or "").lower() not in {"forex", "gold"}:
             return
+
+        # v2.7.0 promotion gate: no manda order_send a MT5 si la estrategia tiene
+        # edge negativo PROBADO (avg_r<=umbral con n>=min_samples). El paper_trade
+        # ya quedó creado: queda en shadow/paper-only. Real-money sigue bloqueado.
+        if self.settings.enable_strategy_promotion_gate:
+            strat = str(paper_trade.get("strategy_name") or "")
+            cat = str(paper_trade.get("category") or "")
+            perf = self.repository.fetch_strategy_performance_for(strat, cat)
+            ok_live, gate_reason = should_execute_live(
+                strat,
+                cat,
+                perf,
+                self.settings.strategy_promotion_min_samples,
+                self.settings.strategy_promotion_min_expectancy_r,
+            )
+            if not ok_live:
+                logger.info(
+                    "Promotion gate: paper-only (sin order_send MT5) strategy=%s symbol=%s reason=%s",
+                    strat,
+                    paper_trade.get("symbol"),
+                    gate_reason,
+                )
+                return
 
         from app.brokers.mt5_demo_trader import MT5DemoTrader
 

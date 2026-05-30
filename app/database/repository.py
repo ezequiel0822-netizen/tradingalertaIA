@@ -913,6 +913,85 @@ class Repository:
             ).fetchall()
         return [dict(row) for row in rows]
 
+    def fetch_closed_paper_trades(self, limit: int = 5000) -> list[dict[str, Any]]:
+        """v2.7.0: todos los paper_trades cerrados (cualquier status != 'open'),
+        para computar expectancy realizada por estrategia."""
+        with get_connection(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT *
+                FROM paper_trades
+                WHERE status != 'open' AND closed_at IS NOT NULL
+                ORDER BY closed_at DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def upsert_strategy_performance(self, perf: dict[str, Any]) -> None:
+        """v2.7.0: persiste expectancy realizada en R por (strategy_name, category)."""
+        with get_connection(self.db_path) as connection:
+            connection.execute(
+                """
+                INSERT INTO strategy_performance (
+                    strategy_name, category, trades, wins, losses, scratches,
+                    win_rate, avg_r, avg_return_pct, sum_return_pct,
+                    artifacts_excluded, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(strategy_name, category) DO UPDATE SET
+                    trades = excluded.trades,
+                    wins = excluded.wins,
+                    losses = excluded.losses,
+                    scratches = excluded.scratches,
+                    win_rate = excluded.win_rate,
+                    avg_r = excluded.avg_r,
+                    avg_return_pct = excluded.avg_return_pct,
+                    sum_return_pct = excluded.sum_return_pct,
+                    artifacts_excluded = excluded.artifacts_excluded,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    perf["strategy_name"],
+                    perf["category"],
+                    perf["trades"],
+                    perf["wins"],
+                    perf["losses"],
+                    perf["scratches"],
+                    perf["win_rate"],
+                    perf["avg_r"],
+                    perf["avg_return_pct"],
+                    perf["sum_return_pct"],
+                    perf["artifacts_excluded"],
+                    perf["updated_at"],
+                ),
+            )
+
+    def fetch_strategy_performance_for(
+        self, strategy_name: str, category: str
+    ) -> dict[str, Any] | None:
+        """v2.7.0: fila de expectancy de UNA estrategia, para el promotion gate."""
+        with get_connection(self.db_path) as connection:
+            row = connection.execute(
+                "SELECT * FROM strategy_performance WHERE strategy_name = ? AND category = ?",
+                (strategy_name, category),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def fetch_strategy_performance(self, limit: int = 100) -> list[dict[str, Any]]:
+        with get_connection(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT *
+                FROM strategy_performance
+                ORDER BY trades DESC, avg_r DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
     def upsert_daily_pnl_row(self, row: dict[str, Any]) -> None:
         with get_connection(self.db_path) as connection:
             connection.execute(

@@ -337,6 +337,22 @@ def _init_db_unsafe(db_path: Path) -> None:
                 FOREIGN KEY(paper_trade_id) REFERENCES paper_trades(id)
             );
 
+            CREATE TABLE IF NOT EXISTS strategy_performance (
+                strategy_name TEXT NOT NULL,
+                category TEXT NOT NULL,
+                trades INTEGER NOT NULL DEFAULT 0,
+                wins INTEGER NOT NULL DEFAULT 0,
+                losses INTEGER NOT NULL DEFAULT 0,
+                scratches INTEGER NOT NULL DEFAULT 0,
+                win_rate REAL NOT NULL DEFAULT 0,
+                avg_r REAL NOT NULL DEFAULT 0,
+                avg_return_pct REAL NOT NULL DEFAULT 0,
+                sum_return_pct REAL NOT NULL DEFAULT 0,
+                artifacts_excluded INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (strategy_name, category)
+            );
+
             CREATE INDEX IF NOT EXISTS idx_alerts_token_type_time
                 ON alerts(chain, token_address, alert_type, created_at);
             CREATE INDEX IF NOT EXISTS idx_alerts_created_at
