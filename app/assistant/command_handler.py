@@ -506,7 +506,7 @@ Chains: {", ".join(self.settings.chains_to_monitor)}
         rows = self.repository.fetch_strategy_performance(limit=50)
         lines = [
             f"Expectancy realizada por estrategia (R) — {self.settings.app_version}",
-            "R = retorno realizado / riesgo al entry. Excluye artifacts (precio congelado).",
+            "R = retorno realizado (neto de costos) / riesgo al entry. Excluye artifacts.",
             "",
         ]
         if not rows:

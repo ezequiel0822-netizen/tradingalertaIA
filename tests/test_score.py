@@ -195,6 +195,11 @@ def _settings() -> Settings:
         enable_strategy_promotion_gate=True,
         strategy_promotion_min_samples=30,
         strategy_promotion_min_expectancy_r=0.0,
+        enable_cost_model=True,
+        cost_roundtrip_pct_forex=0.02,
+        cost_roundtrip_pct_gold=0.03,
+        cost_roundtrip_pct_stock=0.05,
+        cost_roundtrip_pct_memecoin=0.5,
     )
 
 

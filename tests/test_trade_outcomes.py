@@ -140,7 +140,11 @@ def _seed_closed(repo, symbol, entry, latest, ostop, strategy, direction="long")
 
 def test_refresh_strategy_performance_persists_and_excludes_artifacts() -> None:
     repo = _repo()
+    # cost model OFF: este test verifica la MECANICA del refresh (persistir + excluir
+    # artifacts) con R bruto determinístico (2.0). El descuento de costos se cubre
+    # aparte en test_cost_model.py.
     settings = _settings()
+    settings = type(settings)(**{**settings.__dict__, "enable_cost_model": False})
     _seed_closed(repo, "EURUSD", 100.0, 110.0, 95.0, "breakout")  # real win, +2R
     _seed_closed(repo, "GBPUSD", 100.0, 100.0, 95.0, "breakout")  # artifact (frozen)
 

@@ -22,7 +22,11 @@ Nuevo `should_execute_live()` + 3 settings (`ENABLE_STRATEGY_PROMOTION_GATE` def
 
 Default ON porque es un gate restrictivo (reduce riesgo), no una feature que lo agrega. Con la data actual deja `momentum` en SHADOW automáticamente (lo que el user ya hacía a mano) y deja al resto juntar muestra limpia. Visible en `/expectancy` como tag LIVE/SHADOW. Toggle: `ENABLE_STRATEGY_PROMOTION_GATE=false` revierte al comportamiento previo.
 
-Tests: 357 → 383 (+26). Data histórica NO mutada (la quarantine de artifacts es a query-time).
+**Cost model (spread + comisión) — hace confiable al gate.**
+
+El realized-R se calculaba sobre el movimiento de precio BRUTO, sin descontar costos → optimista vs MT5 real, y el promotion gate podía promover a LIVE una estrategia positiva en bruto pero negativa neta. Ahora `build_strategy_performance` resta un costo round-trip por categoría del retorno de cada trade (siempre resta, gane o pierda). Settings nuevos: `ENABLE_COST_MODEL` (default ON), `COST_ROUNDTRIP_PCT_FOREX`=0.02, `_GOLD`=0.03, `_STOCK`=0.05, `_MEMECOIN`=0.5. `trade_outcomes` se mantiene puro (recibe el costo como parámetro); `training_engine` arma el mapa desde settings. El R en `/expectancy` y en el promotion gate ahora es NETO de costos.
+
+Tests: 357 → 390 (+33). Data histórica NO mutada (la quarantine de artifacts es a query-time).
 
 ## Trading Alert AI v2.6.9
 

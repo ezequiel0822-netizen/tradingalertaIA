@@ -46,12 +46,19 @@ def _dt(value: Any) -> datetime | None:
     return parsed
 
 
-def realized_return_pct(trade: dict[str, Any], partial_fraction: float = 0.5) -> float | None:
-    """Retorno realizado direction-aware (%).
+def realized_return_pct(
+    trade: dict[str, Any], partial_fraction: float = 0.5, cost_pct: float = 0.0
+) -> float | None:
+    """Retorno realizado direction-aware (%), NETO de costos.
 
     Si el trade hizo partial close en TP1, mezcla la fracción cerrada en TP1
     con la pierna final (el resto cerró en latest_price). Esto refleja el P&L
     realizado de verdad, no solo la última pierna.
+
+    `cost_pct` es el costo round-trip estimado (spread + comisión) en % que se
+    resta del retorno bruto — siempre resta (empeora el resultado), gane o pierda.
+    Sin esto el realized-R es optimista vs MT5 real y el promotion gate podría
+    promover a LIVE estrategias positivas en bruto pero negativas netas.
     """
     entry = _f(trade.get("entry_price"))
     latest = _f(trade.get("latest_price"))
@@ -71,8 +78,9 @@ def realized_return_pct(trade: dict[str, Any], partial_fraction: float = 0.5) ->
             else:
                 tp1_ret = (tp1 - entry) / entry * 100.0
             frac = max(0.0, min(1.0, partial_fraction))
-            return frac * tp1_ret + (1.0 - frac) * final
-    return final
+            gross = frac * tp1_ret + (1.0 - frac) * final
+            return gross - (cost_pct or 0.0)
+    return final - (cost_pct or 0.0)
 
 
 def risk_at_entry_pct(trade: dict[str, Any]) -> float | None:
@@ -95,8 +103,10 @@ def risk_at_entry_pct(trade: dict[str, Any]) -> float | None:
     return risk if risk > 0 else None
 
 
-def r_multiple(trade: dict[str, Any], partial_fraction: float = 0.5) -> float | None:
-    ret = realized_return_pct(trade, partial_fraction)
+def r_multiple(
+    trade: dict[str, Any], partial_fraction: float = 0.5, cost_pct: float = 0.0
+) -> float | None:
+    ret = realized_return_pct(trade, partial_fraction, cost_pct)
     risk = risk_at_entry_pct(trade)
     if ret is None or risk is None or risk <= 0:
         return None
@@ -121,8 +131,13 @@ def is_artifact(trade: dict[str, Any]) -> bool:
     return abs(latest - entry) < abs(entry) * 1e-9
 
 
-def outcome_label(trade: dict[str, Any], partial_fraction: float = 0.5, scratch_eps: float = 0.05) -> str:
-    ret = realized_return_pct(trade, partial_fraction)
+def outcome_label(
+    trade: dict[str, Any],
+    partial_fraction: float = 0.5,
+    scratch_eps: float = 0.05,
+    cost_pct: float = 0.0,
+) -> str:
+    ret = realized_return_pct(trade, partial_fraction, cost_pct)
     if ret is None:
         return "unknown"
     if ret > scratch_eps:
@@ -151,9 +166,15 @@ def build_strategy_performance(
     trades: list[dict[str, Any]],
     partial_fraction: float = 0.5,
     scratch_eps: float = 0.05,
+    cost_pct_by_category: dict[str, float] | None = None,
 ) -> list[StrategyPerf]:
     """Agrupa paper_trades cerrados por (strategy_name, category) y calcula
-    expectancy realizada en R, excluyendo artifacts."""
+    expectancy realizada en R (NETA de costos), excluyendo artifacts.
+
+    `cost_pct_by_category` mapea category -> costo round-trip % (spread+comisión)
+    que se resta del retorno bruto de cada trade. Si None/vacío, R queda bruto.
+    """
+    costs = cost_pct_by_category or {}
     groups: dict[tuple[str, str], list[dict[str, Any]]] = {}
     artifacts: dict[tuple[str, str], int] = {}
 
@@ -170,14 +191,15 @@ def build_strategy_performance(
 
     results: list[StrategyPerf] = []
     for key, ts in groups.items():
+        cost = float(costs.get(key[1], 0.0) or 0.0)
         rets: list[float] = []
         rs: list[float] = []
         for t in ts:
-            ret = realized_return_pct(t, partial_fraction)
+            ret = realized_return_pct(t, partial_fraction, cost)
             if ret is None:
                 continue
             rets.append(ret)
-            rr = r_multiple(t, partial_fraction)
+            rr = r_multiple(t, partial_fraction, cost)
             if rr is not None:
                 rs.append(rr)
         n = len(rets)

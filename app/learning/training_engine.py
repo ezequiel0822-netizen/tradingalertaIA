@@ -371,7 +371,17 @@ def _refresh_strategy_performance(repository: Repository, settings: Settings) ->
     if not closed:
         return 0
     frac = float(getattr(settings, "partial_close_fraction", 0.5) or 0.5)
-    perfs = build_strategy_performance(closed, partial_fraction=frac)
+    cost_map: dict[str, float] = {}
+    if getattr(settings, "enable_cost_model", False):
+        cost_map = {
+            "forex": float(settings.cost_roundtrip_pct_forex),
+            "gold": float(settings.cost_roundtrip_pct_gold),
+            "stock": float(settings.cost_roundtrip_pct_stock),
+            "memecoin": float(settings.cost_roundtrip_pct_memecoin),
+        }
+    perfs = build_strategy_performance(
+        closed, partial_fraction=frac, cost_pct_by_category=cost_map
+    )
     now = utc_now_iso()
     count = 0
     for p in perfs:

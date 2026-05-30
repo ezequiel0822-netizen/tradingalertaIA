@@ -297,6 +297,15 @@ class Settings:
     enable_strategy_promotion_gate: bool
     strategy_promotion_min_samples: int
     strategy_promotion_min_expectancy_r: float
+    # v2.7.0 — cost model: costo round-trip (spread+comisión) en % por categoría,
+    # restado del retorno bruto para que el realized-R (y por ende el promotion gate)
+    # reflejen la realidad de MT5 y no promuevan estrategias positivas en bruto pero
+    # netas-negativas.
+    enable_cost_model: bool
+    cost_roundtrip_pct_forex: float
+    cost_roundtrip_pct_gold: float
+    cost_roundtrip_pct_stock: float
+    cost_roundtrip_pct_memecoin: float
 
     def __repr__(self) -> str:
         parts: list[str] = []
@@ -683,4 +692,10 @@ def load_settings() -> Settings:
         enable_strategy_promotion_gate=_get_bool("ENABLE_STRATEGY_PROMOTION_GATE", True),
         strategy_promotion_min_samples=_get_int("STRATEGY_PROMOTION_MIN_SAMPLES", 30),
         strategy_promotion_min_expectancy_r=_get_float("STRATEGY_PROMOTION_MIN_EXPECTANCY_R", 0.0),
+        # v2.7.0 — cost model (round-trip % por categoría; defaults conservadores MT5 demo)
+        enable_cost_model=_get_bool("ENABLE_COST_MODEL", True),
+        cost_roundtrip_pct_forex=_get_float("COST_ROUNDTRIP_PCT_FOREX", 0.02),
+        cost_roundtrip_pct_gold=_get_float("COST_ROUNDTRIP_PCT_GOLD", 0.03),
+        cost_roundtrip_pct_stock=_get_float("COST_ROUNDTRIP_PCT_STOCK", 0.05),
+        cost_roundtrip_pct_memecoin=_get_float("COST_ROUNDTRIP_PCT_MEMECOIN", 0.5),
     )
