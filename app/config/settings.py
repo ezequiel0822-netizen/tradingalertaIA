@@ -306,6 +306,10 @@ class Settings:
     cost_roundtrip_pct_gold: float
     cost_roundtrip_pct_stock: float
     cost_roundtrip_pct_memecoin: float
+    # v2.7.0 Fase 2b — re-apunta learned_weights y learning_gate al realized-R
+    # (lessons por feature desde paper_trades cerrados) en vez del drift de alerta.
+    # Default ON. Drift path se mantiene como fallback reversible (flag off).
+    enable_realized_learning: bool
 
     def __repr__(self) -> str:
         parts: list[str] = []
@@ -698,4 +702,6 @@ def load_settings() -> Settings:
         cost_roundtrip_pct_gold=_get_float("COST_ROUNDTRIP_PCT_GOLD", 0.03),
         cost_roundtrip_pct_stock=_get_float("COST_ROUNDTRIP_PCT_STOCK", 0.05),
         cost_roundtrip_pct_memecoin=_get_float("COST_ROUNDTRIP_PCT_MEMECOIN", 0.5),
+        # v2.7.0 Fase 2b — learned_weights + learning_gate sobre realized-R (default ON)
+        enable_realized_learning=_get_bool("ENABLE_REALIZED_LEARNING", True),
     )

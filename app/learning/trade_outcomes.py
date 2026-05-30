@@ -266,3 +266,75 @@ def should_execute_live(
             f"SHADOW: expectancy {avg_r:+.2f}R <= {min_expectancy_r:+.2f}R con n={n} (paper-only)",
         )
     return True, f"LIVE: expectancy {avg_r:+.2f}R con n={n}"
+
+
+def build_realized_feature_lessons(
+    closed_trades: list[dict[str, Any]],
+    features_by_alert_id: dict[int, list[str]],
+    cost_pct_by_category: dict[str, float] | None = None,
+    partial_fraction: float = 0.5,
+    min_samples: int = 2,
+) -> list[dict[str, Any]]:
+    """v2.7.0 Fase 2b: lessons de realized-R por (feature, category) desde
+    paper_trades CERRADOS (excluye artifacts).
+
+    Es la versión HONESTA de strategy_lessons: en vez del drift de la alerta a
+    horizonte fijo (que dejaba ~99% 'neutral'), cada trade aporta su R realizado
+    NETO de costos a cada una de sus features. Lo consumen learned_weights y el
+    learning_gate cuando enable_realized_learning=True.
+
+    `win_rate` = fracción de trades con R>0 (consistente con la definición de
+    /expectancy y el promotion gate). `confidence` escala con el sample_count.
+    Devuelve dicts SIN `updated_at` (lo agrega el caller).
+    """
+    costs = cost_pct_by_category or {}
+    buckets: dict[tuple[str, str], list[tuple[float, float]]] = {}
+    for t in closed_trades:
+        if str(t.get("status") or "") == "open" or not t.get("closed_at"):
+            continue
+        if is_artifact(t):
+            continue
+        cat = str(t.get("category") or "unknown")
+        cost = float(costs.get(cat, 0.0) or 0.0)
+        rr = r_multiple(t, partial_fraction, cost)
+        ret = realized_return_pct(t, partial_fraction, cost)
+        if rr is None or ret is None:
+            continue
+        aid = t.get("alert_id")
+        feats: list[str] = []
+        if aid is not None:
+            try:
+                feats = list(features_by_alert_id.get(int(aid), []))
+            except (TypeError, ValueError):
+                feats = []
+        cat_feat = f"category:{cat}"
+        if cat_feat not in feats:
+            feats.append(cat_feat)
+        for f in feats:
+            buckets.setdefault((str(f), cat), []).append((rr, ret))
+
+    lessons: list[dict[str, Any]] = []
+    for (feature, cat), vals in buckets.items():
+        n = len(vals)
+        if n < min_samples:
+            continue
+        rs = [v[0] for v in vals]
+        rets = [v[1] for v in vals]
+        wins = sum(1 for r in rs if r > 0)
+        win_rate = wins / n
+        avg_r = sum(rs) / n
+        avg_return = sum(rets) / n
+        confidence = min(100, int(n * 8 + abs(avg_return) * 0.5))
+        lessons.append(
+            {
+                "feature": feature,
+                "category": cat,
+                "sample_count": n,
+                "wins": wins,
+                "win_rate": round(win_rate, 4),
+                "avg_r": round(avg_r, 4),
+                "avg_return_pct": round(avg_return, 4),
+                "confidence": confidence,
+            }
+        )
+    return lessons

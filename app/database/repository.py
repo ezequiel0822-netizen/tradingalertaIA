@@ -992,6 +992,64 @@ class Repository:
             ).fetchall()
         return [dict(row) for row in rows]
 
+    def upsert_realized_feature_lesson(self, lesson: dict[str, Any]) -> None:
+        """v2.7.0 Fase 2b: lesson de realized-R por (feature, category) desde
+        paper_trades cerrados. Señal honesta para learned_weights y learning_gate."""
+        with get_connection(self.db_path) as connection:
+            connection.execute(
+                """
+                INSERT INTO realized_feature_lessons (
+                    feature, category, sample_count, wins, win_rate, avg_r,
+                    avg_return_pct, confidence, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(feature, category) DO UPDATE SET
+                    sample_count = excluded.sample_count,
+                    wins = excluded.wins,
+                    win_rate = excluded.win_rate,
+                    avg_r = excluded.avg_r,
+                    avg_return_pct = excluded.avg_return_pct,
+                    confidence = excluded.confidence,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    lesson["feature"],
+                    lesson["category"],
+                    lesson["sample_count"],
+                    lesson["wins"],
+                    lesson["win_rate"],
+                    lesson["avg_r"],
+                    lesson["avg_return_pct"],
+                    lesson["confidence"],
+                    lesson["updated_at"],
+                ),
+            )
+
+    def fetch_realized_feature_lessons(
+        self, category: str | None = None, limit: int = 200
+    ) -> list[dict[str, Any]]:
+        with get_connection(self.db_path) as connection:
+            if category:
+                rows = connection.execute(
+                    """
+                    SELECT * FROM realized_feature_lessons
+                    WHERE category = ?
+                    ORDER BY confidence DESC, sample_count DESC
+                    LIMIT ?
+                    """,
+                    (category, limit),
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    """
+                    SELECT * FROM realized_feature_lessons
+                    ORDER BY confidence DESC, sample_count DESC
+                    LIMIT ?
+                    """,
+                    (limit,),
+                ).fetchall()
+        return [dict(row) for row in rows]
+
     def upsert_daily_pnl_row(self, row: dict[str, Any]) -> None:
         with get_connection(self.db_path) as connection:
             connection.execute(

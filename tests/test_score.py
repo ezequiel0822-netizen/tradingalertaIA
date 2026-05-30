@@ -200,6 +200,7 @@ def _settings() -> Settings:
         cost_roundtrip_pct_gold=0.03,
         cost_roundtrip_pct_stock=0.05,
         cost_roundtrip_pct_memecoin=0.5,
+        enable_realized_learning=False,
     )
 
 

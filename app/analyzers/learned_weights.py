@@ -22,7 +22,13 @@ def apply_learned_weights(
     if base_score <= 0:
         return base_score, []
 
-    lessons = repository.fetch_strategy_lessons(category=category, limit=200)
+    # v2.7.0 Fase 2b: si enable_realized_learning, los pesos se aprenden del
+    # realized-R (lessons honestas desde paper_trades) en vez del drift de alerta.
+    # Drift path se mantiene como fallback cuando el flag está off.
+    if getattr(settings, "enable_realized_learning", False):
+        lessons = repository.fetch_realized_feature_lessons(category=category, limit=200)
+    else:
+        lessons = repository.fetch_strategy_lessons(category=category, limit=200)
     if not lessons:
         return base_score, []
 

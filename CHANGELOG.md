@@ -26,7 +26,11 @@ Default ON porque es un gate restrictivo (reduce riesgo), no una feature que lo 
 
 El realized-R se calculaba sobre el movimiento de precio BRUTO, sin descontar costos → optimista vs MT5 real, y el promotion gate podía promover a LIVE una estrategia positiva en bruto pero negativa neta. Ahora `build_strategy_performance` resta un costo round-trip por categoría del retorno de cada trade (siempre resta, gane o pierda). Settings nuevos: `ENABLE_COST_MODEL` (default ON), `COST_ROUNDTRIP_PCT_FOREX`=0.02, `_GOLD`=0.03, `_STOCK`=0.05, `_MEMECOIN`=0.5. `trade_outcomes` se mantiene puro (recibe el costo como parámetro); `training_engine` arma el mapa desde settings. El R en `/expectancy` y en el promotion gate ahora es NETO de costos.
 
-Tests: 357 → 390 (+33). Data histórica NO mutada (la quarantine de artifacts es a query-time).
+**Fase 2b — learning loop honesto (realized-R en weights + gate).**
+
+`learned_weights` y `learning_gate` aprendían del DRIFT de la alerta a horizonte fijo con umbrales absolutos → ~99% 'neutral', y el gate era inútil (bloqueaba casi todo). Ahora, con `ENABLE_REALIZED_LEARNING` (default ON), aprenden del **P&L realizado** de paper_trades: nueva tabla `realized_feature_lessons` (R por feature, NETO de costos, excluye artifacts) refrescada en cada learning cycle vía `build_realized_feature_lessons` (junta cada paper_trade cerrado → su R → las features del alert linkeado). `apply_learned_weights` y `evaluate_learning_gate` consultan esa señal honesta. **El `learning_gate` ahora SÍ es activable** (bloquea por win_rate realizado probado con n≥min_samples, no por el drift que bloqueaba todo). El drift path queda como fallback reversible (flag off; los tests viejos lo siguen ejercitando). Caveat honesto: con ~120 trades reales repartidos en muchas features, pocas llegan a min_samples → el gate/weights realizados actúan poco hasta que entre más data limpia (testeado explícitamente).
+
+Tests: 357 → 397 (+40). Data histórica NO mutada (la quarantine de artifacts es a query-time).
 
 ## Trading Alert AI v2.6.9
 

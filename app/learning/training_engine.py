@@ -8,7 +8,10 @@ from app.config.settings import Settings
 from app.database.models import EstimateResult, TokenSnapshot
 from app.database.repository import Repository
 from app.learning.feature_extractor import extract_features
-from app.learning.trade_outcomes import build_strategy_performance
+from app.learning.trade_outcomes import (
+    build_realized_feature_lessons,
+    build_strategy_performance,
+)
 from app.utils.time_utils import utc_now_iso
 
 
@@ -45,22 +48,28 @@ def run_learning_cycle(settings: Settings, repository: Repository) -> LearningRu
         horizons_created = horizon_counts.get("horizons_created", 0)
         horizons_updated = horizon_counts.get("horizons_updated", 0)
 
-    lessons = _build_lessons(repository.fetch_signal_outcomes(limit=2000))
+    signal_outcomes = repository.fetch_signal_outcomes(limit=2000)
+    lessons = _build_lessons(signal_outcomes)
     for lesson in lessons:
         repository.upsert_strategy_lesson(lesson)
 
     paper_trades_created = 0
     strategy_perf_updated = 0
+    realized_lessons_updated = 0
     if settings.enable_paper_trading:
         paper_trades_created += _create_paper_trades(settings, repository, alerts)
         _update_paper_trades(repository, settings)
         strategy_perf_updated = _refresh_strategy_performance(repository, settings)
+        realized_lessons_updated = _refresh_realized_feature_lessons(
+            repository, settings, signal_outcomes
+        )
 
     summary = (
         f"Evaluadas {len(alerts)} señales; outcomes nuevos {outcomes_created}; "
         f"lecciones {len(lessons)}; paper trades nuevos {paper_trades_created}; "
         f"horizontes nuevos {horizons_created} (refrescados {horizons_updated}); "
-        f"expectancy por estrategia (R) {strategy_perf_updated}."
+        f"expectancy por estrategia (R) {strategy_perf_updated}; "
+        f"realized feature lessons {realized_lessons_updated}."
     )
     repository.insert_training_run(
         {
@@ -356,6 +365,49 @@ def _update_paper_trades(
         updates["closed_at"] = closed_at
 
         repository.update_paper_trade(int(trade["id"]), updates)
+
+
+def _refresh_realized_feature_lessons(
+    repository: Repository, settings: Settings, signal_outcomes: list[dict[str, Any]]
+) -> int:
+    """v2.7.0 Fase 2b: recomputa lessons de realized-R por feature desde
+    paper_trades cerrados y las persiste en realized_feature_lessons. Señal
+    honesta que consumen learned_weights y learning_gate cuando
+    enable_realized_learning=True. Reusa los signal_outcomes ya fetched para
+    mapear alert_id -> features (extraídas al crear el alert)."""
+    closed = repository.fetch_closed_paper_trades(limit=5000)
+    if not closed:
+        return 0
+    features_by_alert_id: dict[int, list[str]] = {}
+    for so in signal_outcomes:
+        aid = so.get("alert_id")
+        if aid is None:
+            continue
+        try:
+            feats = json.loads(so.get("features") or "[]")
+        except (TypeError, ValueError, json.JSONDecodeError):
+            feats = []
+        if isinstance(feats, list):
+            features_by_alert_id[int(aid)] = [str(f) for f in feats]
+    frac = float(getattr(settings, "partial_close_fraction", 0.5) or 0.5)
+    cost_map: dict[str, float] = {}
+    if getattr(settings, "enable_cost_model", False):
+        cost_map = {
+            "forex": float(settings.cost_roundtrip_pct_forex),
+            "gold": float(settings.cost_roundtrip_pct_gold),
+            "stock": float(settings.cost_roundtrip_pct_stock),
+            "memecoin": float(settings.cost_roundtrip_pct_memecoin),
+        }
+    lessons = build_realized_feature_lessons(
+        closed, features_by_alert_id, cost_pct_by_category=cost_map, partial_fraction=frac
+    )
+    now = utc_now_iso()
+    count = 0
+    for lesson in lessons:
+        lesson["updated_at"] = now
+        repository.upsert_realized_feature_lesson(lesson)
+        count += 1
+    return count
 
 
 def _refresh_strategy_performance(repository: Repository, settings: Settings) -> int:

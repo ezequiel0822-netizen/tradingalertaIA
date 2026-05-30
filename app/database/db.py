@@ -353,6 +353,19 @@ def _init_db_unsafe(db_path: Path) -> None:
                 PRIMARY KEY (strategy_name, category)
             );
 
+            CREATE TABLE IF NOT EXISTS realized_feature_lessons (
+                feature TEXT NOT NULL,
+                category TEXT NOT NULL,
+                sample_count INTEGER NOT NULL DEFAULT 0,
+                wins INTEGER NOT NULL DEFAULT 0,
+                win_rate REAL NOT NULL DEFAULT 0,
+                avg_r REAL NOT NULL DEFAULT 0,
+                avg_return_pct REAL NOT NULL DEFAULT 0,
+                confidence INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (feature, category)
+            );
+
             CREATE INDEX IF NOT EXISTS idx_alerts_token_type_time
                 ON alerts(chain, token_address, alert_type, created_at);
             CREATE INDEX IF NOT EXISTS idx_alerts_created_at
