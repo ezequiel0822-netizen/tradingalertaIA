@@ -1,5 +1,39 @@
 # Changelog
 
+## Trading Alert AI v2.7.1
+
+Tapa el kill switch falso del 2026-06-01: `realized_pnl_today` ahora filtra paper_trades que nunca se ejecutaron a MT5 demo.
+
+**El bug.**
+
+Paper trades de gold con `symbol=GC=F` (formato Yahoo) nunca matcheaban `DEMO_ALLOWED_SYMBOLS` (que tiene `XAUUSD`/`GOLD` post-yahoo_to_mt5, no `GC=F`), entonces NO se ejecutaban a MT5. Su `size_notional` quedaba con el sizing TEORICO del position_sizer (~$184k para gold con `ACCOUNT_STARTING_BALANCE=1M`). Dos trades gold con -1% cada uno → `realized_pnl_today` decia -3.20% drawdown → kill switch falso disparaba, cuando el daño real al balance MT5 era cero (nada habia ejecutado).
+
+Variante del mismo patron que el bug del 27-may, pero esta vez con paper-only en vez de notional inflado teorico vs MT5 real. v2.6.8 tapaba el caso forex (POST-demo_order recalcula notional con MT5 real); v2.7.1 tapa el caso paper-only filtrandolos del calculo.
+
+**Fix.**
+
+- `Repository.has_successful_demo_order(paper_trade_id) -> bool`: True si hay al menos un demo_order con `status='sent'` vinculado al paper_trade.
+- `PortfolioManager.realized_pnl_today()`: agrega filtro `if not repository.has_successful_demo_order(t.id): continue`. Trades paper-only quedan excluidos del calculo USD.
+
+Semantica corregida: `realized_pnl_today` ahora representa correctamente "USD impact en el balance MT5 demo" (no "suma de paper PnL teorico").
+
+**Tests (`tests/test_portfolio_manager.py`, +5 casos).**
+
+- `_seed_closed_trade` helper extendido con `executed_to_mt5: bool = True` (default seedea demo_order para preservar tests existentes).
+- `test_realized_pnl_today_excludes_paper_only_trades`: gold $184k notional sin demo_order → 0% (era el bug).
+- `test_realized_pnl_today_includes_executed_trades`: forex $10k con demo_order → -0.1% normal.
+- `test_realized_pnl_today_mixed_executed_and_paper_only`: mix realista (gold paper-only excluido, forex contado).
+- `test_has_successful_demo_order_returns_false_when_no_order`.
+- `test_has_successful_demo_order_returns_true_when_order_sent`.
+
+Total 397 → **402 tests verdes**.
+
+**Cambios menores.**
+
+- `app/config/settings.py` + `.env.example`: bump v2.7.0 → v2.7.1.
+
+Real-money trading sigue 100% bloqueado.
+
 ## Trading Alert AI v2.7.0 (branch claude/xenodochial-taussig-4206c6 — sin merge a main)
 
 Medición honesta del P&L realizado + gate de promoción que protege capital. Surge del análisis cuantitativo de los paper_trades: el motor de aprendizaje medía la cosa equivocada y ~86% del historial eran artifacts del feedback-loop.

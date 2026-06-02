@@ -790,6 +790,32 @@ class Repository:
             ).fetchone()
         return dict(row) if row else None
 
+    def has_successful_demo_order(self, paper_trade_id: int) -> bool:
+        """v2.7.1: Devuelve True si el paper_trade tuvo al menos UN demo_order
+        con status='sent' a MT5 demo.
+
+        Usado por portfolio_manager.realized_pnl_today para EXCLUIR del calculo
+        USD-impact los paper_trades que NUNCA llegaron a MT5 (memecoin paper,
+        stock paper, o forex/gold paper que fallo en prep o que no matchea el
+        DEMO_ALLOWED_SYMBOLS map post-yahoo_to_mt5).
+
+        Tapa el kill switch falso del 2026-06-01: paper_trades de gold con
+        symbol=GC=F nunca se ejecutaban a MT5 (allowed list tiene XAUUSD/GOLD,
+        no GC=F) pero su size_notional teorico (~$184k) hacia que
+        realized_pnl_today reportara -3.20% drawdown cuando el daño real al
+        balance MT5 era cero.
+        """
+        with get_connection(self.db_path) as connection:
+            row = connection.execute(
+                """
+                SELECT 1 FROM demo_orders
+                WHERE paper_trade_id = ? AND status = 'sent'
+                LIMIT 1
+                """,
+                (int(paper_trade_id),),
+            ).fetchone()
+        return row is not None
+
     def has_recent_paper_trade_for_symbol(
         self, symbol: str, after_iso: str
     ) -> bool:

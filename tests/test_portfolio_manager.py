@@ -117,8 +117,16 @@ def _seed_closed_trade(
     size_notional: float | None,
     unrealized_return_pct: float,
     direction: str = "long",
-) -> None:
-    """Helper: crea un paper_trade ya cerrado HOY (UTC) con notional opcional."""
+    executed_to_mt5: bool = True,
+) -> int:
+    """Helper: crea un paper_trade ya cerrado HOY (UTC) con notional opcional.
+
+    v2.7.1: por default seed un demo_order con status='sent' (simulando
+    ejecucion exitosa a MT5). Para testear paper-only path (gold huerfano,
+    memecoin), pasar executed_to_mt5=False.
+
+    Devuelve el paper_trade_id creado.
+    """
     snapshot = TokenSnapshot(
         chain=category, token_address=symbol, category=category, symbol=symbol,
         price=entry, liquidity_usd=1_000_000,
@@ -144,6 +152,31 @@ def _seed_closed_trade(
         "risk_pct": 1.0, "partial_closed": 0,
     }
     assert repo.create_paper_trade(trade) is True
+
+    # Recover paper_trade_id (latest by opened_at desc)
+    trades = repo.fetch_paper_trades(limit=200) or []
+    trade_id = int(trades[0]["id"])
+
+    if executed_to_mt5:
+        repo.create_demo_order({
+            "demo_request_id": 0,
+            "paper_trade_id": trade_id,
+            "symbol": symbol,
+            "direction": direction,
+            "volume": 0.1,
+            "price": entry,
+            "stop_loss": entry * 0.95,
+            "take_profit": entry * 1.05,
+            "retcode": 10009,
+            "order_ticket": int(uuid4().int % 10_000_000),
+            "deal_ticket": int(uuid4().int % 10_000_000),
+            "status": "sent",
+            "strategy_name": "breakout",
+            "result_summary": "test",
+            "sent_at": now,
+        })
+
+    return trade_id
 
 
 def test_realized_pnl_today_zero_without_closed_trades() -> None:
@@ -215,6 +248,85 @@ def test_realized_pnl_today_aggregates_multiple_trades() -> None:
     pm = PortfolioManager(settings, repo)
     result = pm.realized_pnl_today()
     assert abs(result) < 0.001, f"Expected 0%, got {result}%"
+
+
+# --- v2.7.1: paper-only filter (kill switch falso de gold) ---
+
+
+def test_realized_pnl_today_excludes_paper_only_trades() -> None:
+    """v2.7.1: Paper trade con notional pero SIN demo_order exitoso NO cuenta.
+
+    Bug del 01-jun: gold paper_trade con symbol=GC=F nunca matcheaba
+    DEMO_ALLOWED_SYMBOLS (XAUUSD/GOLD post-yahoo_to_mt5, no GC=F) → no
+    ejecutaba a MT5 → size_notional quedaba teorico ($184k) → kill switch
+    falso disparaba con -3.20% drawdown cuando el daño real era $0.
+    """
+    base = _settings()
+    settings = type(base)(**{**base.__dict__, "account_starting_balance": 100000.0})
+    repo = _repo()
+    # Gold paper-only con notional inflado pero NO ejecuto a MT5
+    _seed_closed_trade(
+        repo, "GC=F", "gold", 4400.0, 184000.0, -1.1,
+        executed_to_mt5=False,  # ← no se ejecuto a MT5
+    )
+    pm = PortfolioManager(settings, repo)
+    result = pm.realized_pnl_today()
+    # Sin demo_order → excluido → 0% (correcto: no afecto MT5 real)
+    assert result == 0.0, f"Expected 0% (paper-only), got {result}%"
+
+
+def test_realized_pnl_today_includes_executed_trades() -> None:
+    """Mismo trade pero CON demo_order exitoso debe contar normalmente."""
+    base = _settings()
+    settings = type(base)(**{**base.__dict__, "account_starting_balance": 100000.0})
+    repo = _repo()
+    _seed_closed_trade(
+        repo, "EURUSD", "forex", 1.16, 10000.0, -1.0,
+        executed_to_mt5=True,
+    )
+    pm = PortfolioManager(settings, repo)
+    result = pm.realized_pnl_today()
+    # $10k × -1% = -$100. -$100 / $100k = -0.1%
+    assert abs(result - (-0.1)) < 0.0001
+
+
+def test_realized_pnl_today_mixed_executed_and_paper_only() -> None:
+    """Mix realista: gold paper-only (huerfano) + forex ejecutado.
+
+    Solo el forex debe contar. Antes de v2.7.1 el gold inflaba el calculo.
+    """
+    base = _settings()
+    settings = type(base)(**{**base.__dict__, "account_starting_balance": 100000.0})
+    repo = _repo()
+    # Gold paper-only -1% sobre $184k teorico (paper_pnl=-$2,028, REAL=$0)
+    _seed_closed_trade(
+        repo, "GC=F", "gold", 4400.0, 184000.0, -1.1, executed_to_mt5=False,
+    )
+    # Forex ejecutado +0.5% sobre $10k real (real_pnl=+$50)
+    _seed_closed_trade(
+        repo, "EURUSD", "forex", 1.16, 10000.0, 0.5, executed_to_mt5=True,
+    )
+    pm = PortfolioManager(settings, repo)
+    result = pm.realized_pnl_today()
+    # Solo el forex cuenta: +$50 / $100k = +0.05%
+    assert abs(result - 0.05) < 0.0001, f"Expected +0.05% (solo forex), got {result}%"
+
+
+def test_has_successful_demo_order_returns_false_when_no_order() -> None:
+    """Repository helper: paper_trade sin demo_order → False."""
+    repo = _repo()
+    trade_id = _seed_closed_trade(
+        repo, "GC=F", "gold", 4400.0, 184000.0, -1.0, executed_to_mt5=False,
+    )
+    assert repo.has_successful_demo_order(trade_id) is False
+
+
+def test_has_successful_demo_order_returns_true_when_order_sent() -> None:
+    repo = _repo()
+    trade_id = _seed_closed_trade(
+        repo, "EURUSD", "forex", 1.16, 10000.0, 0.0, executed_to_mt5=True,
+    )
+    assert repo.has_successful_demo_order(trade_id) is True
 
 
 # v2.6.5 — account_balance refresh + persist (Bug C fix).

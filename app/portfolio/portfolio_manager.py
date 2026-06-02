@@ -68,17 +68,24 @@ class PortfolioManager:
         return round(total / len(positions), 4)
 
     def realized_pnl_today(self) -> float:
-        """v2.6.5: % real del portfolio basado en USD perdido/ganado HOY (UTC).
+        """v2.7.1: % real del portfolio basado en USD perdido/ganado HOY (UTC),
+        SOLO de trades que efectivamente se ejecutaron a MT5 demo.
 
-        ANTES (broken hasta v2.6.4): sumaba `unrealized_return_pct` per-trade
-        directamente. Causaba falsos drawdowns enormes cuando un trade chico
-        se rugged (ej. memecoin -82% sobre $1k notional = $820 loss real, no
-        -82% del portfolio de $100k). Disparaba el kill switch incorrectamente.
+        v2.6.5 introdujo USD-based PnL (vs sum of % per-trade). Tapaba el bug
+        del 27-may donde memecoin -82% sobre $1k = -82% portfolio falso.
 
-        Ahora: convierte cada trade a USD usando `size_notional`, suma USD
-        ganados/perdidos, divide por balance actual. Trades sin
-        `size_notional` válido (ej. paper trades memecoin que no se ejecutan
-        a MT5) se ignoran porque no afectan el balance demo real.
+        v2.7.1 agrega filtro por demo_order exitoso. Tapa el bug del 01-jun:
+        paper_trades de gold con symbol=GC=F nunca matcheaban DEMO_ALLOWED_SYMBOLS
+        (que tiene XAUUSD/GOLD post-yahoo_to_mt5 pero no GC=F), entonces NO se
+        ejecutaban a MT5. Su `size_notional` quedaba con el sizing TEORICO del
+        position_sizer (~$184k para gold con balance teorico 1M). Dos trades
+        gold con -1% cada uno → calculo decia -3.20% drawdown → kill switch
+        falso disparaba, cuando el daño real al balance MT5 era cero (no habia
+        ejecutado nada).
+
+        Ahora: solo trades con `has_successful_demo_order=True` entran al
+        calculo. Memecoin paper, stock paper, y forex/gold sin ejecucion MT5
+        se excluyen porque no afectan el balance demo real.
         """
         today = utc_now().date()
         start_iso = f"{today.isoformat()}T00:00:00+00:00"
@@ -95,6 +102,14 @@ class PortfolioManager:
             return_pct = _to_float(t.get("unrealized_return_pct"))
             notional = _to_float(t.get("size_notional"))
             if return_pct is None or notional is None or notional <= 0:
+                continue
+            # v2.7.1: SOLO trades con ejecucion MT5 cuentan en realized_pnl_today.
+            # Sin esto, paper-only trades con sizing teorico inflado (ej. gold
+            # GC=F que no matchea allowed symbols) disparan kill switches falsos.
+            trade_id = t.get("id")
+            if trade_id is None:
+                continue
+            if not self.repository.has_successful_demo_order(int(trade_id)):
                 continue
             usd_pnl = notional * (return_pct / 100.0)
             total_usd_pnl += usd_pnl
