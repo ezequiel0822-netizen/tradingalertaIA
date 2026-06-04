@@ -116,6 +116,12 @@ class Settings:
     stock_max_alerts_per_run: int
     alert_cap_window_hours: int
     enable_stock_alerts: bool
+    # v2.9.1 — separa el ENVIO de alertas de acciones del analisis: enable_stock_alerts
+    # controla recoleccion/analisis (collector); enable_stock_telegram controla solo si
+    # esas alertas de candidatos se mandan a Telegram. Permite "analizar acciones pero
+    # no alertarlas". NO afecta los avisos de apertura/cierre de trades
+    # (enable_trade_action_reports, flujo separado).
+    enable_stock_telegram: bool
     stock_symbols: list[str]
     min_stock_estimated_gain_pct: float
     min_stock_estimate_confidence: int
@@ -397,7 +403,7 @@ def load_settings() -> Settings:
         obsidian_vault_path = safe_obsidian
 
     return Settings(
-        app_version=os.getenv("APP_VERSION", "v2.9.0"),
+        app_version=os.getenv("APP_VERSION", "v2.9.1"),
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
         telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID"),
         dexscreener_base_url=os.getenv(
@@ -430,6 +436,7 @@ def load_settings() -> Settings:
         stock_max_alerts_per_run=_get_int("STOCK_MAX_ALERTS_PER_RUN", 2),
         alert_cap_window_hours=_get_int("ALERT_CAP_WINDOW_HOURS", 24),
         enable_stock_alerts=_get_bool("ENABLE_STOCK_ALERTS", True),
+        enable_stock_telegram=_get_bool("ENABLE_STOCK_TELEGRAM", True),
         stock_symbols=_get_list(
             "STOCK_SYMBOLS",
             [

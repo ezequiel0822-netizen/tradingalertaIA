@@ -519,7 +519,12 @@ class TradingAlertJob:
         sent_count = 0
         # Phase 4.5 v2.4.0: memecoin se separa en early vs mature.
         # Phase 3 v2.2.0: forex/gold ahora pueden alertar segun flags.
-        cats: list[str] = ["stock"]
+        # v2.9.1: las acciones se siguen analizando/aprendiendo siempre; aca solo
+        # decidimos si sus ALERTAS DE CANDIDATOS van a Telegram (enable_stock_telegram).
+        # Los avisos de apertura/cierre de trades son otro flujo (no se ven afectados).
+        cats: list[str] = []
+        if self.settings.enable_stock_telegram:
+            cats.append("stock")
         if self.settings.enable_memecoin_telegram:
             cats.insert(0, "memecoin_early")
             cats.insert(1, "memecoin_mature")

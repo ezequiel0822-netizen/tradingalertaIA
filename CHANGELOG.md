@@ -1,5 +1,20 @@
 # Changelog
 
+## Trading Alert AI v2.9.1
+
+Toggle para analizar acciones sin alertarlas (`ENABLE_STOCK_TELEGRAM`).
+
+El user pidio dejar de recibir las alertas de "top 5 acciones" en Telegram pero que el bot las siga analizando y aprendiendo (era ruido, no plata: Claude API esta OFF por default). El flag existente `ENABLE_STOCK_ALERTS` no servia: controla la RECOLECCION (`stock_collector.collect` retorna `[]` si esta off → deja de analizar).
+
+**Nuevo flag `ENABLE_STOCK_TELEGRAM` (default true)** que separa el envio del analisis:
+- `app/analyzers/alert_decision_engine.should_send_alert`: para `category=="stock"`, si `not enable_stock_telegram` → `False` (no candidato a Telegram). El analisis y los paper_trades NO dependen de esto (ocurren siempre en `jobs.run_once`).
+- `app/scheduler/jobs._send_ranked_candidates`: `"stock"` solo entra a `cats` si `enable_stock_telegram` (defensa en profundidad, mismo patron que `enable_memecoin_telegram`).
+- NO toca `enable_trade_action_reports`: los avisos de apertura/cierre de trades siguen intactos.
+
+Para el comportamiento pedido, en el `.env`: `ENABLE_STOCK_TELEGRAM=false` y `ENABLE_MEMECOIN_TELEGRAM=true`.
+
+Tests: +2 (`test_stock_blocked_when_telegram_off`, `test_memecoin_unaffected_by_stock_telegram_flag`). Total 445 → **447 verdes**. Real-money sigue 100% bloqueado.
+
 ## Trading Alert AI v2.9.0
 
 Capa ML hibrida (XGBoost) que COMPLEMENTA las reglas, no las reemplaza. Predice probabilidad de win de un trade y modula el promotion gate como señal adicional. Filosofia identica al gate: solo filtra HACIA ABAJO, nunca habilita lo que las reglas bloquearon. Soft-fail/degradado = comportamiento idéntico al sistema actual.

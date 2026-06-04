@@ -55,7 +55,12 @@ def should_send_alert(
     # que el usuario active explicitamente el flag.
     if category == "memecoin" and not settings.enable_memecoin_telegram:
         return False
+    # v2.9.1: las acciones se siguen recolectando, scoreando y abriendo paper trades
+    # (el analisis NO depende de esto); enable_stock_telegram solo controla si la
+    # alerta de candidato va a Telegram. Asi se puede "analizar sin alertar" acciones.
     if category == "stock":
+        if not settings.enable_stock_telegram:
+            return False
         return estimate.eligible_for_gain_alert
     if estimate.eligible_for_gain_alert:
         return True

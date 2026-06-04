@@ -1,4 +1,4 @@
-# Trading Alert AI v2.9.0
+# Trading Alert AI v2.9.1
 
 Trader engine algoritmico **local** (Python 3.12, Windows) que monitorea memecoins, acciones US, forex y oro. Observa datos publicos, guarda historial en SQLite, decide entradas/salidas con un strategy router (5 estrategias swing + 2 de scalping), opera paper trades simulados, aprende del P&L realizado neto de costos, y puede enviar ordenes **solo a cuenta MT5 demo** (con confirmacion manual o auto-confirmacion opt-in).
 
@@ -272,12 +272,12 @@ SQLite en `SQLITE_PATH` (default `trading_alert_ai.db` en la raiz). Mantenela en
 - `app/dashboard`: Streamlit.
 - `app/intelligence` + `app/config` + `app/utils`: Claude/macro/calidad, settings, utilidades.
 - `obsidian/tradingbot v.1`: memoria del proyecto.
-- `tests`: 445 tests.
+- `tests`: 447 tests.
 
 ## Tests
 
 ```powershell
-python -m pytest tests/ -q     # 445 verdes
+python -m pytest tests/ -q     # 447 verdes
 ```
 
 ## Advertencia

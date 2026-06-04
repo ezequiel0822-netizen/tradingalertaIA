@@ -32,6 +32,7 @@ def _settings() -> Settings:
         stock_max_alerts_per_run=2,
         alert_cap_window_hours=24,
         enable_stock_alerts=True,
+        enable_stock_telegram=True,
         stock_symbols=["aapl", "msft"],
         min_stock_estimated_gain_pct=8,
         min_stock_estimate_confidence=55,
