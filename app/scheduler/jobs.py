@@ -36,7 +36,7 @@ from app.collectors.news_collector import NewsCollector
 from app.collectors.sec_collector import SECFilingsCollector
 from app.collectors.stock_collector import StockCollector
 from app.config.settings import Settings
-from app.intelligence.claude_processor import ClaudeProcessor
+from app.intelligence.ollama_processor import build_llm_processor
 from app.intelligence.data_quality import run_full_check as run_data_quality_check
 from app.intelligence.macro_context import current_session, full_macro_context
 from app.learning.feature_extractor import extract_features
@@ -107,7 +107,9 @@ class TradingAlertJob:
         )
         self.strategy_router = StrategyRouter(settings)
         # Phase 3.5 v2.2.0: Claude processor (soft-fail si key no presente)
-        self.claude_processor = ClaudeProcessor(settings, self.repository)
+        # v2.10.0: factory de proveedor LLM (Ollama local si enable_ollama_integration,
+        # sino Claude). Ambos soft-fail/read-only; el nombre del atributo se conserva.
+        self.claude_processor = build_llm_processor(settings, self.repository)
         # Phase 3 v2.2.0: macro context + economic calendar collectors
         self.macro_collector = MacroCollector(settings)
         self.calendar_collector = EconomicCalendarCollector(settings)

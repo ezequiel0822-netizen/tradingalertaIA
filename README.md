@@ -1,4 +1,4 @@
-# Trading Alert AI v2.9.1
+# Trading Alert AI v2.10.0
 
 Trader engine algoritmico **local** (Python 3.12, Windows) que monitorea memecoins, acciones US, forex y oro. Observa datos publicos, guarda historial en SQLite, decide entradas/salidas con un strategy router (5 estrategias swing + 2 de scalping), opera paper trades simulados, aprende del P&L realizado neto de costos, y puede enviar ordenes **solo a cuenta MT5 demo** (con confirmacion manual o auto-confirmacion opt-in).
 
@@ -10,6 +10,7 @@ Trader engine algoritmico **local** (Python 3.12, Windows) que monitorea memecoi
 - Monitorea acciones US (Yahoo), forex majors y oro (Yahoo + MT5).
 - Analiza volumen, liquidez, precio, patrones, noticias y filings SEC.
 - Calcula una lectura IA Pro con setup, sesgo, confianza, riesgos y checklist.
+- LLM opcional para enriquecer texto (resumen de noticias, explicacion de setups, free-text en Telegram): Claude API o **Ollama local gratis** (`ENABLE_OLLAMA_INTEGRATION`). Solo texto, NO decide trades.
 - Decide con un strategy router: breakout, mean_reversion, momentum, news_catalyst, forex_session_breakout (swing) + scalping_breakout y scalping_mean_reversion (scalping en thread aparte).
 - Dimensiona posiciones por riesgo (`balance x risk% / |entry - stop|`) y gestiona el ciclo de vida (trailing stop, SL a breakeven post-TP1, partial close, salida por tiempo).
 - Risk manager con kill-switch (manual o automatico por max drawdown diario), caps por categoria y cooldown por simbolo.
@@ -272,12 +273,12 @@ SQLite en `SQLITE_PATH` (default `trading_alert_ai.db` en la raiz). Mantenela en
 - `app/dashboard`: Streamlit.
 - `app/intelligence` + `app/config` + `app/utils`: Claude/macro/calidad, settings, utilidades.
 - `obsidian/tradingbot v.1`: memoria del proyecto.
-- `tests`: 447 tests.
+- `tests`: 457 tests.
 
 ## Tests
 
 ```powershell
-python -m pytest tests/ -q     # 447 verdes
+python -m pytest tests/ -q     # 457 verdes
 ```
 
 ## Advertencia

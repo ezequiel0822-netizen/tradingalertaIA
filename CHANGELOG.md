@@ -1,5 +1,24 @@
 # Changelog
 
+## Trading Alert AI v2.10.0
+
+Proveedor LLM **local via Ollama** (gratis, sin API key) como alternativa a Claude.
+
+El LLM del bot (resumen de noticias, expansion del analisis pro, interpretacion de free-text en Telegram) **solo enriquece TEXTO — NO toca ninguna decision de trading** (ni gate, ni router, ni ordenes). Hasta ahora era Claude API (opcional, default OFF). v2.10.0 agrega un proveedor local: gratis, privado, sin API key, sin costo diario.
+
+**`app/intelligence/ollama_processor.py` (NUEVO).**
+- `OllamaProcessor`: misma interfaz que `ClaudeProcessor` (`reset_cycle`, `is_available`, `summarize_news`, `expand_pro_analysis`, `interpret_free_text`, `estimated_cost_today`=0). Habla con Ollama por HTTP local (`POST /api/chat` en `OLLAMA_BASE_URL`, default `http://localhost:11434`). Throttle por ciclo + cache TTL. **Cero dependencias nuevas** (usa `requests`).
+- Soft-fail total: si `enable_ollama_integration=False`, si Ollama no responde, o si la respuesta es invalida -> `None` (el bot se comporta igual que sin LLM). Reachability cacheada (ping a `/api/tags`, 60s).
+- `build_llm_processor(settings, repo)`: factory que devuelve `OllamaProcessor` si `enable_ollama_integration`, sino `ClaudeProcessor`. Comparten interfaz (duck-typing); el resto del bot no cambia. Wire en `jobs.py` (un solo call site).
+
+**Settings nuevos.** `ENABLE_OLLAMA_INTEGRATION=false`, `OLLAMA_MODEL=llama3.1`, `OLLAMA_BASE_URL=http://localhost:11434`, `OLLAMA_TIMEOUT_SECONDS=30`, `OLLAMA_CALLS_PER_CYCLE_CAP=6`. Sincronizados en `test_score`/`test_alert_rules` `_settings()`.
+
+**Para usarlo** (lado del user): instalar Ollama (ollama.com), `ollama pull llama3.1`, dejar el servicio corriendo, y poner `ENABLE_OLLAMA_INTEGRATION=true` en el `.env`. Sin eso, soft-fail = bot igual que antes. Nota honesta: un modelo local chico da menor calidad que Claude y corre mas lento en CPU; esto es UX/comodidad, no edge.
+
+**Tests (`tests/test_ollama_processor.py`, +10).** flag off -> no disponible; reachable -> disponible; Ollama caido -> soft-fail; `_call` OK; soft-fail por excepcion/HTTP error; throttle cap; costo=0; factory elige proveedor. Mock de `requests` (no necesita Ollama corriendo).
+
+Total 447 -> **457 verdes**. Read-only para mercados: el LLM jamas ejecuta nada. Real-money sigue 100% bloqueado.
+
 ## Trading Alert AI v2.9.1
 
 Toggle para analizar acciones sin alertarlas (`ENABLE_STOCK_TELEGRAM`).

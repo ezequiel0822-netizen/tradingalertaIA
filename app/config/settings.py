@@ -233,6 +233,15 @@ class Settings:
     claude_calls_per_cycle_cap: int
     claude_cache_ttl_seconds: int
     claude_max_cost_per_day_usd: float
+    # v2.10.0 — LLM local via Ollama (gratis, sin API key, sin costo). Alternativa a
+    # Claude; si enable_ollama_integration=True el bot usa Ollama en vez de Claude.
+    # Solo enriquece texto (resumenes/analisis/free-text), NO toca decisiones de
+    # trading. Soft-fail total si Ollama no esta corriendo.
+    enable_ollama_integration: bool
+    ollama_model: str
+    ollama_base_url: str
+    ollama_timeout_seconds: int
+    ollama_calls_per_cycle_cap: int
     # Phase 4 v2.3.0 — MT5 validation + walk-forward + data quality + CSV
     mt5_broker_profile: str
     enable_walk_forward_backtest: bool
@@ -403,7 +412,7 @@ def load_settings() -> Settings:
         obsidian_vault_path = safe_obsidian
 
     return Settings(
-        app_version=os.getenv("APP_VERSION", "v2.9.1"),
+        app_version=os.getenv("APP_VERSION", "v2.10.0"),
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
         telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID"),
         dexscreener_base_url=os.getenv(
@@ -621,6 +630,12 @@ def load_settings() -> Settings:
         claude_calls_per_cycle_cap=_get_int("CLAUDE_CALLS_PER_CYCLE_CAP", 6),
         claude_cache_ttl_seconds=_get_int("CLAUDE_CACHE_TTL_SECONDS", 3600),
         claude_max_cost_per_day_usd=_get_float("CLAUDE_MAX_COST_PER_DAY_USD", 2.0),
+        # v2.10.0 — LLM local via Ollama (default OFF, gratis)
+        enable_ollama_integration=_get_bool("ENABLE_OLLAMA_INTEGRATION", False),
+        ollama_model=os.getenv("OLLAMA_MODEL", "llama3.1"),
+        ollama_base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
+        ollama_timeout_seconds=_get_int("OLLAMA_TIMEOUT_SECONDS", 30),
+        ollama_calls_per_cycle_cap=_get_int("OLLAMA_CALLS_PER_CYCLE_CAP", 6),
         # Phase 4 v2.3.0
         mt5_broker_profile=os.getenv("MT5_BROKER_PROFILE", "icmarkets"),
         enable_walk_forward_backtest=_get_bool("ENABLE_WALK_FORWARD_BACKTEST", True),
