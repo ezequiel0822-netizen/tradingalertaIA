@@ -201,6 +201,15 @@ def _settings() -> Settings:
         cost_roundtrip_pct_stock=0.05,
         cost_roundtrip_pct_memecoin=0.5,
         enable_realized_learning=False,
+        enable_edge_slicing=True,
+        edge_slice_min_samples=30,
+        enable_sliced_promotion_gate=False,
+        enable_ml_predictor=False,
+        ml_min_train_samples=100,
+        ml_gate_min_samples=400,
+        ml_retrain_min_new_trades=20,
+        ml_conf_pass=0.65,
+        ml_conf_low=0.50,
     )
 
 

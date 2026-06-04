@@ -1,5 +1,59 @@
 # Changelog
 
+## Trading Alert AI v2.9.0
+
+Capa ML hibrida (XGBoost) que COMPLEMENTA las reglas, no las reemplaza. Predice probabilidad de win de un trade y modula el promotion gate como señal adicional. Filosofia identica al gate: solo filtra HACIA ABAJO, nunca habilita lo que las reglas bloquearon. Soft-fail/degradado = comportamiento idéntico al sistema actual.
+
+**Encuadre honesto.** Con 189 trades reales limpios el ML NO crea edge — es andamiaje listo para cuando haya data. Por eso nace DORMIDO: `ENABLE_ML_PREDICTOR=false` por default, y aun activo solo modula decisiones con n>=`ML_GATE_MIN_SAMPLES` (400). Ademas, verificado contra el schema: `rsi_entry`/`atr_value` NO se persisten hoy (quedan NaN); `macd_state` es un proxy categorico desde el alert. El modelo se apoya en macro (vix/dxy), temporales (sesion/hora/dia) y las features del alert (ia_pro, patrones, volumen). Para features tecnicas reales habria que capturarlas al crear el trade (cambio futuro, no retroactivo).
+
+**ml_dataset_builder.py.** Lee paper_trades + macro_snapshots (join temporal vix/dxy via merge_asof) + alerts (feature_extractor). Reusa la quarantine de artifacts y el realized-R de v2.7.0, asi el target cuadra con /expectancy. Cada fila = un trade cerrado no-artifact con features al entry + win_loss (1 si r_multiple>0). Excluye scratch. Exporta exports/ml_dataset.csv y retorna DataFrame. `build_live_features` arma las features de un trade vivo (DRY). Solo depende de pandas.
+
+**ml_predictor.py.** Clase `MLPredictor`: train (XGBClassifier max_depth=5, lr=0.1, n_estimators=100, subsample=0.8, eval_metric=auc; split temporal train-pasado/test-futuro sin look-ahead; AUC via sklearn.roc_auc_score), predict (0-1; 0.5 neutral en modo degradado), feature_importance (top5), save/load (pickle, models/xgboost_v1.pkl), get_status, retrain_if_needed (reentrena con >=20 trades nuevos; si el AUC cae >0.05 MANTIENE el modelo anterior). Modo degradado/soft-fail en todos los caminos: <100 muestras, sin modelo, libs ausentes o cualquier excepcion -> 0.5 sin crashear. `ml_gate_decision` (>0.65 pasa; 0.50-0.65 pasa con lot/2; <0.50 paper-only) y `should_consult_ml` (guard: solo modula con muestra suficiente).
+
+**Integracion en el promotion gate (jobs._try_prepare_demo_order).** Tras el gate de reglas, si el ML esta activo y con muestra suficiente, consulta predict() y aplica ml_gate_decision: bloquea a paper-only, o reduce el lot a la mitad (modificando solo el draft, sin tocar mt5_demo_trader.py). Si esta dormido/degradado/falla: (allow, low)=(True, False) = sin cambios. Reentrenamiento diario en run_once (gate por fecha UTC). `/ml_status` muestra version, modo (activo/dormido), muestras, AUC, top5 features y la distribucion de decisiones del dia (passed/low/blocked, contadores en bot_state).
+
+**Dependencias (aprobadas).** `xgboost==3.2.0`, `scikit-learn==1.9.0` (pinneadas). Soft-fail si no estan instaladas.
+
+**Settings nuevos.** `ENABLE_ML_PREDICTOR=false`, `ML_MIN_TRAIN_SAMPLES=100`, `ML_GATE_MIN_SAMPLES=400`, `ML_RETRAIN_MIN_NEW_TRADES=20`, `ML_CONF_PASS=0.65`, `ML_CONF_LOW=0.50`. Sincronizados en test_score/_settings y test_alert_rules/_settings.
+
+**Tests (+22).** `tests/test_ml_dataset_builder.py` (11: exclusion de artifacts, target, sesion/tiempo, join macro, proxy macd, rsi/atr NaN, scratch, CSV, coverage) y `tests/test_ml_predictor.py` (11: modo degradado <100, AUC valido, predict en rango, features faltantes, save/load identicas, feature_importance, soft-fail sin entrenar, revert por AUC, thresholds del gate, guard should_consult_ml, /ml_status desactivado). `models/` y `exports/` agregados a .gitignore.
+
+Total 423 → **445 tests verdes**. Real-money trading sigue 100% bloqueado; el ML jamas puede causar un order_send, solo prevenirlo.
+
+## Trading Alert AI v2.8.0
+
+Edge Detection & Protection Layer: automatiza la búsqueda de edge por slice (sesión / dirección) y extiende el promotion gate a ese nivel. NO crea edge — construye la maquinaria que lo detecta de forma permanente y rigurosa, y protege capital cuando un slice prueba perder.
+
+**El research que la motivó.**
+
+Análisis read-only de los 189 paper_trades reales (post-Fix-A, excluyendo ~776 artifacts) sliceados por sesión y dirección: NINGÚN bolsillo +R es estadísticamente sólido (los positivos tienen n=4-17, por debajo del umbral de confianza). Hallazgos: forex_session_breakout ya opera 43/44 en la franja Londres-NY (filtrar sesión no le sirve, ya está concentrada) y tiene sesgo direccional fuerte (longs -0.55R n=40 vs shorts +0.64R n=4, este último ruido). Conclusión honesta: no hay filtro de edge para codificar hoy sin sobreajustar; el cuello de botella es muestra limpia. Por eso v2.8.0 no codifica un filtro adivinado, sino la herramienta que mide y deja decidir a la data.
+
+**Componente A — medición sliceada (default ON, no toca ejecución).**
+
+- `app/learning/trade_outcomes.py`: `session_of(opened_at)` (franjas UTC no solapadas: Asia 00-07, London 07-12, LDN-NY 12-16, NY 16-21, Off 21-00), `build_sliced_performance()` (una fila por estrategia×categoría×dimensión×bucket, reusando EXACTO el mismo realized-R neto de costos y la exclusión de artifacts que `build_strategy_performance`, así los números cuadran al re-agregar).
+- Tabla nueva `strategy_performance_sliced` (PK strategy_name+category+dimension+bucket), refrescada cada learning cycle vía `_refresh_sliced_performance` (training_engine).
+- Comando Telegram `/edge` (aliases `/borde`, `bolsillos`): muestra los slices por sesión y dirección, marca `[OK]` los confiables (n>=`EDGE_SLICE_MIN_SAMPLES`) y resalta `EDGE+` los que además son +R. Convierte el research manual en capacidad permanente.
+
+**Componente B — promotion gate sliceado (default OFF, opt-in).**
+
+`should_execute_live_sliced()` es estrictamente MÁS restrictivo que `should_execute_live`: bloquea (SHADOW) si el agregado O cualquier slice del trade en curso (su sesión y su dirección) prueba edge negativo (avg_r<=umbral con n>=min_samples). Hooks en `jobs._try_prepare_demo_order` (swing) y `scalping_engine._open_scalping_trade` (scalping), detrás de `ENABLE_SLICED_PROMOTION_GATE` (default OFF — el gate v2.7.0 sigue idéntico hasta activarlo).
+
+**Regla anti-data-dredging (el rigor que evita el autoengaño).**
+
+El slicing SOLO puede mover a SHADOW, NUNCA promover. Un slice +R jamás rescata a un agregado SHADOW. Cortar en muchos slices garantiza que alguno dé +R por azar (multiple comparisons); usar muchos tests para hallar PERDEDORES es conservador (protege capital), usarlos para hallar GANADORES invitaría falsos positivos. Por eso el gate sigue siendo estrictamente subtractivo: jamás causa un order_send, solo puede prevenirlo.
+
+**Settings nuevos.**
+
+- `ENABLE_EDGE_SLICING=true` (medición ON).
+- `EDGE_SLICE_MIN_SAMPLES=30` (umbral de confiabilidad).
+- `ENABLE_SLICED_PROMOTION_GATE=false` (gate sliceado opt-in).
+
+**Tests (`tests/test_edge_slicing.py`, +21 casos).**
+
+session_of (límites de franja, naive, inválido), build_sliced_performance (agrupación, exclusión de artifacts, costos, consistencia de re-agregación vs build_strategy_performance), should_execute_live_sliced (agregado SHADOW manda, slice perdedor con n>=min manda a SHADOW, slice chico respeta el agregado, slice +R no rescata, sin slices == gate base), repository upsert/fetch sliced, `_refresh_sliced_performance` (puebla + respeta el flag OFF), comando /edge (aliases, sin-datos, con-datos, soft-fail). Settings sincronizados en `tests/test_score.py` y `tests/test_alert_rules.py`.
+
+Total 402 → **423 tests verdes**. Real-money trading sigue 100% bloqueado.
+
 ## Trading Alert AI v2.7.1
 
 Tapa el kill switch falso del 2026-06-01: `realized_pnl_today` ahora filtra paper_trades que nunca se ejecutaron a MT5 demo.

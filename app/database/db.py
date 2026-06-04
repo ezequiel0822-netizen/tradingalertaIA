@@ -353,6 +353,24 @@ def _init_db_unsafe(db_path: Path) -> None:
                 PRIMARY KEY (strategy_name, category)
             );
 
+            CREATE TABLE IF NOT EXISTS strategy_performance_sliced (
+                strategy_name TEXT NOT NULL,
+                category TEXT NOT NULL,
+                dimension TEXT NOT NULL,
+                bucket TEXT NOT NULL,
+                trades INTEGER NOT NULL DEFAULT 0,
+                wins INTEGER NOT NULL DEFAULT 0,
+                losses INTEGER NOT NULL DEFAULT 0,
+                scratches INTEGER NOT NULL DEFAULT 0,
+                win_rate REAL NOT NULL DEFAULT 0,
+                avg_r REAL NOT NULL DEFAULT 0,
+                avg_return_pct REAL NOT NULL DEFAULT 0,
+                sum_return_pct REAL NOT NULL DEFAULT 0,
+                artifacts_excluded INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (strategy_name, category, dimension, bucket)
+            );
+
             CREATE TABLE IF NOT EXISTS realized_feature_lessons (
                 feature TEXT NOT NULL,
                 category TEXT NOT NULL,

@@ -10,6 +10,7 @@ from app.database.repository import Repository
 from app.learning.feature_extractor import extract_features
 from app.learning.trade_outcomes import (
     build_realized_feature_lessons,
+    build_sliced_performance,
     build_strategy_performance,
 )
 from app.utils.time_utils import utc_now_iso
@@ -55,11 +56,13 @@ def run_learning_cycle(settings: Settings, repository: Repository) -> LearningRu
 
     paper_trades_created = 0
     strategy_perf_updated = 0
+    sliced_perf_updated = 0
     realized_lessons_updated = 0
     if settings.enable_paper_trading:
         paper_trades_created += _create_paper_trades(settings, repository, alerts)
         _update_paper_trades(repository, settings)
         strategy_perf_updated = _refresh_strategy_performance(repository, settings)
+        sliced_perf_updated = _refresh_sliced_performance(repository, settings)
         realized_lessons_updated = _refresh_realized_feature_lessons(
             repository, settings, signal_outcomes
         )
@@ -69,6 +72,7 @@ def run_learning_cycle(settings: Settings, repository: Repository) -> LearningRu
         f"lecciones {len(lessons)}; paper trades nuevos {paper_trades_created}; "
         f"horizontes nuevos {horizons_created} (refrescados {horizons_updated}); "
         f"expectancy por estrategia (R) {strategy_perf_updated}; "
+        f"slices de edge {sliced_perf_updated}; "
         f"realized feature lessons {realized_lessons_updated}."
     )
     repository.insert_training_run(
@@ -423,16 +427,10 @@ def _refresh_strategy_performance(repository: Repository, settings: Settings) ->
     if not closed:
         return 0
     frac = float(getattr(settings, "partial_close_fraction", 0.5) or 0.5)
-    cost_map: dict[str, float] = {}
-    if getattr(settings, "enable_cost_model", False):
-        cost_map = {
-            "forex": float(settings.cost_roundtrip_pct_forex),
-            "gold": float(settings.cost_roundtrip_pct_gold),
-            "stock": float(settings.cost_roundtrip_pct_stock),
-            "memecoin": float(settings.cost_roundtrip_pct_memecoin),
-        }
     perfs = build_strategy_performance(
-        closed, partial_fraction=frac, cost_pct_by_category=cost_map
+        closed,
+        partial_fraction=frac,
+        cost_pct_by_category=_cost_map_from_settings(settings),
     )
     now = utc_now_iso()
     count = 0
@@ -441,6 +439,61 @@ def _refresh_strategy_performance(repository: Repository, settings: Settings) ->
             {
                 "strategy_name": p.strategy_name,
                 "category": p.category,
+                "trades": p.trades,
+                "wins": p.wins,
+                "losses": p.losses,
+                "scratches": p.scratches,
+                "win_rate": p.win_rate,
+                "avg_r": p.avg_r,
+                "avg_return_pct": p.avg_return_pct,
+                "sum_return_pct": p.sum_return_pct,
+                "artifacts_excluded": p.artifacts_excluded,
+                "updated_at": now,
+            }
+        )
+        count += 1
+    return count
+
+
+def _cost_map_from_settings(settings: Settings) -> dict[str, float]:
+    """Mapa category -> costo round-trip % desde settings (vacío si cost model off).
+    Compartido por _refresh_strategy_performance y _refresh_sliced_performance para
+    que el realized-R agregado y el sliceado usen EXACTAMENTE los mismos costos."""
+    if not getattr(settings, "enable_cost_model", False):
+        return {}
+    return {
+        "forex": float(settings.cost_roundtrip_pct_forex),
+        "gold": float(settings.cost_roundtrip_pct_gold),
+        "stock": float(settings.cost_roundtrip_pct_stock),
+        "memecoin": float(settings.cost_roundtrip_pct_memecoin),
+    }
+
+
+def _refresh_sliced_performance(repository: Repository, settings: Settings) -> int:
+    """v2.8.0: recomputa expectancy realizada en R sliceada por (estrategia,
+    categoría, dimensión, bucket) — sesión y dirección — para detectar bolsillos
+    de edge. Mismo cálculo que _refresh_strategy_performance, sólo que sliceado.
+    OFF si enable_edge_slicing=False. Devuelve cuántas filas se upsertearon."""
+    if not getattr(settings, "enable_edge_slicing", False):
+        return 0
+    closed = repository.fetch_closed_paper_trades(limit=5000)
+    if not closed:
+        return 0
+    frac = float(getattr(settings, "partial_close_fraction", 0.5) or 0.5)
+    perfs = build_sliced_performance(
+        closed,
+        partial_fraction=frac,
+        cost_pct_by_category=_cost_map_from_settings(settings),
+    )
+    now = utc_now_iso()
+    count = 0
+    for p in perfs:
+        repository.upsert_sliced_performance(
+            {
+                "strategy_name": p.strategy_name,
+                "category": p.category,
+                "dimension": p.dimension,
+                "bucket": p.bucket,
                 "trades": p.trades,
                 "wins": p.wins,
                 "losses": p.losses,

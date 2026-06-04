@@ -75,6 +75,9 @@ class _StubJob:
 
     _try_prepare_demo_order = TradingAlertJob._try_prepare_demo_order
     _auto_execute_demo_request = TradingAlertJob._auto_execute_demo_request
+    _ml_gate = TradingAlertJob._ml_gate
+    # v2.9.0: ML off en estos tests -> _ml_gate retorna (True, False) sin tocar nada
+    _ml_predictor = None
 
 
 def test_enable_auto_confirm_demo_default_false(monkeypatch) -> None:

@@ -1018,6 +1018,80 @@ class Repository:
             ).fetchall()
         return [dict(row) for row in rows]
 
+    def upsert_sliced_performance(self, perf: dict[str, Any]) -> None:
+        """v2.8.0: persiste expectancy realizada en R por
+        (strategy_name, category, dimension, bucket) — sesión / dirección."""
+        with get_connection(self.db_path) as connection:
+            connection.execute(
+                """
+                INSERT INTO strategy_performance_sliced (
+                    strategy_name, category, dimension, bucket, trades, wins,
+                    losses, scratches, win_rate, avg_r, avg_return_pct,
+                    sum_return_pct, artifacts_excluded, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(strategy_name, category, dimension, bucket) DO UPDATE SET
+                    trades = excluded.trades,
+                    wins = excluded.wins,
+                    losses = excluded.losses,
+                    scratches = excluded.scratches,
+                    win_rate = excluded.win_rate,
+                    avg_r = excluded.avg_r,
+                    avg_return_pct = excluded.avg_return_pct,
+                    sum_return_pct = excluded.sum_return_pct,
+                    artifacts_excluded = excluded.artifacts_excluded,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    perf["strategy_name"],
+                    perf["category"],
+                    perf["dimension"],
+                    perf["bucket"],
+                    perf["trades"],
+                    perf["wins"],
+                    perf["losses"],
+                    perf["scratches"],
+                    perf["win_rate"],
+                    perf["avg_r"],
+                    perf["avg_return_pct"],
+                    perf["sum_return_pct"],
+                    perf["artifacts_excluded"],
+                    perf["updated_at"],
+                ),
+            )
+
+    def fetch_sliced_performance(self, limit: int = 200) -> list[dict[str, Any]]:
+        """v2.8.0: todas las filas de expectancy sliceada, para el comando /edge."""
+        with get_connection(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT *
+                FROM strategy_performance_sliced
+                ORDER BY dimension, trades DESC, avg_r DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def fetch_sliced_performance_for(
+        self, strategy_name: str, category: str, buckets: list[str]
+    ) -> list[dict[str, Any]]:
+        """v2.8.0: filas sliceadas de UNA estrategia cuyo bucket está en `buckets`
+        (típicamente la sesión y la dirección del trade en curso), para el
+        promotion gate sliceado. Devuelve [] si no hay buckets."""
+        clean = [b for b in (buckets or []) if b]
+        if not clean:
+            return []
+        placeholders = ",".join("?" for _ in clean)
+        with get_connection(self.db_path) as connection:
+            rows = connection.execute(
+                "SELECT * FROM strategy_performance_sliced "
+                f"WHERE strategy_name = ? AND category = ? AND bucket IN ({placeholders})",
+                (strategy_name, category, *clean),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
     def upsert_realized_feature_lesson(self, lesson: dict[str, Any]) -> None:
         """v2.7.0 Fase 2b: lesson de realized-R por (feature, category) desde
         paper_trades cerrados. Señal honesta para learned_weights y learning_gate."""

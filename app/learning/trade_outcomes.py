@@ -338,3 +338,184 @@ def build_realized_feature_lessons(
             }
         )
     return lessons
+
+
+# ---------------------------------------------------------------------------
+# v2.8.0 — Edge detection sliceado (sesión / dirección)
+#
+# build_strategy_performance mide expectancy por (estrategia, categoría). Pero el
+# edge, si existe, suele esconderse en sub-condiciones: una sesión de mercado, una
+# dirección. Acá slicemos la MISMA métrica (realized-R neto de costos, excluyendo
+# artifacts) por esas dimensiones, para detectar bolsillos +R — y, vía el gate
+# sliceado, para mandar a SHADOW los bolsillos perdedores probados.
+# ---------------------------------------------------------------------------
+
+
+def session_of(opened_at: Any) -> str:
+    """Clasifica el timestamp de apertura (ISO, se asume UTC si naive) en una
+    sesión de mercado. Franjas en hora UTC, NO solapadas, para que cada trade
+    caiga en una sola:
+
+        Asia (00-07) · London (07-12) · LDN-NY (12-16) · NY (16-21) · Off (21-00)
+
+    El overlap Londres-NY (12-16 UTC) es la franja más líquida para forex/gold.
+    Devuelve 'unknown' si el timestamp es inválido.
+    """
+    dt = _dt(opened_at)
+    if dt is None:
+        return "unknown"
+    h = dt.astimezone(timezone.utc).hour
+    if 0 <= h < 7:
+        return "Asia"
+    if 7 <= h < 12:
+        return "London"
+    if 12 <= h < 16:
+        return "LDN-NY"
+    if 16 <= h < 21:
+        return "NY"
+    return "Off"
+
+
+def _bucket_for(trade: dict[str, Any], dimension: str) -> str:
+    if dimension == "session":
+        return session_of(trade.get("opened_at"))
+    if dimension == "direction":
+        return "short" if str(trade.get("direction") or "long") == "short" else "long"
+    return "all"
+
+
+@dataclass
+class SlicedPerf:
+    strategy_name: str
+    category: str
+    dimension: str   # "session" | "direction"
+    bucket: str      # ej "LDN-NY" | "long"
+    trades: int
+    wins: int
+    losses: int
+    scratches: int
+    win_rate: float
+    avg_r: float
+    avg_return_pct: float
+    sum_return_pct: float
+    artifacts_excluded: int
+
+
+def build_sliced_performance(
+    trades: list[dict[str, Any]],
+    dimensions: tuple[str, ...] = ("session", "direction"),
+    partial_fraction: float = 0.5,
+    scratch_eps: float = 0.05,
+    cost_pct_by_category: dict[str, float] | None = None,
+) -> list[SlicedPerf]:
+    """Como build_strategy_performance pero agrupando además por una dimensión de
+    slice. Una fila por (strategy_name, category, dimension, bucket). Reusa EXACTO
+    el mismo cálculo de R (neto de costos) y la exclusión de artifacts, así los
+    números cuadran con strategy_performance al re-agregar un slice.
+
+    A diferencia de build_strategy_performance, NO emite filas para buckets 100%
+    artifacts (sería ruido); los artifacts solo se cuentan cuando el bucket tiene
+    al menos un trade real.
+    """
+    costs = cost_pct_by_category or {}
+    groups: dict[tuple[str, str, str, str], list[dict[str, Any]]] = {}
+    artifacts: dict[tuple[str, str, str, str], int] = {}
+
+    for t in trades:
+        if str(t.get("status") or "") == "open" or not t.get("closed_at"):
+            continue
+        strat = str(t.get("strategy_name") or "unknown")
+        cat = str(t.get("category") or "unknown")
+        art = is_artifact(t)
+        for dim in dimensions:
+            key = (strat, cat, dim, _bucket_for(t, dim))
+            if art:
+                artifacts[key] = artifacts.get(key, 0) + 1
+            else:
+                groups.setdefault(key, []).append(t)
+
+    results: list[SlicedPerf] = []
+    for key, ts in groups.items():
+        cost = float(costs.get(key[1], 0.0) or 0.0)
+        rets: list[float] = []
+        rs: list[float] = []
+        for t in ts:
+            ret = realized_return_pct(t, partial_fraction, cost)
+            if ret is None:
+                continue
+            rets.append(ret)
+            rr = r_multiple(t, partial_fraction, cost)
+            if rr is not None:
+                rs.append(rr)
+        n = len(rets)
+        if n == 0:
+            continue
+        wins = sum(1 for x in rets if x > scratch_eps)
+        losses = sum(1 for x in rets if x < -scratch_eps)
+        results.append(
+            SlicedPerf(
+                strategy_name=key[0],
+                category=key[1],
+                dimension=key[2],
+                bucket=key[3],
+                trades=n,
+                wins=wins,
+                losses=losses,
+                scratches=n - wins - losses,
+                win_rate=round(wins / n, 4),
+                avg_r=round(sum(rs) / len(rs), 4) if rs else 0.0,
+                avg_return_pct=round(sum(rets) / n, 4),
+                sum_return_pct=round(sum(rets), 4),
+                artifacts_excluded=artifacts.get(key, 0),
+            )
+        )
+
+    return sorted(
+        results, key=lambda p: (p.dimension, p.trades, p.avg_r), reverse=True
+    )
+
+
+def should_execute_live_sliced(
+    strategy_name: str,
+    category: str,
+    agg_row: dict[str, Any] | None,
+    slice_rows: list[dict[str, Any]] | None,
+    min_samples: int = 30,
+    min_expectancy_r: float = 0.0,
+) -> tuple[bool, str]:
+    """Promotion gate SLICEADO (v2.8.0). Estrictamente MÁS restrictivo que
+    should_execute_live: bloquea (SHADOW) si el agregado O cualquier slice provisto
+    prueba edge negativo (avg_r <= umbral con n >= min_samples).
+
+    `slice_rows` son las filas de strategy_performance_sliced que aplican al trade
+    en curso — típicamente su sesión y su dirección actuales.
+
+    Regla de oro anti-data-dredging: el slicing SOLO puede mover a SHADOW, NUNCA
+    promover. Si el agregado ya dice SHADOW, queda SHADOW; si dice LIVE pero un
+    slice probó perder, pasa a SHADOW. Usar muchos slices para hallar PERDEDORES
+    es conservador (protege capital); usarlos para hallar GANADORES invitaría
+    falsos positivos por multiple comparisons. Por eso un slice +R nunca rescata
+    a un trade — solo la expectancy agregada habilita LIVE.
+
+    Devuelve (puede_ejecutar, motivo). Sigue siendo subtractivo: jamás causa un
+    order_send, solo puede prevenirlo.
+    """
+    base_ok, base_reason = should_execute_live(
+        strategy_name, category, agg_row, min_samples, min_expectancy_r
+    )
+    if not base_ok:
+        return False, base_reason  # el agregado ya basta para SHADOW
+    for row in slice_rows or []:
+        n = int(row.get("trades") or 0)
+        if n < min_samples:
+            continue
+        avg_r = float(row.get("avg_r") or 0.0)
+        if avg_r <= min_expectancy_r:
+            dim = str(row.get("dimension") or "?")
+            bucket = str(row.get("bucket") or "?")
+            return (
+                False,
+                f"SHADOW: slice {dim}={bucket} {avg_r:+.2f}R<={min_expectancy_r:+.2f}R "
+                f"n={n} (paper-only)",
+            )
+    return True, base_reason

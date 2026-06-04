@@ -310,6 +310,24 @@ class Settings:
     # (lessons por feature desde paper_trades cerrados) en vez del drift de alerta.
     # Default ON. Drift path se mantiene como fallback reversible (flag off).
     enable_realized_learning: bool
+    # v2.8.0 — edge slicing: expectancy realizada en R por sesión/dirección
+    # (strategy_performance_sliced) para detectar bolsillos de edge. La MEDICIÓN va
+    # ON (no toca ejecución; alimenta /edge). El gate sliceado consulta esos slices
+    # y SOLO puede mover a SHADOW (nunca promover); default OFF hasta activarlo.
+    enable_edge_slicing: bool
+    edge_slice_min_samples: int
+    enable_sliced_promotion_gate: bool
+    # v2.9.0 — capa ML hibrida (XGBoost). enable_ml_predictor: master switch (OFF
+    # default, opt-in). El ML SOLO modula el gate con n>=ml_gate_min_samples (umbral
+    # alto = salvaguarda dura: con poca muestra no toca decisiones) y SOLO filtra
+    # hacia abajo. Soft-fail/degradado se comporta igual que antes. Umbrales de
+    # confianza: >conf_pass pasa; conf_low..conf_pass pasa con lot/2; <conf_low paper-only.
+    enable_ml_predictor: bool
+    ml_min_train_samples: int
+    ml_gate_min_samples: int
+    ml_retrain_min_new_trades: int
+    ml_conf_pass: float
+    ml_conf_low: float
 
     def __repr__(self) -> str:
         parts: list[str] = []
@@ -379,7 +397,7 @@ def load_settings() -> Settings:
         obsidian_vault_path = safe_obsidian
 
     return Settings(
-        app_version=os.getenv("APP_VERSION", "v2.7.1"),
+        app_version=os.getenv("APP_VERSION", "v2.9.0"),
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
         telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID"),
         dexscreener_base_url=os.getenv(
@@ -704,4 +722,16 @@ def load_settings() -> Settings:
         cost_roundtrip_pct_memecoin=_get_float("COST_ROUNDTRIP_PCT_MEMECOIN", 0.5),
         # v2.7.0 Fase 2b — learned_weights + learning_gate sobre realized-R (default ON)
         enable_realized_learning=_get_bool("ENABLE_REALIZED_LEARNING", True),
+        # v2.8.0 — edge slicing. Medición ON; gate sliceado OFF (opt-in).
+        enable_edge_slicing=_get_bool("ENABLE_EDGE_SLICING", True),
+        edge_slice_min_samples=_get_int("EDGE_SLICE_MIN_SAMPLES", 30),
+        enable_sliced_promotion_gate=_get_bool("ENABLE_SLICED_PROMOTION_GATE", False),
+        # v2.9.0 — capa ML hibrida (default OFF; el gate solo se modula con muestra
+        # suficiente n>=ml_gate_min_samples). Soft-fail si xgboost no instalado.
+        enable_ml_predictor=_get_bool("ENABLE_ML_PREDICTOR", False),
+        ml_min_train_samples=_get_int("ML_MIN_TRAIN_SAMPLES", 100),
+        ml_gate_min_samples=_get_int("ML_GATE_MIN_SAMPLES", 400),
+        ml_retrain_min_new_trades=_get_int("ML_RETRAIN_MIN_NEW_TRADES", 20),
+        ml_conf_pass=_get_float("ML_CONF_PASS", 0.65),
+        ml_conf_low=_get_float("ML_CONF_LOW", 0.50),
     )

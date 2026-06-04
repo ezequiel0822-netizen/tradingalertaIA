@@ -73,6 +73,12 @@ class BasicTelegramAssistant:
         if normalized in {"/expectancy", "expectancy", "/expectativa", "expectativa", "expectancy r"}:
             return self.expectancy_message()
 
+        if normalized in {"/edge", "edge", "/edges", "/borde", "bolsillos"}:
+            return self.edge_message()
+
+        if normalized in {"/ml_status", "ml_status", "/ml", "estado ml"}:
+            return self.ml_status_message()
+
         if normalized in {"/paper", "paper", "simulacion", "/paper_trades"}:
             return self.paper_message()
 
@@ -553,6 +559,127 @@ Chains: {", ".join(self.settings.chains_to_monitor)}
         lines.append(
             "avgR>0 = edge positivo (n>=30-50 para confiar). "
             "LIVE=ejecuta a MT5; SHADOW=paper-only por edge negativo probado."
+        )
+        lines.append(DISCLAIMER)
+        return "\n".join(lines)
+
+    def ml_status_message(self) -> str:
+        """v2.9.0: estado de la capa ML hibrida (XGBoost). Muestra version, modo
+        (activo vs dormido/degradado), muestras, AUC, fecha de entrenamiento, top-5
+        feature importance y la distribucion de decisiones del dia. Soft-fail."""
+        if not getattr(self.settings, "enable_ml_predictor", False):
+            return (
+                "Capa ML: DESACTIVADA (ENABLE_ML_PREDICTOR=false). El sistema opera "
+                "solo con reglas + promotion gate.\n\n" + DISCLAIMER
+            )
+        try:
+            from app.learning.ml_predictor import MLPredictor
+
+            pred = MLPredictor(
+                min_train_samples=int(getattr(self.settings, "ml_min_train_samples", 100))
+            )
+            status = pred.get_status()
+        except Exception as exc:  # soft-fail
+            return f"/ml_status no disponible ({type(exc).__name__})."
+
+        gate_min = int(getattr(self.settings, "ml_gate_min_samples", 400))
+        trained = bool(status.get("trained"))
+        samples = int(status.get("samples") or 0)
+        modulating = trained and samples >= gate_min
+        ml_available = bool(status.get("ml_available"))
+        mode = (
+            "ACTIVO (modula el gate)"
+            if modulating
+            else "DORMIDO/DEGRADADO (no toca decisiones)"
+        )
+        auc = status.get("auc")
+        lines = [
+            f"Capa ML (XGBoost) — {self.settings.app_version}",
+            f"Estado: {mode}",
+            f"Modelo: {status.get('version')} | libs: "
+            f"{'ok' if ml_available else 'ausentes (degradado)'}",
+            f"Entrenado: {'si' if trained else 'no'} | muestras: {samples} "
+            f"(umbral para modular gate: {gate_min})",
+            f"AUC test: {round(auc, 4) if auc is not None else 'n/d'}",
+            f"Ultimo entrenamiento: {status.get('trained_at') or 'nunca'}",
+        ]
+        imp = pred.feature_importance(top=5)
+        if imp:
+            lines.append("Top 5 features:")
+            for name, weight in imp:
+                lines.append(f"  - {name}: {weight:.3f}")
+        try:
+            passed = int(self.repository.get_state("ml_stat_passed", "0") or 0)
+            low = int(self.repository.get_state("ml_stat_low", "0") or 0)
+            blocked = int(self.repository.get_state("ml_stat_blocked", "0") or 0)
+        except Exception:
+            passed = low = blocked = 0
+        lines.append(
+            f"Decisiones hoy: {passed} pasaron | {low} low-confidence (lot/2) | "
+            f"{blocked} a paper-only"
+        )
+        if not modulating:
+            lines.append(
+                "Nota: el ML aun NO modula decisiones (dormido hasta tener muestra "
+                "suficiente). El sistema se comporta igual que sin ML."
+            )
+        lines.append("")
+        lines.append(DISCLAIMER)
+        return "\n".join(lines)
+
+    def edge_message(self) -> str:
+        """v2.8.0: expectancy realizada en R SLICEADA por sesión y dirección, para
+        cazar bolsillos de edge. Marca [OK] los slices con muestra suficiente
+        (n>=EDGE_SLICE_MIN_SAMPLES) y resalta los que además son +R; los de poca
+        muestra van como [..] (ruido, no concluir todavía). Es el research que
+        antes se hacía a mano, ahora permanente y refrescado cada ciclo.
+        """
+        try:
+            rows = self.repository.fetch_sliced_performance(limit=200)
+        except Exception as exc:  # soft-fail: no crashear el assistant
+            return f"/edge no disponible ({type(exc).__name__}). Reintenta luego."
+
+        min_n = int(getattr(self.settings, "edge_slice_min_samples", 30))
+        gate_on = bool(getattr(self.settings, "enable_sliced_promotion_gate", False))
+        lines = [
+            f"Edge por slice (R realizado, neto de costos) — {self.settings.app_version}",
+            f"Confiable con n>={min_n}. Gate sliceado: {'ON' if gate_on else 'OFF'} "
+            "(el slicing solo manda a SHADOW, nunca promueve).",
+            "",
+        ]
+        if not rows:
+            lines.append(
+                "(sin datos todavia — se computa cada ciclo de learning sobre "
+                "paper_trades cerrados)"
+            )
+            lines.append("")
+            lines.append(DISCLAIMER)
+            return "\n".join(lines)
+
+        by_dim: dict[str, list] = {}
+        for r in rows:
+            by_dim.setdefault(str(r.get("dimension") or "?"), []).append(r)
+        dim_titles = {"session": "POR SESION", "direction": "POR DIRECCION"}
+        for dim in sorted(by_dim):
+            lines.append(f"== {dim_titles.get(dim, dim.upper())} ==")
+            for r in by_dim[dim]:
+                strat = str(r.get("strategy_name") or "?")
+                cat = str(r.get("category") or "?")
+                bucket = str(r.get("bucket") or "?")
+                n = int(r.get("trades") or 0)
+                avg_r = float(r.get("avg_r") or 0.0)
+                wr = float(r.get("win_rate") or 0.0) * 100
+                reliable = n >= min_n
+                tag = "[OK]" if reliable else "[..]"
+                flag = "  <== EDGE+" if (reliable and avg_r > 0.05) else ""
+                lines.append(
+                    f"{tag} {strat}/{cat} {bucket}: n={n} avgR={avg_r:+.2f} "
+                    f"win {wr:.0f}%{flag}"
+                )
+            lines.append("")
+        lines.append(
+            "[OK]=muestra suficiente · [..]=ruido (n bajo). "
+            "avgR>0 con [OK] = bolsillo con edge real."
         )
         lines.append(DISCLAIMER)
         return "\n".join(lines)

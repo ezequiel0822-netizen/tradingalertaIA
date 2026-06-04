@@ -7,3 +7,6 @@ __pycache__/
 venv/
 *.db
 .claude/
+# v2.9.0 - modelos ML entrenados y datasets exportados (no versionar binarios/datos)
+models/
+exports/

@@ -41,7 +41,11 @@ from app.intelligence.data_quality import run_full_check as run_data_quality_che
 from app.intelligence.macro_context import current_session, full_macro_context
 from app.learning.feature_extractor import extract_features
 from app.learning.lifecycle_manager import manage_open_positions
-from app.learning.trade_outcomes import should_execute_live
+from app.learning.trade_outcomes import (
+    session_of,
+    should_execute_live,
+    should_execute_live_sliced,
+)
 from app.portfolio.mt5_reconciler import MT5Reconciler
 from app.portfolio.portfolio_manager import PortfolioManager
 from app.risk.position_sizer import calculate_position_size
@@ -123,6 +127,19 @@ class TradingAlertJob:
                 )
             except Exception:
                 logger.exception("MT5Reconciler init failed; continuing without")
+        # v2.9.0: MLPredictor (capa ML hibrida). Soft-fail: si xgboost no esta
+        # instalado o falla, queda None y el sistema se comporta igual que antes.
+        self._ml_predictor = None
+        self._ml_last_retrain_date: str | None = None
+        if settings.enable_ml_predictor:
+            try:
+                from app.learning.ml_predictor import MLPredictor
+
+                self._ml_predictor = MLPredictor(
+                    min_train_samples=settings.ml_min_train_samples
+                )
+            except Exception:
+                logger.exception("MLPredictor init failed; continuing without ML")
 
     def run_forever(self) -> None:
         # Log solo el nombre del archivo (no path completo) para evitar filesystem leak.
@@ -435,6 +452,7 @@ class TradingAlertJob:
         if self.settings.enable_learning_engine:
             learning = run_learning_cycle(self.settings, self.repository)
             logger.info("Learning cycle complete. %s", learning.summary)
+            self._maybe_retrain_ml()
 
         if self.settings.enable_price_snapshots:
             last_purge = self.repository.get_state("snapshots_last_purge")
@@ -913,6 +931,91 @@ class TradingAlertJob:
                     self._try_prepare_demo_order(paper_trade)
             return  # solo 1 trade por snapshot (la primera signal valida)
 
+    def _record_ml_decision(self, outcome: str) -> None:
+        """v2.9.0: contador diario de decisiones ML en bot_state para /ml_status
+        (passed/low/blocked). Resetea al cambiar de dia UTC. Soft-fail."""
+        try:
+            today = utc_now().date().isoformat()
+            if self.repository.get_state("ml_stat_date") != today:
+                self.repository.set_state("ml_stat_date", today)
+                self.repository.set_state("ml_stat_passed", "0")
+                self.repository.set_state("ml_stat_low", "0")
+                self.repository.set_state("ml_stat_blocked", "0")
+            key = f"ml_stat_{outcome}"
+            current = int(self.repository.get_state(key, "0") or 0)
+            self.repository.set_state(key, str(current + 1))
+        except Exception:
+            logger.exception("ML decision record fallo; ignoro")
+
+    def _maybe_retrain_ml(self) -> None:
+        """v2.9.0: reentrena el ML 1x/dia si hay >= ml_retrain_min_new_trades nuevos
+        desde el ultimo entrenamiento. Gate por fecha UTC. Soft-fail total: cualquier
+        error no afecta el ciclo. La reversion por degradacion de AUC (>0.05) la
+        maneja retrain_if_needed (mantiene el modelo anterior)."""
+        if self._ml_predictor is None or not self.settings.enable_ml_predictor:
+            return
+        today = utc_now().date().isoformat()
+        if self._ml_last_retrain_date == today:
+            return
+        self._ml_last_retrain_date = today
+        try:
+            from app.learning.ml_dataset_builder import build_ml_dataset
+
+            df = build_ml_dataset(self.settings.sqlite_path, export_csv=False)
+            result = self._ml_predictor.retrain_if_needed(
+                df, self.settings.ml_retrain_min_new_trades
+            )
+            logger.info("ML retrain diario: %s", result)
+        except Exception:
+            logger.exception("ML retrain fallo; soft-fail (modelo anterior intacto)")
+
+    def _ml_gate(self, paper_trade: dict) -> tuple[bool, bool]:
+        """v2.9.0: señal ML adicional para el order_send a demo. Devuelve
+        (allow, low_confidence). Soft-fail: si el ML no esta activo/entrenado, no
+        tiene muestra suficiente (n<ml_gate_min_samples), o falla, devuelve
+        (True, False) = SIN CAMBIOS. SOLO filtra hacia abajo: se invoca despues de
+        que las reglas aprobaron, asi que jamas habilita un order_send bloqueado."""
+        pred = self._ml_predictor
+        if pred is None or not self.settings.enable_ml_predictor:
+            return True, False
+        try:
+            from app.learning.feature_extractor import extract_features
+            from app.learning.ml_dataset_builder import build_live_features
+            from app.learning.ml_predictor import ml_gate_decision, should_consult_ml
+
+            if not should_consult_ml(pred, self.settings.ml_gate_min_samples):
+                return True, False  # ML dormido (muestra insuficiente): sin cambios
+
+            macro = self.repository.fetch_latest_macro_snapshot()
+            alert_feats: list[str] = []
+            detail = self.repository.fetch_alert_full_detail(
+                int(paper_trade.get("alert_id") or -1)
+            )
+            if detail and detail.get("alert"):
+                alert_feats = extract_features(detail["alert"])
+            features = build_live_features(paper_trade, macro, alert_feats)
+            conf = pred.predict(features)
+            allow, low, reason = ml_gate_decision(
+                conf, self.settings.ml_conf_pass, self.settings.ml_conf_low
+            )
+            if not allow:
+                logger.info(
+                    "ML gate: paper-only strategy=%s symbol=%s %s",
+                    paper_trade.get("strategy_name"), paper_trade.get("symbol"), reason,
+                )
+            elif low:
+                logger.info(
+                    "ML gate: lot reducido strategy=%s symbol=%s %s",
+                    paper_trade.get("strategy_name"), paper_trade.get("symbol"), reason,
+                )
+            self._record_ml_decision(
+                "blocked" if not allow else ("low" if low else "passed")
+            )
+            return allow, low
+        except Exception:
+            logger.exception("ML gate fallo; soft-fail (sin cambios)")
+            return True, False
+
     def _try_prepare_demo_order(self, paper_trade: dict) -> None:
         """Phase 5: create a pending MT5 demo order request.
 
@@ -933,17 +1036,38 @@ class TradingAlertJob:
         # v2.7.0 promotion gate: no manda order_send a MT5 si la estrategia tiene
         # edge negativo PROBADO (avg_r<=umbral con n>=min_samples). El paper_trade
         # ya quedó creado: queda en shadow/paper-only. Real-money sigue bloqueado.
+        # v2.8.0: si enable_sliced_promotion_gate, además chequea el slice (sesión +
+        # dirección del trade). El slicing solo puede mover a SHADOW, nunca promover.
         if self.settings.enable_strategy_promotion_gate:
             strat = str(paper_trade.get("strategy_name") or "")
             cat = str(paper_trade.get("category") or "")
             perf = self.repository.fetch_strategy_performance_for(strat, cat)
-            ok_live, gate_reason = should_execute_live(
-                strat,
-                cat,
-                perf,
-                self.settings.strategy_promotion_min_samples,
-                self.settings.strategy_promotion_min_expectancy_r,
-            )
+            if self.settings.enable_sliced_promotion_gate:
+                sess = session_of(paper_trade.get("opened_at"))
+                direction = (
+                    "short"
+                    if str(paper_trade.get("direction") or "long") == "short"
+                    else "long"
+                )
+                slice_rows = self.repository.fetch_sliced_performance_for(
+                    strat, cat, [sess, direction]
+                )
+                ok_live, gate_reason = should_execute_live_sliced(
+                    strat,
+                    cat,
+                    perf,
+                    slice_rows,
+                    self.settings.strategy_promotion_min_samples,
+                    self.settings.strategy_promotion_min_expectancy_r,
+                )
+            else:
+                ok_live, gate_reason = should_execute_live(
+                    strat,
+                    cat,
+                    perf,
+                    self.settings.strategy_promotion_min_samples,
+                    self.settings.strategy_promotion_min_expectancy_r,
+                )
             if not ok_live:
                 logger.info(
                     "Promotion gate: paper-only (sin order_send MT5) strategy=%s symbol=%s reason=%s",
@@ -952,6 +1076,11 @@ class TradingAlertJob:
                     gate_reason,
                 )
                 return
+
+        # v2.9.0 ML gate: señal adicional. Soft-fail; SOLO filtra hacia abajo.
+        ml_allow, ml_low = self._ml_gate(paper_trade)
+        if not ml_allow:
+            return  # ML manda a paper-only (sin order_send a MT5)
 
         from app.brokers.mt5_demo_trader import MT5DemoTrader
 
@@ -976,6 +1105,13 @@ class TradingAlertJob:
             minutes=self.settings.demo_trade_request_ttl_minutes
         )
         draft = result.draft
+        if ml_low:
+            halved = round(draft.volume / 2.0, 2)
+            if halved >= 0.01:
+                logger.info(
+                    "ML low confidence: reduzco lot %.2f -> %.2f", draft.volume, halved
+                )
+                draft.volume = halved
         request_id = self.repository.create_demo_trade_request(
             {
                 "paper_trade_id": paper_trade["id"],
