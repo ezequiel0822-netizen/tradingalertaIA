@@ -1,5 +1,16 @@
 # Changelog
 
+## Trading Alert AI v2.12.0
+
+Comandos Telegram `/market` y `/porque_perdi`: la capa LLM asesora (v2.11.0) ahora es usable desde Telegram. Read-only, solo texto, gating por `ENABLE_LLM_ADVISOR`, soft-fail total (si Ollama esta off o no responde -> mensaje claro, el bot sigue igual). Parte read-only de la "Fase B" del roadmap v3.1.
+
+- `/market` (mercado, /mercado): evaluacion honesta del mercado del dia via `TradingReasoner.assess_market`, con macro de `full_macro_context` (sesiones activas + vix/dxy del ultimo `macro_snapshot`).
+- `/porque_perdi` (por que perdi): post-mortem del ultimo `paper_trade` cerrado no-artifact con R<0 via `analyze_loss`, incluyendo `rsi_entry`/`atr_value` del entry (capturados en v2.11.0).
+- `BasicTelegramAssistant`: +param opcional `reasoner` (lazy `TradingReasoner`, inyectable en tests) + metodos `market_message`, `loss_review_message`, `_last_losing_trade`.
+- `tests/test_market_commands.py` (+7): gating por flag, soft-fail (None -> mensaje), y que el contexto correcto (incl. features del entry) llega al reasoner.
+
+470 -> **477 verdes**. El LLM sigue read-only: no decide ni ejecuta nada. Real-money 100% bloqueado.
+
 ## Trading Alert AI v2.11.0
 
 Captura de features tecnicos al entry (desbloquea el ML) + capa LLM asesora (read-only). Dos pasos hacia la vision "v3" (IA local potente), ambos additivos, soft-fail y opt-in OFF; el sistema corre identico si estan apagados.

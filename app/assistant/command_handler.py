@@ -28,10 +28,87 @@ class BasicTelegramAssistant:
         settings: Settings,
         repository: Repository,
         claude_processor=None,
+        reasoner=None,
     ) -> None:
         self.settings = settings
         self.repository = repository
         self.claude_processor = claude_processor
+        self._reasoner_inst = reasoner
+
+    # -- v2.12.0 / Fase B — capa LLM asesora enchufada a Telegram (READ-ONLY) -- #
+    def _reasoner(self):
+        """TradingReasoner lazy (crea su propio OllamaProcessor). Inyectable en tests."""
+        if self._reasoner_inst is None:
+            from app.intelligence.reasoner import TradingReasoner
+
+            self._reasoner_inst = TradingReasoner(self.settings)
+        return self._reasoner_inst
+
+    def _advisor_off_message(self) -> str:
+        return (
+            "El asesor LLM esta apagado. Activalo con ENABLE_LLM_ADVISOR=true "
+            "(requiere Ollama corriendo + ENABLE_OLLAMA_INTEGRATION=true)."
+        )
+
+    def market_message(self) -> str:
+        """/market — evaluacion del mercado de hoy via LLM local (solo texto)."""
+        if not getattr(self.settings, "enable_llm_advisor", False):
+            return self._advisor_off_message()
+        from app.intelligence.macro_context import full_macro_context
+
+        ctx = full_macro_context(self.repository)
+        macro = {
+            "session": "+".join(ctx.get("active_sessions") or []) or "off-hours",
+            "vix": ctx.get("vix"),
+            "dxy": ctx.get("dxy"),
+        }
+        text = self._reasoner().assess_market(macro)
+        if not text:
+            return (
+                "No pude generar la evaluacion (Ollama no respondio o esta apagado). "
+                "El bot sigue funcionando igual."
+            )
+        return f"Evaluacion del mercado (LLM local):\n\n{text}\n\n{DISCLAIMER}"
+
+    def loss_review_message(self) -> str:
+        """/porque_perdi — post-mortem del ultimo trade perdedor via LLM local."""
+        if not getattr(self.settings, "enable_llm_advisor", False):
+            return self._advisor_off_message()
+        trade = self._last_losing_trade()
+        if trade is None:
+            return "No encontre trades perdedores cerrados recientes para analizar."
+        text = self._reasoner().analyze_loss(trade)
+        if not text:
+            return (
+                "No pude generar el analisis (Ollama no respondio o esta apagado). "
+                "El bot sigue funcionando igual."
+            )
+        symbol = trade.get("symbol") or "?"
+        return f"Por que perdio {symbol} (LLM local):\n\n{text}\n\n{DISCLAIMER}"
+
+    def _last_losing_trade(self):
+        """Ultimo paper_trade cerrado no-artifact con R<0 (usa rsi/atr del entry)."""
+        from app.learning.trade_outcomes import is_artifact, r_multiple
+
+        for t in self.repository.fetch_paper_trades(limit=50):  # updated_at DESC
+            if str(t.get("status") or "") == "open" or not t.get("closed_at"):
+                continue
+            if is_artifact(t):
+                continue
+            r = r_multiple(t)
+            if r is not None and r < 0:
+                return {
+                    "symbol": t.get("symbol"),
+                    "direction": t.get("direction"),
+                    "strategy_name": t.get("strategy_name"),
+                    "entry_price": t.get("entry_price"),
+                    "stop_loss": t.get("stop_loss") or t.get("original_stop_loss"),
+                    "r_multiple": round(r, 2),
+                    "rsi_entry": t.get("rsi_entry"),
+                    "atr_value": t.get("atr_value"),
+                    "close_reason": t.get("status"),
+                }
+        return None
 
     def handle(self, text: str) -> str:
         raw = text.strip()
@@ -78,6 +155,13 @@ class BasicTelegramAssistant:
 
         if normalized in {"/ml_status", "ml_status", "/ml", "estado ml"}:
             return self.ml_status_message()
+
+        if normalized in {"/market", "market", "mercado", "/mercado", "como esta el mercado"}:
+            return self.market_message()
+
+        if normalized in {"/porque_perdi", "porque_perdi", "por que perdi",
+                          "/porque_perdio", "analiza la perdida"}:
+            return self.loss_review_message()
 
         if normalized in {"/paper", "paper", "simulacion", "/paper_trades"}:
             return self.paper_message()
