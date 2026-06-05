@@ -1,5 +1,16 @@
 # Changelog
 
+## Trading Alert AI v3.1.0
+
+Resumen diario por Telegram al cierre NY (Fase B p3 — ultima pieza de Fase B). 1x/dia, tras la hora de corte (UTC), manda los trades del dia (cerrados no-artifact: ganados/perdidos/R neto) + una leccion via LLM local si el asesor esta on. Read-only, opt-in OFF, soft-fail; los numeros se mandan aunque Ollama este apagado.
+
+- `app/scheduler/jobs.py`: `_maybe_send_daily_summary` (gate por fecha en bot_state, sobrevive reinicios) + `_today_trade_stats` + `_format_daily_summary`. Hook en `run_once`. No toca ninguna decision ni orden.
+- `app/intelligence/reasoner.py`: +`daily_summary(stats)` (lectura del dia + 1 leccion; solo texto, requiere `enable_llm_advisor`).
+- Settings: `ENABLE_DAILY_SUMMARY=false` (default) + `DAILY_SUMMARY_HOUR_UTC=21`. Sincronizados en `test_score`/`test_alert_rules`. app_version -> v3.1.0.
+- `tests/test_daily_summary.py` (+9).
+
+492 -> **501 verdes**. Cierra la Fase B del roadmap v3.1 (asesor + comandos + veto + resumen). Real-money 100% bloqueado.
+
 ## Trading Alert AI v3.0.0
 
 Arranca la serie **v3** (salto deliberado desde v2.12.0): primera capa donde el LLM influye sobre el demo gate, siempre de forma SUBTRACTIVA. Veto del ensemble LLM en el gate (Fase B p2 del roadmap v3.1). Resuelve la contradiccion del plan v3.0 original (que tenia al LLM dando "luz verde"): aca el LLM **solo puede vetar**, jamas habilitar.

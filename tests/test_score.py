@@ -150,6 +150,8 @@ def _settings() -> Settings:
         enable_llm_advisor=False,
         enable_llm_ensemble=False,
         ollama_second_model="mistral",
+        enable_daily_summary=False,
+        daily_summary_hour_utc=21,
         mt5_broker_profile="icmarkets",
         enable_walk_forward_backtest=True,
         walk_forward_train_days=14,

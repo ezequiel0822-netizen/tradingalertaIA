@@ -456,6 +456,9 @@ class TradingAlertJob:
             logger.info("Learning cycle complete. %s", learning.summary)
             self._maybe_retrain_ml()
 
+        # v3.1.0: resumen diario por Telegram (read-only, soft-fail, gate por fecha UTC).
+        self._maybe_send_daily_summary()
+
         if self.settings.enable_price_snapshots:
             last_purge = self.repository.get_state("snapshots_last_purge")
             cutoff = minutes_ago(24 * 60)
@@ -982,6 +985,74 @@ class TradingAlertJob:
             logger.info("ML retrain diario: %s", result)
         except Exception:
             logger.exception("ML retrain fallo; soft-fail (modelo anterior intacto)")
+
+    def _maybe_send_daily_summary(self) -> None:
+        """v3.1.0 (Fase B p3): 1x/dia, tras la hora de corte (UTC), manda por Telegram
+        un resumen del dia (trades cerrados hoy: wins/losses/R neto) + una leccion via
+        LLM local si el asesor esta on. Gate por fecha en bot_state (sobrevive
+        reinicios). READ-ONLY + soft-fail total: no toca ninguna decision ni orden."""
+        if not getattr(self.settings, "enable_daily_summary", False):
+            return
+        now = utc_now()
+        if now.hour < int(getattr(self.settings, "daily_summary_hour_utc", 21)):
+            return
+        today = now.date().isoformat()
+        if self.repository.get_state("daily_summary_last_date") == today:
+            return
+        try:
+            stats = self._today_trade_stats(today)
+            message = self._format_daily_summary(today, stats)
+            self.notifier.send_message(message)
+            self.repository.set_state("daily_summary_last_date", today)
+        except Exception:
+            logger.exception("Resumen diario fallo; soft-fail (reintenta proximo ciclo)")
+
+    def _today_trade_stats(self, today: str) -> dict:
+        """Agrega paper_trades cerrados HOY (UTC, no-artifact): wins/losses/R neto."""
+        from app.learning.trade_outcomes import is_artifact, r_multiple
+
+        wins = losses = 0
+        net_r = 0.0
+        for t in self.repository.fetch_paper_trades(limit=200):
+            if not str(t.get("closed_at") or "").startswith(today):
+                continue
+            if str(t.get("status") or "") == "open" or is_artifact(t):
+                continue
+            r = r_multiple(t)
+            if r is None:
+                continue
+            net_r += r
+            if r > 0:
+                wins += 1
+            elif r < 0:
+                losses += 1
+        return {"total": wins + losses, "wins": wins, "losses": losses,
+                "net_r": round(net_r, 2)}
+
+    def _format_daily_summary(self, today: str, stats: dict) -> str:
+        """Mensaje: numeros (siempre) + leccion LLM opcional (si el asesor esta on)."""
+        lines = [
+            f"Resumen del dia - {today}",
+            f"Trades cerrados: {stats['total']} "
+            f"({stats['wins']} ganados, {stats['losses']} perdidos)",
+            f"R neto del dia: {stats['net_r']:+.2f}",
+        ]
+        lesson = None
+        try:
+            from app.intelligence.reasoner import TradingReasoner
+
+            proc = (
+                self.claude_processor
+                if hasattr(self.claude_processor, "generate")
+                else None
+            )
+            lesson = TradingReasoner(self.settings, processor=proc).daily_summary(stats)
+        except Exception:
+            lesson = None
+        if lesson:
+            lines.append("")
+            lines.append(lesson)
+        return "\n".join(lines)
 
     def _ml_gate(self, paper_trade: dict) -> tuple[bool, bool]:
         """v2.9.0: señal ML adicional para el order_send a demo. Devuelve

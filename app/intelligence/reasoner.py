@@ -142,3 +142,19 @@ class TradingReasoner:
             "Explicacion breve del setup:"
         )
         return self._generate(system, user, max_tokens=200)
+
+    def daily_summary(self, stats: dict[str, Any]) -> str | None:
+        """Lectura del dia + UNA leccion para manana (texto). NO da senales."""
+        system = (
+            "Eres un coach de trading honesto. Te dan el resultado del dia. Escribe "
+            "2-3 oraciones en espanol: una lectura honesta del dia y UNA leccion "
+            "accionable para manana. Sin recomendaciones de compra/venta de activos."
+        )
+        user = (
+            "Resultado de hoy:\n"
+            f"- Trades cerrados: {_g(stats, 'total')}\n"
+            f"- Ganados: {_g(stats, 'wins')} | Perdidos: {_g(stats, 'losses')}\n"
+            f"- R neto del dia: {_g(stats, 'net_r')}\n\n"
+            "Lectura del dia + 1 leccion para manana:"
+        )
+        return self._generate(system, user, max_tokens=250)
