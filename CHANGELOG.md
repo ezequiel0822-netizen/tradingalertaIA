@@ -1,5 +1,19 @@
 # Changelog
 
+## Trading Alert AI v3.0.0
+
+Arranca la serie **v3** (salto deliberado desde v2.12.0): primera capa donde el LLM influye sobre el demo gate, siempre de forma SUBTRACTIVA. Veto del ensemble LLM en el gate (Fase B p2 del roadmap v3.1). Resuelve la contradiccion del plan v3.0 original (que tenia al LLM dando "luz verde"): aca el LLM **solo puede vetar**, jamas habilitar.
+
+DOS modelos locales (primario + 2da opinion) evaluan si hay una RED FLAG en un trade que las reglas YA aprobaron. Si CUALQUIERA marca red flag -> el trade baja a paper-only (sin order_send a MT5). Subtractivo por construccion: se invoca DESPUES de reglas + promotion gate + ML gate, asi que solo puede bloquear.
+
+- `app/intelligence/ensemble_gate.py` (NUEVO): `ensemble_veto(settings, context, processor) -> (veto, reason)`. Soft-fail total -> NO veta si el flag esta off, no hay processor LLM, o todos los modelos fallan/responden ambiguo. Cada modelo se evalua aislado (el error de uno no descarta el flag del otro); dedupe si primario==segundo.
+- `app/scheduler/jobs.py`: `_llm_ensemble_gate(paper_trade)` (espejo del `_ml_gate`, downward-only, soft-fail) + hook en `_try_prepare_demo_order` DESPUES del ML gate. NO toca `mt5_demo_trader.py`.
+- `app/intelligence/ollama_processor.py`: `_call`/`generate` aceptan `model` (override para la 2da opinion); el cache key ahora incluye el modelo.
+- Settings: `ENABLE_LLM_ENSEMBLE=false` (default; requiere `ENABLE_OLLAMA_INTEGRATION`) + `OLLAMA_SECOND_MODEL=mistral`. Sincronizados en `test_score`/`test_alert_rules`. app_version -> v3.0.0 (salto de v2.12.0; arranca serie v3).
+- `tests/test_ensemble_gate.py` (+15): parsing SI/NO, subtractivo, soft-fail, veto por cualquiera, aislamiento por modelo, dedupe, y el hook de jobs (allow/veto/soft-fail).
+
+477 -> **492 verdes**. El LLM y el ML siguen subtractivos: jamas ejecutan nada. Real-money 100% bloqueado.
+
 ## Trading Alert AI v2.12.0
 
 Comandos Telegram `/market` y `/porque_perdi`: la capa LLM asesora (v2.11.0) ahora es usable desde Telegram. Read-only, solo texto, gating por `ENABLE_LLM_ADVISOR`, soft-fail total (si Ollama esta off o no responde -> mensaje claro, el bot sigue igual). Parte read-only de la "Fase B" del roadmap v3.1.

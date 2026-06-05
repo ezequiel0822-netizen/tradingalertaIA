@@ -151,6 +151,8 @@ def _settings() -> Settings:
         ollama_timeout_seconds=30,
         ollama_calls_per_cycle_cap=6,
         enable_llm_advisor=False,
+        enable_llm_ensemble=False,
+        ollama_second_model="mistral",
         mt5_broker_profile="icmarkets",
         enable_walk_forward_backtest=True,
         walk_forward_train_days=14,

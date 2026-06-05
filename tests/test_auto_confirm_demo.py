@@ -76,6 +76,9 @@ class _StubJob:
     _try_prepare_demo_order = TradingAlertJob._try_prepare_demo_order
     _auto_execute_demo_request = TradingAlertJob._auto_execute_demo_request
     _ml_gate = TradingAlertJob._ml_gate
+    # v3.0.0: ensemble off en estos tests -> _llm_ensemble_gate retorna True (allow)
+    # sin tocar el LLM ni el repo (guard temprano por enable_llm_ensemble=False).
+    _llm_ensemble_gate = TradingAlertJob._llm_ensemble_gate
     # v2.9.0: ML off en estos tests -> _ml_gate retorna (True, False) sin tocar nada
     _ml_predictor = None
 

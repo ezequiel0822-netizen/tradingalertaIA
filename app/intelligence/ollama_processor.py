@@ -74,7 +74,8 @@ class OllamaProcessor:
         return self._ping()
 
     def _call(
-        self, system: str, user: str, max_tokens: int | None = None
+        self, system: str, user: str, max_tokens: int | None = None,
+        model: str | None = None,
     ) -> str | None:
         cap = int(getattr(self.settings, "ollama_calls_per_cycle_cap", 6))
         if self._calls_this_cycle >= cap:
@@ -82,7 +83,10 @@ class OllamaProcessor:
         if not self.is_available():
             return None
 
-        cache_key = hashlib.sha256((system + user).encode("utf-8")).hexdigest()
+        model_name = str(model or getattr(self.settings, "ollama_model", "llama3.1"))
+        cache_key = hashlib.sha256(
+            (model_name + "\x00" + system + "\x00" + user).encode("utf-8")
+        ).hexdigest()
         cached = self._cache.get(cache_key)
         if cached:
             expiry, val = cached
@@ -91,7 +95,7 @@ class OllamaProcessor:
 
         num_predict = int(max_tokens or getattr(self.settings, "ollama_max_tokens", 256))
         payload = {
-            "model": str(getattr(self.settings, "ollama_model", "llama3.1")),
+            "model": model_name,
             "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
@@ -121,13 +125,15 @@ class OllamaProcessor:
         return text
 
     def generate(
-        self, system: str, user: str, max_tokens: int | None = None
+        self, system: str, user: str, max_tokens: int | None = None,
+        model: str | None = None,
     ) -> str | None:
         """Primitiva PUBLICA de generacion de texto (soft-fail), reusada por la capa
-        asesora (TradingReasoner). Devuelve None si Ollama esta off/caido/invalido o
-        si se excedio el cap del ciclo. Hereda throttle + cache + reachability de
+        asesora (TradingReasoner) y el ensemble-gate. `model` permite elegir un modelo
+        distinto al default (segunda opinion). Devuelve None si Ollama esta off/caido/
+        invalido o si se excedio el cap. Hereda throttle + cache + reachability de
         `_call`. No toca ninguna decision de trading: solo texto."""
-        return self._call(system, user, max_tokens=max_tokens)
+        return self._call(system, user, max_tokens=max_tokens, model=model)
 
     # -- mismos prompts que ClaudeProcessor (duck-typing) ------------------ #
     def summarize_news(self, news_items: list[dict], symbol: str) -> str | None:

@@ -1030,6 +1030,44 @@ class TradingAlertJob:
             logger.exception("ML gate fallo; soft-fail (sin cambios)")
             return True, False
 
+    def _llm_ensemble_gate(self, paper_trade: dict) -> bool:
+        """v3.0.0: veto del ensemble LLM (modelo primario + 2da opinion). Devuelve
+        True=proceder, False=veto (el trade baja a paper-only). Soft-fail: si el flag
+        esta off, no hay Ollama, o algo falla -> True (sin cambios). DOWNWARD-ONLY: se
+        invoca DESPUES de que reglas + gates aprobaron, asi que jamas habilita un
+        order_send bloqueado; lo unico que puede hacer es vetar."""
+        if not getattr(self.settings, "enable_llm_ensemble", False):
+            return True
+        try:
+            from app.intelligence.ensemble_gate import ensemble_veto
+
+            macro = self.repository.fetch_latest_macro_snapshot() or {}
+            context = {
+                "symbol": paper_trade.get("symbol"),
+                "direction": paper_trade.get("direction"),
+                "strategy_name": paper_trade.get("strategy_name"),
+                "entry": paper_trade.get("entry_price"),
+                "stop": paper_trade.get("stop_loss"),
+                "tp": paper_trade.get("take_profit_1"),
+                "session": session_of(paper_trade.get("opened_at")),
+                "rsi": paper_trade.get("rsi_entry"),
+                "atr": paper_trade.get("atr_value"),
+                "vix": macro.get("vix_value"),
+            }
+            veto, reason = ensemble_veto(self.settings, context, self.claude_processor)
+            if veto:
+                logger.info(
+                    "LLM ensemble: paper-only (veto) strategy=%s symbol=%s %s",
+                    paper_trade.get("strategy_name"),
+                    paper_trade.get("symbol"),
+                    reason,
+                )
+                return False
+            return True
+        except Exception:
+            logger.exception("LLM ensemble gate fallo; soft-fail (sin cambios)")
+            return True
+
     def _try_prepare_demo_order(self, paper_trade: dict) -> None:
         """Phase 5: create a pending MT5 demo order request.
 
@@ -1095,6 +1133,11 @@ class TradingAlertJob:
         ml_allow, ml_low = self._ml_gate(paper_trade)
         if not ml_allow:
             return  # ML manda a paper-only (sin order_send a MT5)
+
+        # v3.0.0 LLM ensemble veto: dos modelos buscan red flags en el trade ya
+        # aprobado. Soft-fail; SOLO veta (downward-only). No toca mt5_demo_trader.
+        if not self._llm_ensemble_gate(paper_trade):
+            return  # el ensemble veta -> paper-only (sin order_send a MT5)
 
         from app.brokers.mt5_demo_trader import MT5DemoTrader
 
