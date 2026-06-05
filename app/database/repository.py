@@ -534,9 +534,10 @@ class Repository:
                     mfe_pct, mae_pct, original_stop_loss, trailing_active,
                     strategy_name, direction, time_horizon_hours,
                     size_notional, size_units, risk_pct, partial_closed,
-                    account_balance_at_open, is_scalping
+                    account_balance_at_open, is_scalping,
+                    rsi_entry, atr_value, macd_value, macd_signal_value
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     trade["alert_id"],
@@ -571,6 +572,10 @@ class Repository:
                     trade.get("partial_closed", 0),
                     trade.get("account_balance_at_open"),
                     int(trade.get("is_scalping") or 0),  # v2.6.0 Phase 5.5 Bloque B
+                    trade.get("rsi_entry"),               # v2.11.0 features tecnicas
+                    trade.get("atr_value"),               # al entry (None si no hay)
+                    trade.get("macd_value"),
+                    trade.get("macd_signal_value"),
                 ),
             )
         return True

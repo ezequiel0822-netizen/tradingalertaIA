@@ -1,5 +1,25 @@
 # Changelog
 
+## Trading Alert AI v2.11.0
+
+Captura de features tecnicos al entry (desbloquea el ML) + capa LLM asesora (read-only). Dos pasos hacia la vision "v3" (IA local potente), ambos additivos, soft-fail y opt-in OFF; el sistema corre identico si estan apagados.
+
+**Fase 0 — `rsi`/`atr`/`macd` persistidos al abrir el swing trade.** Hasta ahora el ML los recibia NaN (no se persistian); el `ml_dataset_builder` lo documentaba como "proximo paso de mayor valor".
+- `app/database/db.py`: 4 columnas nuevas nullable en `paper_trades` (`rsi_entry`, `atr_value`, `macd_value`, `macd_signal_value`) via el patron idempotente `_ensure_column`. NULL para trades viejos (no retroactivo), scalping (su `ScalpingSignal` es frozen) y memecoins/alertas reconstruidas (sin velas).
+- `app/database/repository.create_paper_trade`: persiste los 4 con `.get()` (backward-compatible con todos los callers/tests).
+- `app/scheduler/jobs._try_open_paper_trades`: los llena desde el `TechnicalPattern` ya calculado (path live forex/gold/stock — la categoria que ejecuta al demo gate). `atr_value` = ATR en % (normalizado entre simbolos).
+- `app/learning/ml_dataset_builder.py`: lee los valores reales y deriva un `macd_state` REAL (macd vs signal) con fallback al proxy del alert para trades viejos. +2 tests.
+
+**Fase A — `TradingReasoner` (capa LLM asesora, read-only).** Construye sobre `OllamaProcessor`; solo produce TEXTO en lenguaje natural. NO decide ni ejecuta trades.
+- `app/intelligence/reasoner.py` (NUEVO): `assess_market` (evaluacion del dia), `analyze_loss` (post-mortem de perdida), `explain_setup` (explica un setup). Todos devuelven `str | None`. Soft-fail total (advisor off / Ollama caido / respuesta invalida -> None).
+- `app/intelligence/ollama_processor.py`: +`generate()` (primitiva publica de texto, reusa throttle/cache/soft-fail de `_call`).
+- Setting `ENABLE_LLM_ADVISOR=false` (default; requiere `ENABLE_OLLAMA_INTEGRATION=true`). Sincronizado en `test_score`/`test_alert_rules` `_settings()`.
+- `tests/test_reasoner.py` (+11), incluido `test_safety_invariant_advisor_exposes_no_decision` que falla si alguien le agrega un metodo de decision/ejecucion al asesor.
+
+Total 457 -> **470 verdes**. El LLM y el ML siguen SUBTRACTIVOS: jamas ejecutan nada. Real-money sigue 100% bloqueado (`ENABLE_REAL_TRADING=false` hardcoded).
+
+Roadmap completo en `Trading Alert AI v3.1 Plan Arquitectura MEJORADO.md` (resuelve la contradiccion del plan v3.0 original: LLM/ML = veto, nunca luz verde).
+
 ## Trading Alert AI v2.10.0
 
 Proveedor LLM **local via Ollama** (gratis, sin API key) como alternativa a Claude.

@@ -3,7 +3,8 @@
 Solo usa pandas (ya en requirements); no toca xgboost. Verifica que el dataset
 excluye artifacts (misma quarantine que v2.7.0), arma el target win_loss, deriva
 features de tiempo/sesion, hace el join temporal de macro (vix/dxy), deriva el
-proxy macd_state desde el alert, y deja rsi_entry/atr_value como NaN (no persistidas).
+macd_state (real desde el macd persistido o proxy del alert), y captura
+rsi_entry/atr_value cuando el trade las guardo al entry (v2.11.0; NaN si no).
 """
 
 from __future__ import annotations
@@ -61,6 +62,10 @@ def _seed_trade(
     strategy: str = "breakout",
     category: str = "forex",
     symbol: str = "EURUSD",
+    rsi: float | None = None,
+    atr: float | None = None,
+    macd: float | None = None,
+    macd_signal: float | None = None,
 ) -> None:
     now = opened_at or utc_now_iso()
     repo.create_paper_trade({
@@ -72,6 +77,9 @@ def _seed_trade(
         "updated_at": now, "closed_at": now, "mfe_pct": 0, "mae_pct": 0,
         "original_stop_loss": ostop, "trailing_active": 0, "strategy_name": strategy,
         "direction": direction,
+        # v2.11.0 features tecnicas al entry (None = trade viejo / scalping)
+        "rsi_entry": rsi, "atr_value": atr,
+        "macd_value": macd, "macd_signal_value": macd_signal,
     })
 
 
@@ -152,13 +160,40 @@ def test_macd_state_proxy_from_alert() -> None:
     assert df.loc[2, "macd_state"] == "bearish"
 
 
-def test_rsi_atr_are_na_today() -> None:
+def test_rsi_atr_na_when_not_captured() -> None:
+    # Trade viejo / scalping: sin captura -> rsi_entry/atr_value quedan NaN.
     repo = _repo()
     _seed_alert(repo, 1, ["breakout"])
     _seed_trade(repo, 1, 100.0, 110.0, 95.0)
     df = build_ml_dataset(repo.db_path, export_csv=False)
     assert df["rsi_entry"].isna().all()
     assert df["atr_value"].isna().all()
+
+
+def test_rsi_atr_macd_captured_at_entry() -> None:
+    # v2.11.0: si el trade guardo features tecnicas al entry, el dataset las usa
+    # como numericas reales y deriva macd_state del macd numerico (no del proxy).
+    repo = _repo()
+    _seed_alert(repo, 1, ["breakout"])            # alert SIN pista de macd
+    _seed_alert(repo, 2, ["breakout"])
+    _seed_trade(repo, 1, 100.0, 110.0, 95.0, rsi=62.5, atr=1.3, macd=0.8, macd_signal=0.5)
+    _seed_trade(repo, 2, 100.0, 95.0, 98.0, symbol="GBPUSD",
+                rsi=28.0, atr=0.9, macd=-0.4, macd_signal=-0.1)
+    df = build_ml_dataset(repo.db_path, export_csv=False).set_index("alert_id")
+    assert abs(float(df.loc[1, "rsi_entry"]) - 62.5) < 1e-6
+    assert abs(float(df.loc[1, "atr_value"]) - 1.3) < 1e-6
+    assert df.loc[1, "macd_state"] == "bullish"   # macd 0.8 > signal 0.5
+    assert df.loc[2, "macd_state"] == "bearish"   # macd -0.4 < signal -0.1
+
+
+def test_macd_state_real_overrides_alert_proxy() -> None:
+    # El macd numerico persistido gana sobre el proxy categorico del alert:
+    # alert dice 'macd bajista' pero macd>signal -> bullish.
+    repo = _repo()
+    _seed_alert(repo, 1, ["macd bajista"])
+    _seed_trade(repo, 1, 100.0, 110.0, 95.0, macd=1.2, macd_signal=0.3)
+    df = build_ml_dataset(repo.db_path, export_csv=False)
+    assert df.iloc[0]["macd_state"] == "bullish"
 
 
 def test_scratch_trades_excluded() -> None:

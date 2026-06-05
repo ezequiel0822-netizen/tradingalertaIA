@@ -120,6 +120,15 @@ class OllamaProcessor:
         self._calls_this_cycle += 1
         return text
 
+    def generate(
+        self, system: str, user: str, max_tokens: int | None = None
+    ) -> str | None:
+        """Primitiva PUBLICA de generacion de texto (soft-fail), reusada por la capa
+        asesora (TradingReasoner). Devuelve None si Ollama esta off/caido/invalido o
+        si se excedio el cap del ciclo. Hereda throttle + cache + reachability de
+        `_call`. No toca ninguna decision de trading: solo texto."""
+        return self._call(system, user, max_tokens=max_tokens)
+
     # -- mismos prompts que ClaudeProcessor (duck-typing) ------------------ #
     def summarize_news(self, news_items: list[dict], symbol: str) -> str | None:
         if not news_items:

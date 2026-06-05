@@ -5,17 +5,19 @@ sus features al momento de entrada y su outcome (win=1, loss=0). Reusa la misma
 logica de quarantine (is_artifact) y de realized-R (realized_return_pct,
 r_multiple) que v2.7.0, asi el target cuadra con /expectancy.
 
-NOTA HONESTA SOBRE FEATURES (verificado contra el schema 2026-06):
+NOTA HONESTA SOBRE FEATURES (schema v2.11.0):
   - vix_level, dxy_level   -> SI (macro_snapshots, join temporal por captured_at)
   - session/hour/dow       -> SI (derivadas de opened_at)
   - strategy_name/category -> SI (paper_trades)
   - features del alert      -> SI (feature_extractor sobre el alert vinculado:
                                  ia_pro, bullish/bearish_pattern, volumen, etc.)
-  - macd_state             -> PROXY categorico (bullish/bearish/neutral desde el
-                                 alert; el MACD numerico no se persiste)
-  - rsi_entry, atr_value   -> NO se persisten hoy -> quedan NaN. Para tenerlos de
-                                 verdad hay que capturarlos al crear el trade
-                                 (cambio futuro, no retroactivo).
+  - rsi_entry, atr_value   -> SI desde v2.11.0: se capturan del TechnicalPattern al
+                                 abrir el swing trade (columnas paper_trades.rsi_entry/
+                                 atr_value). Trades viejos (<v2.11.0) y scalping quedan
+                                 NaN -> el cambio NO es retroactivo.
+  - macd_state             -> REAL desde v2.11.0 si hay macd_value/macd_signal_value
+                                 persistidos (bullish si macd>signal, etc.); si no,
+                                 PROXY categorico desde el alert (trades viejos).
 
 Solo depende de pandas (ya en requirements) + modulos internos. No importa xgboost.
 """
@@ -105,6 +107,33 @@ def _macd_state_from_features(feats: list[str]) -> str:
     if "bearish_pattern" in feats:
         return "bearish"
     return "neutral"
+
+
+def _num_or_na(value: Any) -> Any:
+    """float(value) o pd.NA si es None / no convertible (trades viejos sin captura)."""
+    if value is None:
+        return pd.NA
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return pd.NA
+
+
+def _macd_state(macd: Any, macd_signal: Any, feats: list[str]) -> str:
+    """Estado MACD REAL si se persistio (v2.11.0): bullish si macd>signal, bearish si
+    macd<signal, neutral si iguales. Si no hay numericos (trades viejos / scalping),
+    cae al proxy categorico del alert."""
+    try:
+        if macd is not None and macd_signal is not None:
+            m, s = float(macd), float(macd_signal)
+            if m > s:
+                return "bullish"
+            if m < s:
+                return "bearish"
+            return "neutral"
+    except (TypeError, ValueError):
+        pass
+    return _macd_state_from_features(feats)
 
 
 def _load_macro_df(db_path: Path) -> pd.DataFrame:
@@ -199,10 +228,12 @@ def build_ml_dataset(
             "strategy_name": str(t.get("strategy_name") or "unknown"),
             "category": cat,
             "direction": str(t.get("direction") or "long"),
-            # tecnicas: proxy / no persistidas
-            "macd_state": _macd_state_from_features(feats),
-            "rsi_entry": pd.NA,   # no persistido hoy
-            "atr_value": pd.NA,   # no persistido hoy
+            # tecnicas: reales si se capturaron al entry (v2.11.0); NaN/proxy si no.
+            "macd_state": _macd_state(
+                t.get("macd_value"), t.get("macd_signal_value"), feats
+            ),
+            "rsi_entry": _num_or_na(t.get("rsi_entry")),
+            "atr_value": _num_or_na(t.get("atr_value")),
             # macro (se completan abajo con merge_asof)
             "vix_level": pd.NA,
             "dxy_level": pd.NA,
@@ -269,7 +300,8 @@ def build_live_features(
     """Arma el dict de features para MLPredictor.predict() de UN trade vivo, con la
     MISMA logica que build_ml_dataset (DRY). `macro_row`: dict con vix_value/dxy_value
     (ej. fetch_latest_macro_snapshot). `alert_features`: extract_features del alert
-    vinculado. rsi_entry/atr_value quedan None (no persistidas hoy)."""
+    vinculado. rsi_entry/atr_value/macd salen del paper_trade si se capturaron al
+    entry (v2.11.0); quedan None para trades viejos (XGBoost maneja NaN nativo)."""
     opened = _parse_dt(paper_trade.get("opened_at")) or datetime.now(timezone.utc)
     feats = alert_features or []
     macro = macro_row or {}
@@ -278,12 +310,14 @@ def build_live_features(
         "dxy_level": macro.get("dxy_value"),
         "time_of_day_hour": opened.hour,
         "day_of_week": opened.weekday(),
-        "rsi_entry": None,
-        "atr_value": None,
+        "rsi_entry": paper_trade.get("rsi_entry"),
+        "atr_value": paper_trade.get("atr_value"),
         "session": _session_label(opened.hour),
         "strategy_name": str(paper_trade.get("strategy_name") or "unknown"),
         "category": str(paper_trade.get("category") or "unknown"),
-        "macd_state": _macd_state_from_features(feats),
+        "macd_state": _macd_state(
+            paper_trade.get("macd_value"), paper_trade.get("macd_signal_value"), feats
+        ),
         "direction": str(paper_trade.get("direction") or "long"),
     }
     for key in _ALERT_FEATURE_KEYS:

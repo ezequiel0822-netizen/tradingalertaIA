@@ -924,6 +924,13 @@ class TradingAlertJob:
                 "risk_pct": sizing.risk_pct_actual,
                 "partial_closed": 0,
                 "account_balance_at_open": balance,
+                # v2.11.0 — features tecnicas al ENTRY (habilitan el ML, que hoy
+                # las recibia NaN). Vienen del TechnicalPattern ya calculado arriba.
+                # atr_value = ATR en % (atr_pct): normalizado entre simbolos.
+                "rsi_entry": pattern.rsi,
+                "atr_value": pattern.atr_pct,
+                "macd_value": pattern.macd,
+                "macd_signal_value": pattern.macd_signal,
             }
             created = self.repository.create_paper_trade(trade)
             if created and self.settings.enable_trade_action_reports:

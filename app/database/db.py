@@ -438,6 +438,15 @@ def _init_db_unsafe(db_path: Path) -> None:
         _ensure_column(connection, "demo_orders", "is_scalping", "INTEGER DEFAULT 0")
         _ensure_column(connection, "signal_outcomes", "is_scalping", "INTEGER DEFAULT 0")
         _ensure_column(connection, "strategy_lessons", "is_scalping", "INTEGER DEFAULT 0")
+        # v2.11.0 — features tecnicas capturadas al ENTRY (habilitan el ML, que
+        # hoy las recibia NaN). Se llenan desde el TechnicalPattern al abrir el
+        # swing trade (jobs._try_open_paper_trades). NULL para trades viejos (no
+        # retroactivo) y para scalping (su ScalpingSignal no expone indicadores).
+        # atr_value guarda ATR en % (atr_pct): normalizado y comparable entre simbolos.
+        _ensure_column(connection, "paper_trades", "rsi_entry", "REAL")
+        _ensure_column(connection, "paper_trades", "atr_value", "REAL")
+        _ensure_column(connection, "paper_trades", "macd_value", "REAL")
+        _ensure_column(connection, "paper_trades", "macd_signal_value", "REAL")
 
 
 def _ensure_column(

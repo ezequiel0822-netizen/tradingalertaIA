@@ -242,6 +242,11 @@ class Settings:
     ollama_base_url: str
     ollama_timeout_seconds: int
     ollama_calls_per_cycle_cap: int
+    # v2.11.0 — Capa LLM asesora (TradingReasoner): explica/evalua en lenguaje natural
+    # sobre el LLM local. READ-ONLY: solo produce TEXTO (evaluacion de mercado,
+    # post-mortem de perdidas, explicacion de setup). NUNCA decide ni ejecuta un
+    # trade. Soft-fail total; requiere Ollama corriendo (enable_ollama_integration).
+    enable_llm_advisor: bool
     # Phase 4 v2.3.0 — MT5 validation + walk-forward + data quality + CSV
     mt5_broker_profile: str
     enable_walk_forward_backtest: bool
@@ -412,7 +417,7 @@ def load_settings() -> Settings:
         obsidian_vault_path = safe_obsidian
 
     return Settings(
-        app_version=os.getenv("APP_VERSION", "v2.10.0"),
+        app_version=os.getenv("APP_VERSION", "v2.11.0"),
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
         telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID"),
         dexscreener_base_url=os.getenv(
@@ -636,6 +641,7 @@ def load_settings() -> Settings:
         ollama_base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
         ollama_timeout_seconds=_get_int("OLLAMA_TIMEOUT_SECONDS", 30),
         ollama_calls_per_cycle_cap=_get_int("OLLAMA_CALLS_PER_CYCLE_CAP", 6),
+        enable_llm_advisor=_get_bool("ENABLE_LLM_ADVISOR", False),
         # Phase 4 v2.3.0
         mt5_broker_profile=os.getenv("MT5_BROKER_PROFILE", "icmarkets"),
         enable_walk_forward_backtest=_get_bool("ENABLE_WALK_FORWARD_BACKTEST", True),
