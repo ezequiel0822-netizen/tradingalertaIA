@@ -1,78 +1,131 @@
+---
+tags: [seguridad, restricciones, inamovibles]
+version: v2.7.0
+updated: 2026-05-30
+---
+
 # Reglas de Seguridad
 
-## Prohibiciones absolutas
+> [!danger] Estas reglas NO se rompen
+> Cualquier futura sesion de Claude Code debe respetarlas. Si una tarea requiere romperlas, se PARA y se pide autorizacion explicita.
+
+---
+
+## Real-money trading
+
+> [!danger] BLOQUEADO HARDCODED
+> `ENABLE_REAL_TRADING=false` en codigo, no solo en `.env`. Cambiarlo requiere autorizacion nueva + 3+ meses de demo estable (sharpe>1, win_rate>50%, maxDD<10%).
+
+### Triple defensa
+
+1. Setting `ENABLE_REAL_TRADING=false` default + HARDCODED
+2. `mt5_demo_trader._validate_demo_account()` valida `account.trade_mode == ACCOUNT_TRADE_MODE_DEMO` y RECHAZA real
+3. `order_send` SOLO se invoca desde `app/brokers/mt5_demo_trader.py` (unico modulo con esa capacidad)
+
+### Promotion gate (v2.7.0) refuerza
+
+`should_execute_live()` agrega cuarta capa: estrategias con edge negativo PROBADO (avg_r ≤ umbral con n ≥ min_samples) quedan paper-only (SHADOW). NO toca real-money, solo el `order_send` a demo MT5.
+
+---
+
+## Archivos sagrados (NO TOCAR sin permiso)
+
+| Archivo | Por que |
+|---|---|
+| `.env` (real) | Contiene secretos. NUNCA leer, modificar ni mostrar contenido sin autorizacion |
+| `C:\Users\xxxv4\trading_data\trading_alert_ai.db` | DB con historial real (post v2.7.0) |
+| `C:\Users\xxxv4\iCloudDrive\tradingalertaIA\trading_alert_ai.db` | Backup congelado pre-movida |
+| `app/brokers/mt5_demo_trader.py` | Unico modulo que ejecuta `order_send` |
+| `app/portfolio/mt5_reconciler.py` | Cierra/modifica posiciones MT5 |
+| `app/database/db.py::_init_db_unsafe` | Schema — usar `_ensure_column` para migraciones backward-compat |
+
+---
+
+## Capacidades opt-in (NO hardcodear true)
+
+| Setting | Default | Por que opt-in |
+|---|---|---|
+| `ENABLE_AUTO_CONFIRM_DEMO` | false | Bypass de confirmacion manual = decision de seguridad del user |
+| `ENABLE_SCALPING_ENGINE` | false | Mas agresivo que swing (mas trades, debugging threading) |
+| `ENABLE_MT5_DEMO_TRADING` | false | Permite order_send a demo |
+| `ENABLE_STRATEGY_PROMOTION_GATE` | **true** (excepcion) | Gate restrictivo = reduce riesgo, default ON razonable |
+| `ENABLE_COST_MODEL` | **true** (excepcion) | Mide la verdad neta de costos, default ON razonable |
+| `ENABLE_REALIZED_LEARNING` | **true** (excepcion) | Aprende del P&L real, default ON razonable |
+
+---
+
+## Comportamientos correctos (NO "corregir")
+
+- **Lifecycle SL-to-breakeven post-TP1** — paper_trade mueve SL a entry tras hit TP1. Es disenado asi, no es bug.
+- **MT5Reconciler sync de SL solo TIGHTEN** — nunca loosen. Empeorar el risk de una posicion abierta esta prohibido.
+- **Lessons scalping separadas via sufijo `_scalping`** — NO mezclar con swing. Aprenden distinto.
+- **Promotion gate subtractivo** — solo PREVIENE order_send. Nunca lo causa.
+- **Memecoins NO ejecutan a MT5** — solo paper/lab de aprendizaje. MT5 no tiene memecoins.
+- **`paper_trade.size_notional` se updatea POST-demo_order con notional MT5 real** (v2.6.8). NO es bug.
+- **`alert_id` negativo en `signal_outcomes` para scalping** (`-paper_trade.id`) — evita colision con swing. NO es bug.
+
+---
+
+## Secretos en logs
+
+> [!warning] Doble defensa contra fuga
+> 1. `Settings.__repr__` mascarado via `_SECRET_FIELDS`
+> 2. `LogRedactor` filter en logging_config
+>
+> Si agregas un campo secreto nuevo a Settings, debe agregarse a `_SECRET_FIELDS` set.
+
+Campos secretos actuales:
+- `telegram_bot_token`
+- `telegram_chat_id`
+- `mt5_login`
+- `mt5_password`
+- `mt5_server`
+- `anthropic_api_key`
+
+---
+
+## Tests (no negociables)
+
+- **397 tests verdes** baseline (v2.7.0). Mantener verde tras cualquier cambio.
+- Antes de modificar Settings: sincronizar `tests/test_score.py::_settings()` Y `tests/test_alert_rules.py::_settings()` en el MISMO commit. Son los dos unicos que construyen `Settings(...)` directo.
+- Tests escriben a `.test_dbs/` (in-memory o tmpdir). NO al path de produccion.
+
+---
+
+## Git policy
+
+- Nunca push --force a main sin autorizacion
+- Nunca skip hooks (--no-verify) sin autorizacion
+- Co-Authored-By en commits que hace Claude
+- Commits descriptivos (estilo `feat(vX.Y.Z): descripcion`)
+
+---
+
+## Memecoins (defensa anti-rug)
+
+- `FORCE_LEARNING_GATE_FOR_MEMECOIN=true` — aunque global gate este off, memecoins siempre pasan por el filter
+- `critical_security` features filtran riesgo
+- Holder concentration y liquidity_locked = `None` (requieren RPC blockchain, Phase 7)
+- Memecoins NO ejecutan a MT5 — solo paper
+
+---
+
+## Prohibiciones absolutas (sin excepcion)
 
 El sistema NO debe:
-
-- comprar
-- vender
-- conectar wallets reales
+- comprar, vender, conectar wallets reales
 - conectar brokers reales
-- firmar transacciones
-- ejecutar ordenes en cuenta real
-- pedir seed phrase
-- pedir private keys
-- guardar secretos en codigo
-- imprimir tokens en consola o logs
+- ejecutar trades reales
+- mover dinero
+- cambiar `ENABLE_REAL_TRADING`
+- enviar transacciones blockchain
+- usar `eval()` o `exec()` con input externo
+- deserializar datos sin validacion
 
-## Excepciones autorizadas (desde v2.0.0)
+---
 
-- **MT5 demo trading** queda autorizado para Fase 5. Solo cuenta demo, nunca real.
-- Esta excepcion se aplica unicamente a la cuenta MT5 demo configurada en el `.env` del usuario.
-- Real-money trading sigue prohibido sin nueva autorizacion explicita.
-- **2026-05-19**: usuario confirma cuenta demo **ICMarkets** lista. Phase 4 (validación + walk-forward + data quality + CSV) shipped en v2.3.0. **Phase 5 está autorizada para arrancar** (`order_send(action=demo)` con kill-switch + mandatory SL + 1% riesgo por trade).
+## Links relacionados
 
-## Secretos
-
-Los secretos solo deben vivir en `.env`:
-
-- `TELEGRAM_BOT_TOKEN`
-- `TELEGRAM_CHAT_ID`
-- `MT5_LOGIN`, `MT5_PASSWORD`, `MT5_SERVER`, `MT5_PATH` (desde v2.0.0)
-
-`.env.example` siempre tiene valores vacios. Defensas adicionales en v2.1.0:
-
-- `Settings.__repr__` enmascara campos secretos con `<redacted>`.
-- `LogRedactor` filter del root logger borra tokens y valores conocidos antes de escribir log.
-- `safe_path` rechaza traversal (`../`) en `OBSIDIAN_VAULT_PATH` y archivos invalidos en `MT5_PATH`.
-- `init_db` no loguea path absoluto de la DB si ocurre corruption.
-
-## Telegram
-
-El asistente solo responde al `TELEGRAM_CHAT_ID` autorizado.
-
-Comandos sensibles tienen clamps duros desde v2.1.0:
-
-- `/halt N` → N se clampa a [1, 168] horas.
-- `RISK_PER_TRADE_PCT` → safety cap a 10% (rechaza configs accidentales).
-
-## Trader engine (v2.0.0+)
-
-El bot opera **solo en paper trades simulados**:
-
-- Strategy router pregunta a 4 estrategias (breakout, mean_reversion, momentum, news_catalyst).
-- Risk manager bloquea apertura si:
-  - kill_switch activo (manual `/halt` o auto por max drawdown)
-  - max_open_trades_total alcanzado
-  - max_total_risk_pct excedido
-  - daily P&L < -max_daily_drawdown_pct
-- Position sizer calcula tamaño por `% cuenta x distancia stop`.
-- Lifecycle manager cierra trades por time horizon o por strategy invalidation.
-
-Sin esto, ningun paper trade se abre.
-
-## Memecoins en v2.0.0+
-
-Memecoins quedan como **lab de aprendizaje**:
-
-- Alimentan `strategy_lessons` y `alert_outcome_horizons` para entrenar el motor.
-- NO van a Telegram salvo que `ENABLE_MEMECOIN_TELEGRAM=true`.
-- NO se operan en MT5 (los instrumentos no existen ahi).
-
-## Dependencias (v2.1.0)
-
-`requirements.txt` con versiones pinneadas exactas. Defensa contra cadena suministro maliciosa.
-
-## Recomendacion operativa
-
-Si alguna vez un token real queda en `.env.example`, README, logs o memoria, regenerarlo en BotFather o proveedor correspondiente.
+- [[01 - Cerebro del Proyecto]] - identidad
+- [[17 - Promotion Gate y Cost Model]] - capa nueva v2.7.0
+- [[21 - Decisiones Arquitectonicas]] - por que las decisiones

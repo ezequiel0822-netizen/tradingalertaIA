@@ -1,262 +1,160 @@
+---
+tags: [versiones, historial, evolucion]
+version: v2.9.1
+updated: 2026-06-04
+---
+
 # Versiones y Cambios
 
-## v1.0
+> [!info] Trayectoria
+> 2 semanas de evolucion desde un MVP read-only hasta un trader engine con learning honesto basado en P&L realizado neto de costos.
 
-MVP local:
+---
 
-- DEX Screener
-- GeckoTerminal
-- GoPlus opcional
-- SQLite
-- Telegram alerts
-- Dashboard
+## Tabla maestra
 
-## v1.1
+| Version | Fecha | Hito |
+|---|---|---|
+| v1.0-v1.5 | 2026-05-16 | MVP read-only: DEX Screener + Telegram + SQLite + Streamlit |
+| v1.5.2 | 2026-05-17 | Learning Engine (signal_outcomes, strategy_lessons, paper_trades) |
+| v1.6.0 | 2026-05-18 | Phase 1: horizons 1h/6h/24h/7d + MFE/MAE + backtester |
+| v1.7.0 | 2026-05-18 | Phase 2: paper trading++, trailing stops, ATR SL/TP, learning gate (OFF) |
+| **v2.0.0** | **2026-05-18** | **PIVOT: alerter → trader engine.** Strategy router, portfolio, risk manager, MT5 reader read-only |
+| v2.1.0 | 2026-05-19 | Phase 2.6: security hardening (Settings.repr mascarado, LogRedactor, safe_path) |
+| v2.2.0 | 2026-05-19 | Phase 3+3.5: forex price-action + macro (VIX/DXY) + ForexFactory + Claude API |
+| v2.3.0 | 2026-05-19 | Phase 4: MT5 ICMarkets validation, walk-forward, data quality |
+| v2.4.0 | 2026-05-19 | Phase 4.5: Memecoin Hunter Pro + Bot Mode Toggle |
+| **v2.5.0** | **2026-05-20** | **Phase 5: order_send a MT5 demo con confirmacion manual** |
+| v2.5.1-v2.5.3 | 2026-05-20 | Patches demo + fallback pip-value + /demo_candidates validacion |
+| v2.5.4 | 2026-05-20 | **Phase 5.5 Bloque A: auto-confirm opt-in** |
+| v2.5.5 | 2026-05-22 | DEMO_MAX_TOTAL_RISK_PCT separado + /health |
+| **v2.6.0** | **2026-05-22** | **Phase 5.5 Bloque B: Scalping Engine + Mode Toggle + Learning per-style** |
+| v2.6.1 | 2026-05-22 | /demo_close_all + 8 stock symbols extra |
+| v2.6.2 | 2026-05-25 | Diagnostic instrumentation scalping |
+| v2.6.3 | 2026-05-25 | FIX: timeframe int no string |
+| v2.6.4 | 2026-05-25 | FIX: numpy.void sin .get() |
+| v2.6.5 | 2026-05-26 | FIX: realized_pnl_today + symbol_select + account_balance |
+| **v2.6.6** | **2026-05-28** | **scalping_mean_reversion (BB+RSI) + ScalpingEngine multi-strategy** |
+| **v2.6.7** | **2026-05-28** | **MT5Reconciler: cierra MT5 huerfanas + sync SL post-trailing** |
+| **v2.6.8** | **2026-05-28** | **size_notional con MT5 real + per-symbol cooldown** |
+| v2.6.9 | 2026-05-29 | /gate_preview Telegram command |
+| **v2.7.0** | **2026-05-30** | **Realized-R honesto + promotion gate + cost model + Fase 2b learning + DB fuera iCloud** |
+| **v2.7.1** | **2026-06-02** | **`realized_pnl_today` filtra paper-only trades (tapa kill switch falso de gold GC=F)** |
+| **v2.8.0** | **2026-06-03** | **Edge Detection: `strategy_performance_sliced` por sesion/direccion + `/edge` + gate sliceado (opt-in OFF, solo restringe)** |
+| **v2.9.0** | **2026-06-03** | **Hybrid ML layer (XGBoost): `ml_predictor` modula el gate SOLO hacia abajo, soft-fail, DORMIDO por default** |
+| **v2.9.1** | **2026-06-04** | **Flag `ENABLE_STOCK_TELEGRAM`: analizar acciones sin alertarlas (avisos de trades intactos)** |
+| **v2.10.0** | **2026-06-04** | **Proveedor LLM local via Ollama (gratis, sin API key): `OllamaProcessor` + factory; solo enriquece texto, no decide trades** |
 
-Reduccion de ruido:
+---
 
-- estimacion de subida
-- estimacion de caida
-- confianza
-- Telegram solo para memecoins con subida estimada >= 500%
+## Fases conceptuales
 
-## v1.2
+### Phase 1-2: Detection MVP
 
-Ranking y bolsa:
+Detectar memecoins y stocks, scoring, alertas Telegram. Read-only puro.
 
-- categoria `memecoin`
-- categoria `stock`
-- cupos por 24h
-- cupos por ciclo
-- collector publico de bolsa
-- ranking antes de enviar
+### Phase 2.5: Trader Engine (v2.0)
 
-## v1.3
+PIVOT mayor. De "alerter" a "trader engine":
+- Strategy router (5 swing)
+- Portfolio manager + risk manager + position sizer
+- Kill-switch automatico (drawdown) + manual
+- Bot mode toggle
+- MT5 reader (read-only)
 
-Asistente basico por Telegram:
+### Phase 2.6: Security hardening (v2.1)
 
-- `/status`
-- `/top`
-- `/top_memecoins`
-- `/top_stocks`
-- `/alertas`
-- `/analiza`
-- `/pausar`
-- `/reanudar`
-- `/config`
+`Settings.__repr__` mascarado, `LogRedactor`, `safe_path`, `safe_json`.
 
-No usa OpenAI API.
+### Phase 3 + 3.5: Macro + LLM (v2.2)
 
-## v1.4
+Forex price-action, macro context (VIX/DXY/SPY), economic calendar (ForexFactory), Claude API soft-fail.
 
-Market Intelligence read-only:
+### Phase 4: Validation (v2.3)
 
-- patrones tecnicos con OHLCV
-- RSI, medias, ruptura, volumen
-- noticias y eventos por titulares
-- comandos `/noticias SIMBOLO`
-- comandos `/patron SIMBOLO`
-- patrones/noticias suman al ranking
+MT5 ICMarkets validation, walk-forward backtester, data quality monitor.
 
-## v1.5
+### Phase 4.5: Memecoin Pro + Modes (v2.4)
 
-Signal Quality:
+Memecoin Hunter Pro (volume_velocity, anti-rug multiplier), Bot Mode Toggle (trader / alerts_only / hybrid).
 
-- alertas agrupadas
-- comando `/cupos`
-- comando `/descartes`
-- filtro anti-hype
-- memoria automatica en Obsidian
+### Phase 5: order_send a demo MT5 (v2.5)
 
-## v1.5.1
+`MT5DemoTrader` (unico modulo con order_send). Confirmacion manual obligatoria. Validaciones demo-only. Real-money bloqueado.
 
-IA Pro read-only:
+### Phase 5.5 Bloque A: Auto-confirm (v2.5.4)
 
-- comando `/pro SIMBOLO`
-- comando `/filings SIMBOLO`
-- MACD, Bollinger, ATR, volumen relativo, soporte/resistencia
-- sparkline visual para lectura rapida
-- catalizadores de noticias: earnings, revenue, guidance, conferencias, upgrades/downgrades
-- filings SEC recientes para acciones
-- setup profesional con sesgo, score, confianza, riesgos y checklist
+`ENABLE_AUTO_CONFIRM_DEMO` opt-in. Bypassa confirmacion manual Telegram.
 
-Regla: sigue sin operar mercados.
+### Phase 5.5 Bloque B: Scalping Engine (v2.6.0)
 
-## v1.5.2
+Thread dedicado, polling 3-5s. Strategy `scalping_breakout` M1. Force-exit timeout. Caps independientes. Kill-switch propio. Lessons separadas via sufijo `_scalping`.
 
-Learning Engine:
+### Sprint del 27-28 may (v2.6.6 → v2.6.9)
 
-- evalua señales pasadas contra precios actuales
-- aprende features que funcionan o fallan
-- guarda outcomes en `signal_outcomes`
-- guarda lecciones en `strategy_lessons`
-- simula setups en papel en `paper_trades`
-- agrega readiness A/B/C/D/BLOCKED
-- comandos `/aprendizaje`, `/paper`, `/entrenar`
+Tras perdida de $12k el 27-may, 4 bugs descubiertos + fixeados:
 
-Regla: paper trading no es trading real. No se envian ordenes.
+- v2.6.6: `scalping_mean_reversion` + multi-strategy engine
+- v2.6.7: `MT5Reconciler` (cierra huerfanas + sync SL TIGHTEN)
+- v2.6.8: `size_notional` con MT5 real + per-symbol cooldown
+- v2.6.9: `/gate_preview` Telegram command
 
-## v1.6.0
+Ver [[16 - Bugs Resueltos]] para el detalle de la saga.
 
-Aprendizaje por horizonte (Fase 1 - Fundamentos):
+### v2.7.0: Realized-R honesto + promotion gate (2026-05-30)
 
-- guarda snapshots historicos de precio en `price_snapshots` (purga 30 dias por defecto)
-- evalua cada alerta a horizontes fijos 1h, 6h, 24h y 7d
-- guarda outcomes en `alert_outcome_horizons` con `return_pct`, `mfe_pct`, `mae_pct` y `snapshots_used`
-- nuevo modulo `app/learning/horizon_evaluator.py` integrado en `run_learning_cycle`
-- nuevo modulo `app/learning/backtester.py` con `backtest_strategy()` y `rank_top_strategies()`
-- comandos Telegram nuevos: `/horizontes SIMBOLO` y `/backtest [Nh] [features...]`
-- dashboard Streamlit nueva seccion "Rendimiento por horizonte" con tabla MFE/MAE, equity curve simulada y ranking de reglas
-- reporte semanal automatico en `11 - Reporte Semanal.md` cada 7 dias
-- 16 tests nuevos en `tests/test_price_snapshots.py`, `test_horizon_evaluator.py`, `test_backtester.py`, `test_telegram_horizons_backtest.py`, `test_weekly_obsidian_report.py`
-
-Nota: las alertas anteriores a v1.6.0 no tienen snapshots historicos, sus outcomes por horizonte aparecen como `insufficient_data` hasta que se acumulen snapshots.
-
-Regla: sigue siendo read-only. No compra, no vende, no firma transacciones.
-
-## v1.7.0
-
-Fase 2 - paper trading++, pesos aprendidos, learning gate, foundation forex/oro:
-
-- Paper trades guardan MFE y MAE durante toda la vida del trade (`paper_trades.mfe_pct`, `paper_trades.mae_pct`).
-- Trailing stops simulados: cuando la posicion sube por encima del umbral (5% stock, 50% memecoin), el stop sigue al precio. Nunca baja. Se preserva el stop original en `original_stop_loss`.
-- SL/TP por ATR opcional en `build_trade_readiness`. Si hay OHLCV, calcula ATR del activo y arma stop/targets con multiplicadores (2x stop, 2x/4x targets), clampeados al rango seguro por categoria.
-- Pesos aprendidos en `app/analyzers/learned_weights.py`: ajusta score base con `strategy_lessons` aprendidas. Bonus/malus por feature con clamp duro ±10. OFF por default; activar con `ENABLE_LEARNED_WEIGHTS=true` despues de revisar `/aprendizaje`.
-- Learning gate en `app/analyzers/learning_gate.py`: antes de mandar Telegram, consulta backtester historico de la combinacion (`category + alert + score buckets`, horizonte 24h, ultimos 30 dias). Si win_rate < 45% y hay >= 10 muestras, bloquea envio. La alerta queda con `sent_to_telegram=0`, visible en `/descartes`. OFF por default; activar con `ENABLE_LEARNING_GATE=true`.
-- Nuevo collector `app/collectors/forex_collector.py` para FX majors (EURUSD, GBPUSD, USDJPY, USDCHF, AUDUSD, USDCAD, NZDUSD) y oro (GC=F) via Yahoo Finance. Solo acumula snapshots y outcomes por horizonte; NO genera alertas Telegram. Fase 3 traera el analisis price-action especifico para forex/oro.
-- 21 settings nuevos. 26 tests nuevos (64 verdes en total).
-
-Regla: sigue siendo read-only. No compra, no vende, no firma transacciones. Demo MT5 trading autorizado para Fase 5; real sigue prohibido sin nueva autorizacion.
-
-## v2.0.0
-
-Fase 2.5 - trader engine autonomo (simulado + MT5 read-only). El bot pasa de "alerter" a "trader engine":
-
-- Nuevo `app/brokers/mt5_reader.py`: adapter MT5 read-only soft-fail. Lee tick, rates y account_info. Credenciales solo en .env real, nunca en logs. NUNCA `order_send`.
-- Nuevo `app/portfolio/portfolio_manager.py`: posiciones abiertas, exposicion por categoria, P&L diario, equity curve, riesgo total.
-- Nuevo `app/risk/risk_manager.py`: kill-switch persistente (manual con `/halt` o automatico por max drawdown diario), gates de max trades concurrentes y max riesgo agregado.
-- Nuevo `app/risk/position_sizer.py`: tamano calculado por % cuenta × distancia al stop. Soporta long y short.
-- Nuevo `app/strategies/`: 4 estrategias nombradas (breakout, mean_reversion, momentum, news_catalyst) + router que filtra por min_confidence.
-- Nuevo `app/intelligence/macro_context.py`: sesiones FX (asian/london/ny) con flag is_high_liquidity.
-- Nuevo `app/learning/lifecycle_manager.py`: gestiona posiciones vivas - MFE/MAE, trailing, time exit, partial close en TP1 con stop a breakeven. Soporta short.
-- Nuevo `app/alerts/trade_reporter.py`: mensajes Telegram al abrir/cerrar paper trades.
-- Schema: tabla `daily_pnl_log` nueva + 8 columnas nuevas en `paper_trades` (strategy_name, direction, time_horizon_hours, size_notional, size_units, risk_pct, partial_closed, account_balance_at_open).
-- Memecoins bloqueadas de Telegram por default (`enable_memecoin_telegram=false`); siguen alimentando `strategy_lessons` como lab de aprendizaje.
-- Decision Engine continuo en `app/scheduler/jobs.py`: gestiona posiciones abiertas al inicio del ciclo, pregunta al strategy router para nuevos snapshots, aplica position_sizer + risk_manager antes de abrir paper trades.
-- Dashboard Streamlit con seccion "Portfolio en vivo" (balance, posiciones, riesgo total, P&L hoy, kill-switch badge, exposicion por categoria, historial daily_pnl_log).
-- Telegram comandos nuevos: `/portfolio`, `/posiciones`, `/halt [horas]`, `/resume_trading`, `/strategies`.
-- 28 settings nuevos. 53 tests nuevos. **117 tests verdes en total**.
-
-Regla: sigue siendo read-only. NO compra, NO vende, NO `order_send` ni a brokers reales ni a demo MT5 (eso es Fase 5). MT5 demo trading sigue autorizado para Fase 5; real-money trading sigue prohibido sin nueva autorizacion explicita.
-
-## v2.1.0
-
-Fase 2.6 - security & privacy hardening. Sin nuevas features funcionales. Cero breaking changes en API publica.
-
-- `Settings.__repr__` enmascara `telegram_bot_token`, `telegram_chat_id`, `mt5_login`, `mt5_password`, `mt5_server` con `<redacted>` y paths solo como basename. Defensa contra logs accidentales de `repr(settings)`.
-- Nuevo `app/utils/safe_path.py`: bloquea path traversal en `OBSIDIAN_VAULT_PATH` (fallback al default) y rechaza `MT5_PATH` invalido.
-- Nuevo `app/utils/log_redactor.py`: filter del root logger que enmascara tokens estilo Telegram y valores conocidos del .env. Instalado al startup desde main.py.
-- Nuevo `app/utils/safe_http.py`: `safe_json` para parsing defensivo. Aplicado en dexscreener + geckoterminal collectors.
-- `init_db` ahora maneja DB corrupta con mensaje claro (sin filesystem leak).
-- `/halt` clampa a [1, 168] horas. `calculate_position_size` rechaza `risk_pct > 10` como safety cap. `score_token` trata liquidez negativa como None.
-- `requirements.txt`: versiones pinneadas exactas (python-dotenv, requests, streamlit, pandas, pytest, MetaTrader5). Defensa contra cadena suministro maliciosa.
-- Log de inicio loguea solo nombre de archivo de DB, no path absoluto del usuario.
-- 18 tests de seguridad nuevos. Total **135 tests verdes** (117 → 135).
-- Bump a v2.1.0.
-
-Hallazgos del audit confirmados como OK (no requirieron fix): .gitignore correcto, HTTPS-only, todos los `requests.get` con timeout, User-Agents genericos, no shell injection, no eval/exec/pickle, no logs a disco, Streamlit en localhost, `/config` no expone secretos.
-
-Regla: sigue siendo read-only. NO order_send a brokers reales ni demo MT5 (Fase 5).
-
-## v2.2.0
-
-Phase 3 + 3.5: forex price-action profesional + LLM integration con Claude API. Sigue read-only.
-
-**Phase 3:**
-- Macro collector: VIX, DXY, SPY via Yahoo. Regime `risk_on`/`risk_off`/`neutral` en nueva tabla `macro_snapshots`.
-- Economic calendar via ForexFactory XML. Eventos high-impact en USD/EUR/GBP/JPY/CHF/AUD/CAD/NZD en nueva tabla `economic_events`.
-- `calendar_filter.is_safe_window`: bloquea trades ± 30 min alrededor de NFP/FOMC/CPI.
-- `analyze_multitf`: combina pattern M15 + H1 con flag `aligned` + `confluence_score`.
-- Nueva strategy `forex_session_breakout`: solo durante London/NY overlap, breakout del Asian range.
-- 4 strategies existentes ahora **usan** `ctx.macro` (breakout penaliza low liquidity, mean_reversion penaliza risk_off, momentum bonifica risk_on, news_catalyst permite forex/gold).
-- Alertas Telegram activadas para forex/gold con caps separados.
-- Columna `alerts.strategy_name` para drilldown.
-- Dashboard Streamlit: heatmap horizonte × hora, macro panel, calendario económico, drilldown por alerta.
-
-**Phase 3.5:**
-- `claude_processor.py`: cliente Claude API con throttle, cache TTL, telemetria de costo, safety cap diario. Soft-fail completo si la key falta o `anthropic` no está instalado.
-- Modelo default Haiku 4.5 (~$1/M input, $5/M output).
-- `_market_intelligence` llama `expand_pro_analysis` → reasons gana "🤖 IA: ...".
-- Fallback "no entendi" en Telegram usa Claude para interpretar preguntas naturales.
-- `AlertRecord.ai_reasoning` para storage futuro.
-- `ANTHROPIC_API_KEY` enmascarado en `_SECRET_FIELDS` y `LogRedactor`.
-
-Schema: 2 tablas nuevas (`macro_snapshots`, `economic_events`) + columna `alerts.strategy_name`.
-Settings: 19 nuevos. Tests: 28 nuevos. Total **163 verdes** (135 → 163).
-APP_VERSION bump a v2.2.0.
-
-Regla: sigue siendo read-only. NO order_send a brokers reales ni demo MT5 (Fase 5).
-
-## v2.3.0
-
-Phase 4: validación MT5 demo + walk-forward backtester + data quality monitor + CSV export. Cuenta demo ICMarkets ya conectada. Sigue read-only para órdenes; `order_send` autorizado para Phase 5.
-
-**MT5:**
-- `mt5_symbol_map.py`: mapping Yahoo↔MT5 por broker (icmarkets default).
-- `mt5_reader.py`: validate_symbol, symbol_info, compute_pip_value, get_historical_range. Constants MT5Timeframe.M1/M5/M15/H1/H4/D1.
-- `mt5_historical.py`: fetcher con cache en SQLite (`mt5_historical_cache`).
-- Packages instalados: MetaTrader5 5.0.5735, anthropic 0.103.1.
-
-**Walk-forward backtester:**
-- `walk_forward.py`: train/test split deslizante out-of-sample. Detecta degradación entre train y test (no tunea params; eso es Phase 6).
-- Persiste en nueva tabla `walk_forward_results`.
-
-**Data quality monitor:**
-- `data_quality.py`: gap_check, staleness_check, collector_failure_check, run_full_check.
-- Integrado en `jobs.run_once` cada 10 ciclos. Persiste en nueva tabla `data_quality_log`.
-
-**CSV export:**
-- `csv_export.py`: outcomes, paper_trades, horizons, walk_forward. Path saneado con safe_resolve_within.
-
-**Telegram nuevos comandos:**
-- `/mt5_status`: estado MT5 + broker + account + symbol_info.
-- `/data_quality`: stale + gaps + failures.
-- `/walk_forward STRATEGY [días]`: corre walk-forward.
-- `/export_csv [tipo]`: genera archivo en `exports/`.
-
-**Dashboard:**
-- Sección "Walk-Forward Performance" (resumen por strategy + top 20 ventanas).
-- Sección "Data Quality" (últimos 20 checks).
-
-Schema: 3 tablas nuevas (`mt5_historical_cache`, `walk_forward_results`, `data_quality_log`).
-Settings: 12 nuevos. Tests: 34 nuevos. Total **197 verdes** (163 → 197).
-APP_VERSION bump a v2.3.0.
-
-Regla: sigue read-only. `order_send` autorizado para Phase 5 (cuenta demo ICMarkets).
-
-## v2.4.0
-
-Phase 4.5: Memecoin Hunter Pro + Bot Mode Toggle. Sigue read-only.
-
-**Memecoin Hunter Pro:**
-- `geckoterminal_collector.py`: nuevo método para `/new_pools` con filtro de edad (default 6h). Marca event_type `EARLY_MEMECOIN` (peso 90 en ALERT_PRIORITY).
-- `app/analyzers/memecoin_hunter.py`: scoring refinado con `early_bonus` (0-20 pts), `volume_velocity_ratio` (aceleración 5m vs 1h), `anti_rug_multiplier` (0.3-1.0 penaliza honeypot/risky/etc).
-- Integrado en `jobs.py`: `adjusted_score = int((base + early_bonus) * anti_rug_multiplier)`.
-- Holder concentration / liquidity_locked quedan None (futuro Phase 5+: collector RPC).
-
-**Memecoin Telegram re-activado:**
-- Default flip `ENABLE_MEMECOIN_TELEGRAM=true`.
-- Caps separados early vs mature: 3/2 por 24h.
-- Learning gate FORZADO para memecoin (`FORCE_LEARNING_GATE_FOR_MEMECOIN=true`).
-
-**Bot Mode Toggle:**
-- 3 modos: `trader` (default), `alerts_only` (skip strategy router, mantiene Telegram + lifecycle), `hybrid` (= trader en v2.4.0).
-- Setting `BOT_MODE` + comando Telegram `/mode` + CLI flag `--mode`.
-- Prioridad: CLI > bot_state > setting > default.
-- Dashboard muestra metric "Bot mode".
-
-Schema: sin tablas nuevas (solo `bot_state.bot_mode_active` key).
-Settings: 10 nuevos + 1 default flip. Tests: 32 nuevos. Total **229 verdes** (197 → 229).
-APP_VERSION bump a v2.4.0.
-
-Regla: sigue read-only. `order_send` recién en Phase 5.
+Sesion de hallazgo raiz:
+- `_update_paper_trades` long-only insta-killeaba shorts → 86% del historial paper_trades eran artifacts
+- Aprendizaje (`signal_outcomes`) media drift de alerta a horizonte fijo (~99% neutral, gate ciego)
+
+Fixes:
+- **Fix A** (keystone): `_update_paper_trades` direction-aware
+- **Fix C**: `lifecycle_manager._fresh_price` mapea Yahoo→MT5
+- **Fix D**: nuevo `trade_outcomes.py` (realized-R, cost model, artifacts, gate) + tabla `strategy_performance` + comando `/expectancy`
+- **Promotion gate** (`should_execute_live`): bloquea order_send de losers probados
+- **Cost model**: round-trip por categoria, R neto en gate
+- **Fase 2b**: learning loop honesto. `learned_weights` + `learning_gate` re-apuntados al realized-R via `realized_feature_lessons`
+
+### Infra v2.7.0: DB fuera de iCloud
+
+`SQLITE_PATH=C:/Users/xxxv4/trading_data/trading_alert_ai.db`. iCloud causaba contencion brutal (tests 1h42m, learning sin terminar).
+
+---
+
+## Commits clave (referencia rapida)
+
+| Commit | Version | Que |
+|---|---|---|
+| `fd59478` | **v2.7.1** | **realized_pnl_today filtra paper-only trades** |
+| `0cc27d6` | v2.7.0 | Fase 2b: learning honesto (realized-R) |
+| `f32db0e` | v2.7.0 | Bump app_version default |
+| `ba51599` | v2.7.0 | Cost model |
+| `3f0b48e` | v2.7.0 | Realized-R + promotion gate |
+| `9fc0575` | v2.6.9 | /gate_preview |
+| `ac18442` | v2.6.8 | notional + cooldown |
+| `14e5cbe` | v2.6.7 | MT5 Reconciler |
+| `1a69630` | v2.6.6 | scalping_mean_reversion + multi-strategy |
+| `cb01305` | v2.6.5 | 3 bugs overnight validation |
+
+---
+
+## Tests verdes por version
+
+| Version | Tests | Delta |
+|---|---|---|
+| v2.6.5 | 307 | base |
+| v2.6.6 | 323 | +16 |
+| v2.6.7 | 338 | +15 |
+| v2.6.8 | 352 | +14 |
+| v2.6.9 | 357 | +5 |
+| v2.7.0 | 397 | +40 |
+| **v2.7.1** | **402** | **+5** |
+
+---
+
+## Links relacionados
+
+- [[14 - Estado Actual v2.7.0]] - snapshot actual
+- [[16 - Bugs Resueltos]] - saga de fixes
+- [[17 - Promotion Gate y Cost Model]] - core de v2.7.0
+- [[18 - Realized R y Aprendizaje Honesto]] - Fase 2b

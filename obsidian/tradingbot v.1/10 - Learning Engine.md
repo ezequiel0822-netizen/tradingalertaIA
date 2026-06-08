@@ -1,128 +1,206 @@
+---
+tags: [learning, engine, outcomes, lessons]
+version: v2.7.0
+updated: 2026-05-30
+---
+
 # Learning Engine
 
-## Objetivo
+> [!info] Objetivo
+> Aprender de outcomes historicos: que features ayudan, que strategies funcionan, ajustar scoring para futuros signals.
 
-Preparar a Trading Alert AI para pensar como un sistema de trading profesional. Hasta Phase 5 sigue read-only (paper trades + lecciones). Phase 5 lo conecta a demo MT5.
+---
 
-## Que aprende
+## Componentes
 
-- que tipos de alerta terminan mejor
-- que features ayudan: IA Pro, patron tecnico, noticias, filings, volumen, liquidez
-- que features castigan: anti-hype, baja liquidez, riesgo critico, catalizador negativo
-- que setups merecen simulacion en papel
-- (v1.6.0) que horizontes son mas confiables por categoria
-- (v1.6.0) que combinaciones de features dan mejor sharpe en backtest
-- (v1.7.0) si los pesos aprendidos mejoran el score base
-- (v2.0.0) que strategies (breakout/mean_reversion/momentum/news_catalyst) funcionan mejor
+```
+Alert (con features) 
+    ↓
+Espera horizon (1h, 6h, 24h, 7d)
+    ↓
+Calcula drift y realized return
+    ↓
+signal_outcomes (drift de alerta)        ← Path original (siempre activo)
+paper_trades.realized_pnl                ← Path v2.7.0 (realized-R)
+    ↓
+Agregacion por feature + categoria
+    ↓
+strategy_lessons (drift)
+strategy_performance (realized-R)        ← v2.7.0
+realized_feature_lessons (realized-R)    ← Fase 2b
+    ↓
+learned_weights (ajusta score)
+learning_gate (filtra signals - opt-in)
+```
+
+---
 
 ## Tablas
 
-- `signal_outcomes`: compara precio de alerta contra precio actual guardado.
-- `strategy_lessons`: resume features ganadoras o peligrosas (con win_rate, sample_count, confidence).
-- `alert_outcome_horizons` (v1.6.0): outcomes por horizonte 1h/6h/24h/7d con return_pct + MFE + MAE.
-- `price_snapshots` (v1.6.0): historial de precios para calcular MFE/MAE durante la ventana.
-- `paper_trades`: setups simulados — desde v2.0.0 tienen strategy_name, direction, size_notional, risk_pct, partial_closed.
-- `daily_pnl_log` (v2.0.0): P&L diario, kill_switch triggers, equity inicial/final.
-- `training_runs`: bitacora de entrenamientos.
-- `walk_forward_results` (v2.3.0): ventanas train/test deslizantes con metricas sharpe/win_rate por strategy. Detecta degradacion out-of-sample.
-- `data_quality_log` (v2.3.0): check_at + gaps + stale_symbols + collector_failures.
-- `mt5_historical_cache` (v2.3.0): OHLCV cache para evitar pedirle al broker dos veces lo mismo.
+### `signal_outcomes`
 
-## Comandos
+Outcome por (alert_id) a horizonte fijo:
+- `observed_return_pct` — drift de la alerta
+- `outcome_label` — win/loss/neutral segun `OUTCOME_WIN_RETURN_*_PCT`
+- `age_minutes`, `features`, `evaluated_at`
+- **`is_scalping`** (v2.6.0)
+- Para scalping: `alert_id = -paper_trade.id` (negativo para no colisionar)
 
-```text
-/aprendizaje
-/paper
-/entrenar
-/horizontes SIMBOLO
-/backtest [24h] [features]
-/portfolio
-/posiciones
-/strategies
-/walk_forward STRATEGY [dias] [categoria]
-/data_quality
-/export_csv [tipo]
-/mt5_status
-```
+### `strategy_lessons` (path drift)
 
-## Modulos clave
+Agregado por `(feature, category)`:
+- `sample_count`, `win_rate`, `avg_return_pct`
+- `avg_score`, `confidence`, `lesson` (texto humano)
+- Categoria para scalping: `{cat}_scalping`
 
-### Horizon evaluator (v1.6.0)
+### `strategy_performance` (v2.7.0, path realized)
 
-`app/learning/horizon_evaluator.py` evalua cada alerta a 1h/6h/24h/7d. Persiste en `alert_outcome_horizons` con `outcome_label`, `return_pct`, `mfe_pct`, `mae_pct`.
+Agregado por `(strategy_name, category)`:
+- `sample_count`, `avg_r`, `win_rate`
+- `expectancy_r_net` (despues de cost model)
+- `arts_excl` (artifacts excluidos)
+- Refrescada cada learning cycle por `_refresh_strategy_performance`
 
-### Backtester (v1.6.0)
+### `realized_feature_lessons` (v2.7.0 Fase 2b)
 
-`app/learning/backtester.py` con dos modos:
-- `backtest_strategy(features, horizon)` mide una combinacion AND.
-- `rank_top_strategies(horizon)` enumera combinaciones (singletons + pares predefinidos), devuelve top por sharpe aproximado.
+Agregado por `feature` (similar a strategy_lessons pero con realized-R):
+- `sample_count`, `avg_r_net`
+- Construida por `build_realized_feature_lessons` (junta paper_trade cerrado → R → features del alert linkeado)
+- Refrescada cada learning cycle
 
-### Learned weights (v1.7.0, OFF por default)
+### `alert_outcome_horizons`
 
-`app/analyzers/learned_weights.py` ajusta el score base con `strategy_lessons`. Bonus/malus por feature con clamp duro ±10. Activar con `ENABLE_LEARNED_WEIGHTS=true` despues de revisar `/aprendizaje`.
+Outcome por horizonte (1h, 6h, 24h, 7d):
+- `horizon_hours`, `entry_price`, `exit_price`, `return_pct`
+- `mfe_pct`, `mae_pct`, `snapshots_used`
+- `outcome_label`, `status`
 
-### Learning gate (v1.7.0, OFF por default)
+---
 
-`app/analyzers/learning_gate.py` consulta al backtester antes de enviar alerta. Si win_rate historico < umbral con muestras suficientes, bloquea envio. Activar con `ENABLE_LEARNING_GATE=true`.
+## Learning cycle (en cada ciclo del bot)
 
-### Strategy router (v2.0.0)
+1. Fetch alerts que cumplen `LEARNING_MIN_ALERT_AGE_MINUTES`
+2. Para cada alert: calcula outcome (drift + horizontes)
+3. Upsert `signal_outcomes`
+4. Compute aggregates → upsert `strategy_lessons`
+5. **v2.7.0:** refresca `strategy_performance` por paper_trades cerrados
+6. **v2.7.0 Fase 2b:** refresca `realized_feature_lessons`
+7. Si `ENABLE_LEARNED_WEIGHTS=true`: aplica weights a alerts futuros
 
-`app/strategies/` con 4 estrategias nombradas + router. Cada strategy decide direction, entry, stop, targets, time horizon. El router filtra por `STRATEGY_MIN_CONFIDENCE`.
+Cap: `LEARNING_MAX_ALERTS_PER_RUN=500`.
 
-### Walk-forward backtester (v2.3.0)
+---
 
-`app/learning/walk_forward.py::WalkForwardBacktester` divide la historia de trades cerrados en ventanas deslizantes (train_days + test_days, slide_days). Calcula metricas en train (in-sample) y test (out-of-sample). Reporta `degradation_pct = (train_sharpe - test_sharpe) / |train_sharpe| * 100`.
+## Outcome thresholds
 
-NO tunea parametros — eso queda para Phase 6 strategy evolution.
+Recalibrados v2.6.5 (user):
+- `OUTCOME_WIN_RETURN_MEMECOIN_PCT=30` (era 100)
+- `OUTCOME_LOSS_RETURN_MEMECOIN_PCT=-15` (era -40)
+- `OUTCOME_WIN_RETURN_STOCK_PCT=5`
+- `OUTCOME_LOSS_RETURN_STOCK_PCT=-3`
 
-Settings: `walk_forward_train_days=14`, `walk_forward_test_days=7`, `walk_forward_slide_days=1`, `walk_forward_min_train_samples=10`.
+> [!warning] Siguen muy estrictos para el gate
+> Casi nada hit eso → ~99% outcomes 'neutral'. Por eso el path drift es poco util. v2.7.0 Fase 2b re-apunta el learning al realized-R que es mas honesto.
 
-### Data quality monitor (v2.3.0)
+---
 
-`app/intelligence/data_quality.py` chequea gaps en `price_snapshots`, staleness de tokens (último snapshot vs ahora), y collector failures. Integrado en `jobs.run_once` cada `data_quality_check_every_n_cycles=10`.
+## Learned weights
 
-### Lifecycle manager (v2.0.0)
+`ENABLE_LEARNED_WEIGHTS=true` (user activo desde v2.6.5).
 
-`app/learning/lifecycle_manager.py` gestiona posiciones abiertas:
-- Refresca latest_price (MT5 si disponible).
-- Actualiza MFE/MAE + trailing stop.
-- Cierra trades por time horizon.
-- Partial close en TP1 (50% size + stop a breakeven).
-- Soporta short.
+Ajusta score base segun `(feature, category, win_rate)`:
+- Sample >= `LEARNED_WEIGHTS_MIN_SAMPLES=5`
+- Confidence >= `LEARNED_WEIGHTS_MIN_CONFIDENCE=40`
+- Bump max por feature: `LEARNED_WEIGHTS_PER_FEATURE_MAX=3.0`
+- Bump total max: `LEARNED_WEIGHTS_MAX_ADJUSTMENT=10.0`
 
-## Regla
+**v2.7.0 Fase 2b:** con `ENABLE_REALIZED_LEARNING=true`, los weights leen de `realized_feature_lessons` (P&L real) en vez de `strategy_lessons` (drift). Fallback al drift si flag off.
 
-El aprendizaje no compra, no vende y no ejecuta ordenes en cuenta real. Hasta Phase 5 todo es simulado. Phase 5 conecta a demo MT5 (no real-money).
+---
 
-## Criterio de readiness (legacy v1.5.2)
+## Learning gate
 
-- `A`: setup fuerte para revisar manualmente
-- `B`: setup interesante, necesita confirmacion
-- `C`: watchlist
-- `D`: bajo interes
-- `BLOCKED`: no simular por riesgo o datos insuficientes
+`ENABLE_LEARNING_GATE=false` (NO activar, ver [[05 - Alertas y Scoring]]).
 
-Desde v2.0.0 el readiness sigue como filtro inicial, pero el **strategy router** es el que decide si crear paper trade.
+Cuando se active: para cada signal nuevo, busca features `category:`, `alert:`, `score:` y backtest historico. Si `win_rate < LEARNING_GATE_MIN_WIN_RATE` con `N >= LEARNING_GATE_MIN_SAMPLES` en `LEARNING_GATE_SINCE_DAYS`, BLOQUEA.
 
-## Status values de paper_trades
+**v2.7.0 Fase 2b:** `_evaluate_gate_realized` consulta `realized_feature_lessons` si `ENABLE_REALIZED_LEARNING=true`. Drift path queda como fallback.
 
-- `open`
-- `stopped_simulated`
-- `target_2_simulated`
-- `closed_by_time` (v2.0.0)
-- `closed_by_invalidation` (v2.0.0)
-- `closed_by_strategy_exit` (v2.0.0)
-- `closed_by_kill_switch` (v2.0.0)
-- `partial_tp1` (v2.0.0, transicional)
+`FORCE_LEARNING_GATE_FOR_MEMECOIN=true` — memecoin SIEMPRE pasa por el gate.
 
-## Risk controls (v2.0.0)
+---
 
-Antes de cualquier paper trade nuevo:
+## Walk-forward backtest
 
-1. Kill switch activo? → bloquea
-2. `max_open_trades_total` alcanzado (default 5)? → bloquea
-3. `max_open_trades_{category}` alcanzado (3 stock / 4 forex / 2 gold)? → bloquea
-4. `max_total_risk_pct` excedido (default 6%)? → bloquea
-5. `daily_pnl < -max_daily_drawdown_pct` (default 3%)? → activa kill switch automatico
+`ENABLE_WALK_FORWARD_BACKTEST=true` (activo).
 
-Default `risk_per_trade_pct=1.0%`. Safety cap a 10% en `calculate_position_size` (v2.1.0).
+Settings:
+- `WALK_FORWARD_TRAIN_DAYS=14`
+- `WALK_FORWARD_TEST_DAYS=7`
+- `WALK_FORWARD_SLIDE_DAYS=1`
+- `WALK_FORWARD_MIN_TRAIN_SAMPLES=10`
+
+Cada ciclo: entrena reglas en ventana de 14 dias, valida en siguientes 7, desliza 1 dia. Output en `walk_forward_results`.
+
+Util para: detectar reglas que ganan in-sample pero no out-of-sample (overfitting).
+
+---
+
+## Backtester
+
+`backtest_strategy(repository, filter_features, horizon_hours, since_days, category)` — backtest historico por features. Output: BacktestResult con `sample_count`, `win_rate`, `avg_return_pct`, `median_return_pct`, `avg_mfe_pct`, `avg_mae_pct`, `max_drawdown_pct`, `sharpe_approx`, `equity_curve`.
+
+`rank_top_strategies(...)` — rankea features por sharpe + win_rate + sample_count.
+
+Usado por `/backtest`, `/gate_preview`, scripts diagnostic.
+
+---
+
+## Horizon evaluator
+
+`HORIZONS = (1, 6, 24, 168)` horas. Cada alert se evalua a esos horizonts.
+
+Util para: detectar que strategies son momentum (mejor a 1-6h) vs swing (mejor a 24-168h).
+
+---
+
+## Lessons separadas swing vs scalping
+
+Decision v2.6.0: scalping outcomes van a category `{cat}_scalping`:
+- swing forex → `forex`
+- scalping forex → `forex_scalping`
+
+No mezclan. Porque:
+- Scalping cierra al close del trade (no por horizon)
+- Tiempo de vida 10s-3min vs swing 1-48h
+- Aprenden distinto
+
+---
+
+## v2.7.0 - realized-R como senal principal
+
+> [!success] Decision arquitectonica
+> Antes el learning aprendia del **drift** (cambio de precio entre alerta y horizonte fijo). Ahora aprende del **P&L realizado** de paper_trades cerrados (con direccion correcta, partial close, neto de costos).
+
+Ver [[18 - Realized R y Aprendizaje Honesto]] para detalle de la implementacion.
+
+---
+
+## Comandos relacionados
+
+- `/aprendizaje` — lessons swing y scalping separadas
+- `/horizontes SIMBOLO` — performance por horizonte
+- `/backtest` — backtest historico
+- `/gate_preview` — preview de impacto si activas gate
+- `/expectancy` — strategy_performance (realized-R) con LIVE/SHADOW
+- `/entrenar` — fuerza un learning cycle
+
+---
+
+## Links relacionados
+
+- [[17 - Promotion Gate y Cost Model]] - como se conecta al trading
+- [[18 - Realized R y Aprendizaje Honesto]] - Fase 2b detail
+- [[05 - Alertas y Scoring]] - como impacta el scoring
+- [[13 - Comandos Telegram]] - comandos de learning
+- [[20 - Schema de Base de Datos]] - tablas

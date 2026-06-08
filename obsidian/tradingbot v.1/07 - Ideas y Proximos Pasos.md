@@ -1,104 +1,144 @@
+---
+tags: [roadmap, ideas, futuro]
+version: v2.9.1
+updated: 2026-06-04
+---
+
 # Ideas y Proximos Pasos
 
-## Estado actual (v2.3.0)
+> [!info] Estado actual v2.9.1
+> Bot mide la verdad neta de costos + tiene la herramienta de edge sliceado (`/edge`, v2.8.0) y el andamiaje ML (XGBoost dormido, v2.9.0). Toda estrategia sigue R negativo: falta **DATA**, no codigo. Phase 6+ requiere ≥1 strategy con R+ neto. Real-money bloqueado.
 
-Phase 4 cerrada. 197 tests verdes. El bot ya tiene:
-- Strategy router con 5 estrategias (breakout + mean_reversion + momentum + news_catalyst + forex_session_breakout)
-- Portfolio manager + risk manager + position sizer
-- Lifecycle manager con MFE/MAE/trailing/time exit/partial close
-- **MT5 reader extendido**: symbol_info, validate_symbol, pip_value real, historical_range. Cuenta demo ICMarkets disponible.
-- **Walk-forward backtester** out-of-sample (detecta curve-fitting). Persiste en walk_forward_results.
-- **Data quality monitor**: gaps, staleness, collector failures. Persiste en data_quality_log.
-- **CSV export** para outcomes/paper_trades/horizons/walk_forward.
-- Comandos Telegram nuevos: `/mt5_status`, `/data_quality`, `/walk_forward`, `/export_csv`.
-- Forex/oro collector con alertas Telegram activadas (caps separados)
-- Macro context completo: sesiones FX + regime (VIX/DXY/SPY) + calendario economico (ForexFactory)
-- Multi-timeframe analysis (M15 + H1) con confluence score
-- Learning engine con horizons + backtester + learned weights + learning gate
-- Claude API integration (Haiku 4.5) soft-fail para razonamiento sobre noticias + preguntas naturales en Telegram
-- Security hardening (settings repr mascarado, safe_path, log redactor, safe_json, deps pinneadas)
-- Packages `MetaTrader5 5.0.5735` y `anthropic 0.103.1` instalados.
+---
 
-## Roadmap pendiente
+## Pendientes inmediatos (dias)
 
-### Phase 3 — Forex price-action + dashboard avanzado
+> [!todo] Lado del usuario (v2.9.1)
+> 1. **Aplicar `.env`**: `ENABLE_STOCK_TELEGRAM=false` + `ENABLE_MEMECOIN_TELEGRAM=true` + `APP_VERSION=v2.9.1`.
+> 2. **Arrancar** desde la carpeta del proyecto con el python del venv (`.\.venv\Scripts\python.exe main.py`), MT5 abierto+logueado. Chequear `/health`, `/ml_status` (dira DORMIDO), `/edge`.
+> 3. **Considerar sacar gold de `DEMO_ALLOWED_SYMBOLS`** (XAUUSD,GOLD): es la categoria mas toxica (-2.79R, 0/12 wins) y con n<30 el gate aun la deja ejecutar a demo.
+> 4. **Dejar correr** para juntar muestra limpia (lo unico que mueve la aguja del edge).
 
-- Modulo de analisis forex-especifico: S/R diarios, breakouts con session filter (London/NY), calendario economico (NFP/FOMC/CPI).
-- Activar alertas Telegram para forex/gold cuando el modulo este listo.
-- Position sizing con pip values y spreads reales de MT5.
-- Heatmaps return × horizon × hour-of-day.
-- Drilldown per alert.
-- Cohort comparison (con/sin IA Pro).
-- Multi-timeframe confirmation (M5+H1+H4).
-- VIX y DXY collectors para contexto macro.
+---
 
-### Phase 3.5 — LLM integration (Claude API)
+## Roadmap corto (semanas)
 
-- Integrar Anthropic Claude API en el bot.
-- El bot manda noticias, contexto y catalizadores → Claude devuelve analisis razonado en texto.
-- Reformula reasons de alerta con razonamiento cualitativo.
-- Permite preguntas naturales en Telegram ("por que abriste NVDA?").
-- Esto convierte el "AI" del nombre en AI real.
-- Costo: ~$10-30 USD/mes segun uso.
+### v2.7.1 / v2.7.x
 
-### Phase 4 — MT5 demo READ-ONLY validation
+- ~~**Slice `strategy_performance` por sesion**~~ ✅ HECHO en v2.8.0 (`strategy_performance_sliced` + `/edge` + gate sliceado opt-in). Pendiente: vigilar si algun slice cruza n>=30 con R+ solido.
+- ~~**Capa ML**~~ ✅ HECHO en v2.9.0 (XGBoost, dormido). **PROXIMO PASO DE MAYOR VALOR: capturar `rsi`/`macd`/`atr` al crear cada trade** — hoy NO se persisten (quedan NaN), el ML esta casi ciego sin features tecnicas reales.
+- **Heartbeat diario a Telegram** con expectancy + tags LIVE/SHADOW (observabilidad).
+- **Calibrar cost model** con fills reales de `demo_orders` (no defaults teoricos).
+- **Auto-tune scalping params** segun observacion (SL/TP pips, lookback bars).
 
-- Validar conexion MT5 con cuenta demo real.
-- Data quality monitor (gap detection, collector failure alerts).
-- CSV export de outcomes para analisis externo.
-- Walk-forward backtester sobre las 4 strategies (validacion out-of-sample).
+### v2.7.x — Session-aware lessons
 
-### Phase 5 — MT5 demo ACTIVE trading (autorizado por usuario 2026-05-18)
+Aprender que strategy gana en que sesion (London/NY/Asian) y regimen (risk_on/off). Hoy `current_session` y `regime` se computan pero no entran al feature set de scoring.
 
-- Primera fase donde `order_send(account_type='demo')` esta permitido.
-- Kill-switch ya implementado, max drawdown daily ya implementado, position sizing ya implementado, mandatory SL en todos los trades, dry-run flag adicional.
-- Real-money trading sigue prohibido hasta nueva autorizacion.
+---
 
-### Phase 6 — Strategy evolution (concepto del usuario 2026-05-19)
+## Roadmap medio plazo (1-3 meses)
 
-Aplicar "selección natural" a las estrategias:
+### Phase 6 — Strategy Evolution
 
-- Cada strategy trade en demo durante 30+ dias.
-- Fitness se calcula (Sharpe + win_rate + max drawdown).
-- Estrategias con fitness bajo durante 3 periodos seguidos se desactivan.
-- Estrategias con drawdown > 15% se reducen capital al 50%.
-- Periodicamente se generan variantes con mutaciones de parametros (ej. `breakout_v2` con ATR multiplier distinto).
-- Compiten contra las originales.
+> [!warning] Bloqueada hasta tener ≥1 strategy con R+ neto
+> Phase 6 = mutacion automatica de parametros con base teorica + fitness sharpe + win_rate + drawdown. Sin una sola strategy profitable, evolution no tiene desde donde partir.
 
-Protecciones contra overfitting:
-- Min sample size 50+ trades antes de evaluar.
-- Siempre 1 estrategia activa como floor (no all-or-nothing).
-- Variantes con base teorica, no random.
+Precondiciones:
+- ≥3 meses de outcomes scalping limpios (post v2.7.0)
+- ≥1 strategy con R+ neto consistente
+- Cost model calibrado con fills reales
 
-## Mejoras de datos
+### Recalibracion de outcomes
 
-- holders (cripto)
-- liquidez bloqueada (cripto)
-- contratos verificados (cripto)
-- redes sociales
-- volumen por exchanges
-- eventos de noticias
-- calendario economico (forex/stocks)
-- VIX y DXY (macro)
+Los `OUTCOME_WIN_RETURN_*_PCT` actuales (memecoin +30%, stock +5%) son muy estrictos: casi nada hit eso, aunque avg_return sea positivo. Hay que recalibrar a algo mas realista (memecoin +10-15%, stock +1.5%) cuando haya data limpia.
 
-## Mejoras de scoring
+### Activar learning_gate
 
-- Pesos aprendidos: ✅ shipped en v1.7.0
-- Series historicas por pool
-- Comparacion contra promedio movil
-- Deteccion de wash trading
-- Ajuste por market cap
+Hoy `ENABLE_LEARNING_GATE=false`. Tras recalibrar OUTCOME_WIN_RETURN_*, chequear con `/gate_preview`. Si el balance bloqueados/pasa es razonable, activar.
 
-## Seguridad
+---
 
-- Auditoria automatica de archivos: ✅ shipped en v2.1.0
-- Rotacion recomendada de tokens: regla operativa, sin codigo
-- Log redactor: ✅ shipped en v2.1.0
-- Cifrado at-rest del SQLite: queda para futuro si lo pide el usuario
+## Roadmap largo (3+ meses)
 
-## Inteligencia avanzada
+### Phase 7 — Collector RPC blockchain ($30-200/mes)
 
-- Phase 3.5: Claude API (mas urgente)
-- ML clasico (XGBoost) prediciendo win/loss: futuro, requiere 3+ meses de data
-- Deep learning: NO recomendado para retail
-- Reinforcement learning: NO recomendado
+Hoy `holder_concentration` y `liquidity_locked` son `None` para memecoin (placeholder). Phase 7 conecta a RPC blockchain (Alchemy, QuickNode, etc.):
+- Holder concentration real (top 10 holders %)
+- Liquidity locked (lock period, unlock date)
+- Smart money tracking (wallets de alta perfomance)
+
+Costo: $30-200/mes segun nivel de Alchemy/QuickNode.
+
+### Phase 8 — Multi-timeframe
+
+Hoy: M1 scalping + ciclo de 60s para swing. Agregar:
+- M5 para confirmar scalping entries
+- H4 para context de swing
+- D1 para regimen macro
+
+Cambios:
+- `mt5_reader.get_rates` con multiple timeframes
+- `pattern_analyzer` con confluence multi-tf (mas estricto)
+
+### Phase 9 — News/sentiment real-time
+
+Hoy: Yahoo RSS (lento, a veces 500). Agregar:
+- X (Twitter) API ($100/mes) — sentiment per ticker
+- Reddit PRAW — sentiment de subreddits financieros
+- Investing.com / Benzinga — earnings calendars + tier de noticias
+
+### Phase 10 — Real-money trading
+
+> [!danger] BLOQUEADO
+> Requiere:
+> - 3+ meses de demo estable (sharpe>1, win_rate>50%, maxDD<10%)
+> - Autorizacion explicita NUEVA del usuario
+> - Auditoria de seguridad final
+> - Pequeno capital de prueba primero ($500-1000)
+>
+> Hasta entonces, `ENABLE_REAL_TRADING=false` HARDCODED.
+
+---
+
+## Ideas exploratorias (no priorizadas)
+
+- **Sentiment Bear/Bull index** custom (combinacion de VIX + put/call ratio + news sentiment)
+- **Correlation matrix** entre symbols para detectar regimen
+- **Order flow heuristics** via MT5 ticks (volumen relativo, spread anomaly)
+- **Strategy ensembles** (combinar 2+ strategies para signal robusto)
+- **Dashboard mobile** (Streamlit responsive o app simple)
+
+---
+
+## NO hacer (decidido)
+
+- **ML profundo** (LSTM, transformers) — sobre-ingenieria que casi nunca paga en retail
+- **Reinforcement Learning** — fragil para trading
+- **Cifrado at-rest del SQLite** — opcional, no urgente
+- **Logs a archivo con rotacion** — stderr suficiente
+- **TradingView integration** — duplica data que ya tenemos
+- **Webhooks externos** — out of scope
+- **Activar learning_gate ahora** — preview revelo bloquearia todo
+
+---
+
+## La verdad de fondo (post v2.7.0)
+
+> [!quote] Insight clave
+> v2.7.0 hace que el bot (1) mida la verdad neta de costos y (2) no ejecute losers probados. **NO crea edge — eso sigue siendo el problema dificil (datos + research).**
+
+Encontrar edge requiere:
+1. Data limpia post-quarantine de artifacts (Fix A v2.7.0)
+2. Slice por sesion/regimen para encontrar bolsillos +R
+3. Iterar sobre strategies + parametros (eventualmente Phase 6)
+4. Cost model calibrado con realidad MT5 demo
+
+---
+
+## Links relacionados
+
+- [[14 - Estado Actual v2.7.0]] - donde estamos hoy
+- [[15 - Estrategias]] - stats actuales por strategy
+- [[17 - Promotion Gate y Cost Model]] - como medimos hoy
+- [[18 - Realized R y Aprendizaje Honesto]] - Fase 2b

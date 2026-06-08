@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "04 - Configuracion Operativa.md",
+                "file": "13 - Comandos Telegram.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "04 - Configuracion Operativa"
+              "title": "13 - Comandos Telegram"
             }
           }
         ]
@@ -94,7 +94,6 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "04 - Configuracion Operativa.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -104,7 +103,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Enlaces entrantes de 04 - Configuracion Operativa"
+              "title": "Enlaces entrantes"
             }
           },
           {
@@ -113,12 +112,11 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "04 - Configuracion Operativa.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "Enlaces salientes de 04 - Configuracion Operativa"
+              "title": "Enlaces salientes"
             }
           },
           {
@@ -156,13 +154,12 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "04 - Configuracion Operativa.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Esquema de 04 - Configuracion Operativa"
+              "title": "Esquema"
             }
           }
         ]
@@ -185,16 +182,38 @@
   },
   "active": "19209f5ab1fcf1a2",
   "lastOpenFiles": [
-    "09 - Memoria Automatica.md",
-    "06 - Telegram Assistant.md",
-    "03 - Versiones y Cambios.md",
-    "08 - Bitacora de Aprendizaje.md",
-    "02 - Reglas de Seguridad.md",
     "01 - Cerebro del Proyecto.md",
-    "00 - Indice.md",
-    "Bienvenido.md",
-    "07 - Ideas y Proximos Pasos.md",
+    "06 - Pendientes.md",
+    "23 - Fases del Proyecto.md",
     "05 - Alertas y Scoring.md",
-    "04 - Configuracion Operativa.md"
+    "22 - Setup y Operacion.md",
+    "21 - Decisiones Arquitectonicas.md",
+    "20 - Schema de Base de Datos.md",
+    "19 - Arquitectura del Sistema.md",
+    "18 - Realized R y Aprendizaje Honesto.md",
+    "17 - Promotion Gate y Cost Model.md",
+    "17 - Promotion Gate y Cost Model.md.tmp.11684.6b44c1388d4c",
+    "16 - Bugs Resueltos.md",
+    "16 - Bugs Resueltos.md.tmp.11684.4d23be472808",
+    "15 - Estrategias.md",
+    "13 - Comandos Telegram.md.tmp.11684.d7519f5a32bd",
+    "10 - Learning Engine.md.tmp.11684.91bcf6a41a3d",
+    "03 - Versiones y Cambios.md.tmp.11684.da23f11db986",
+    "02 - Reglas de Seguridad.md.tmp.11684.a723896c6820",
+    "14 - Estado Actual v2.7.0.md",
+    "00 - Indice.md.tmp.11684.ed0637528665",
+    "06 - Telegram Assistant.md",
+    "00 - Indice.md",
+    "16 - Actualizacion Obsidian v2.6.9 - 2026-05-30.md",
+    "03 - Versiones y Cambios.md",
+    "12 - Guia de Uso.md",
+    "14 - Estado Actual v2.6.0.md",
+    "11 - Reporte Semanal.md",
+    "10 - Learning Engine.md",
+    "04 - Configuracion Operativa.md",
+    "07 - Ideas y Proximos Pasos.md",
+    "08 - Bitacora de Aprendizaje.md",
+    "09 - Memoria Automatica.md",
+    "02 - Reglas de Seguridad.md"
   ]
 }

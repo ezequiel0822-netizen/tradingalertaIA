@@ -1,100 +1,127 @@
+---
+tags: [telegram, assistant, comandos]
+version: v2.7.0
+updated: 2026-05-30
+---
+
 # Telegram Assistant
 
-## Version
+> [!info] Activo desde v1.3
+> Mejorado iteradamente. Hoy soporta **40+ comandos** organizados en 6 areas: estado, demo trading, scalping, modo, analisis manual, learning.
 
-Activo desde `v1.3`; mejorado iteradamente:
-- `v1.5` cupos/descartes
-- `v1.5.1` IA Pro
-- `v1.5.2` Learning Engine
-- `v1.6.0` horizons + backtest
-- `v2.0.0` trader engine (portfolio, halt, strategies)
-- `v2.1.0` security hardening
-- `v2.2.0` forex price-action + Claude API integration (fallback "no entendi" interpreta preguntas naturales)
-- `v2.3.0` Phase 4: `/mt5_status`, `/data_quality`, `/walk_forward`, `/export_csv`
-- `v2.4.0` Phase 4.5: `/mode` (alerts_only|trader|hybrid). Memecoin hunter mejorado + alertas Telegram re-activadas.
+---
 
-## Tipo
+## Que hace
 
-Asistente local basado en reglas + SQLite. Desde v2.2.0 soporta integracion opcional con Claude API (Haiku 4.5) — soft-fail si no esta configurado.
+- Lee mensajes del user via Telegram Bot API (`getUpdates`)
+- Despachador (`BasicTelegramAssistant.handle`) decide que metodo invocar
+- Devuelve string formateado
+- `TelegramAssistantPoller` se llama en cada ciclo del bot (poll `TELEGRAM_ASSISTANT_MAX_UPDATES=10` updates por ciclo)
 
-Cuando `ENABLE_CLAUDE_INTEGRATION=true` y `ANTHROPIC_API_KEY` esta presente:
-- Pregunta natural en Telegram (sin slash) → Claude interpreta y mapea a comando o responde directo.
-- En `/pro SIMBOLO` y alertas, las reasons se enriquecen con sintesis Claude.
+---
 
-## Comandos
+## Aliases por defecto
 
-```text
-# Info y control basico
-/help
-/status
-/cupos
-/config
+Cada comando suele tener varios aliases (con y sin slash, en espanol). Ej:
+- `/aprendizaje`, `aprendizaje`, `que aprendiste`, `/learning` → `learning_message()`
 
-# Tokens y alertas
-/top
-/top_memecoins
-/top_stocks
-/alertas
-/descartes
-/analiza NVDA
-/analiza 0x...
+---
 
-# Inteligencia
-/noticias NVDA
-/filings NVDA
-/patron NVDA
-/pro NVDA
+## Areas de comandos
 
-# Aprendizaje
-/aprendizaje
-/paper
-/entrenar
-/horizontes NVDA
-/backtest [24h] [features...]
+| Area | Comandos clave |
+|---|---|
+| **Estado** | `/health`, `/status`, `/portfolio`, `/posiciones`, `/cupos` |
+| **Demo trading** | `/demo_candidates`, `/demo_prepare ID`, `/confirm_demo_trade ID`, `/demo_positions`, `/demo_close_all`, `/demo_halt` |
+| **Scalping** | `/scalping_on`, `/scalping_off`, `/scalping_status`, `/scalping_halt`, `/scalping_resume`, `/scalping_stats` |
+| **Modo** | `/mode hybrid`, `/mode swing_only`, `/mode scalping_only`, `/mode alerts_only` |
+| **Kill switch** | `/halt`, `/resume_trading`, `/pausar`, `/reanudar` |
+| **Analisis manual** | `/analiza SIMBOLO`, `/noticias SIMBOLO`, `/filings SIMBOLO`, `/patron SIMBOLO`, `/pro SIMBOLO` |
+| **Learning** | `/aprendizaje`, `/horizontes SIMBOLO`, `/backtest`, `/strategies`, `/gate_preview`, **`/expectancy`** (v2.7.0) |
+| **CSV** | `/export_csv` |
+| **Otros** | `/help`, `/ayuda`, `/start`, `/top`, `/top_memecoins`, `/top_stocks`, `/alertas`, `/descartes`, `/paper`, `/entrenar`, `/config` |
 
-# Trader engine (v2.0.0+)
-/portfolio
-/posiciones
-/halt [horas]
-/resume_trading
-/strategies
+Para detalle completo de cada comando ver [[13 - Comandos Telegram]].
 
-# Phase 4 (v2.3.0)
-/mt5_status
-/data_quality
-/walk_forward STRATEGY [dias] [categoria]
-/export_csv [outcomes|trades|horizons|walk_forward]
+---
 
-# Phase 4.5 (v2.4.0)
-/mode                  # muestra modo activo
-/mode alerts_only      # solo alertas, sin auto-trading
-/mode trader           # default, decide y abre paper trades
-/mode hybrid           # phase 5+ requerirá confirmación; hoy = trader
+## Commands clave v2.7.0
 
-# Pausa global
-/pausar
-/reanudar
+### `/expectancy`
+
+Muestra `strategy_performance` (P&L realizado neto de costos en R) con tags **LIVE/SHADOW** del promotion gate.
+
+Output:
+```
+[SHADOW] unknown/stock:                n=32  avgR=-0.039
+[LIVE  ] forex_session_breakout/forex: n=24  avgR=-0.512  (arts_excl=339)
+[LIVE  ] momentum/forex:               n=22  avgR=-0.657
+...
 ```
 
-## Comportamiento
+`LIVE` = puede mandar a MT5 demo. `SHADOW` = bloqueada por gate, paper-only.
 
-- Solo responde al chat autorizado (`TELEGRAM_CHAT_ID`).
-- Puede explicar datos guardados.
-- Puede pausar/reanudar alertas automaticas.
-- Puede activar/liberar el kill switch del trader engine (`/halt`, `/resume_trading`).
-- Puede mostrar portfolio, posiciones abiertas, estrategias activas.
-- Reportes automaticos: cuando el bot abre o cierra un paper trade, manda mensaje al chat.
-- NO puede operar mercados reales.
+### `/gate_preview` (v2.6.9)
 
-## Reportes automaticos (v2.0.0+)
+Preview del impacto si activas `ENABLE_LEARNING_GATE=true`. Muestra por feature: samples, win_rate, avg_return, decision PASS/BLOCK.
 
-Cuando `ENABLE_TRADE_ACTION_REPORTS=true`, el bot manda:
+Aliases: `/preview_gate`, `/learning_gate`, `preview gate`
 
-- Al abrir: "🟢 Abri long EURUSD (breakout, conf 78). Entry/SL/TPs. Size USD. Simulado."
-- Al cerrar: "🔴 Cerre NVDA (stopped). P&L -1.2%. MFE +0.8%/MAE -1.5%."
+---
 
-## Pendientes
+## Auto-confirm path
 
-- Phase 3.5: integrar Claude API para preguntas naturales y analisis cualitativo.
-- Resumir semanalmente que filtros funcionan mejor.
-- Conectar memoria automatica con aprendizajes manuales del usuario.
+Con `ENABLE_AUTO_CONFIRM_DEMO=true`, el flujo es:
+
+1. Bot detecta signal apto para forex/gold
+2. Crea paper_trade
+3. `_try_prepare_demo_order` → crea `demo_trade_request`
+4. **Promotion gate (v2.7.0)** valida `should_execute_live` → si SHADOW, frena aqui
+5. `_auto_execute_demo_request` llama `trader.send_prepared_request`
+6. Crea `demo_order` row
+7. Updatea `paper_trade.size_notional` con MT5 real (v2.6.8)
+8. Notifica Telegram "Auto-orden demo enviada"
+
+---
+
+## Manual confirm path
+
+Con `ENABLE_AUTO_CONFIRM_DEMO=false`:
+
+1-3. Igual al auto path
+4. Notifica Telegram "Orden demo MT5 lista para confirmar / ID: N / /confirm_demo_trade N"
+5. User manda `/confirm_demo_trade N` desde Telegram
+6. Ejecuta `_auto_execute_demo_request` (mismo backend)
+7-8. Igual al auto path
+
+`DEMO_TRADE_REQUEST_TTL_MINUTES=5` — si el user no confirma en 5 min, la request expira.
+
+---
+
+## Notifications proactivas (sin pedirlas)
+
+El bot manda mensajes proactivos cuando:
+- Auto-orden demo enviada / fallida
+- Kill switch dispara
+- Scalping heartbeat cada N trades (`SCALPING_HEARTBEAT_EVERY_N_TRADES=10`)
+- Alertas agrupadas por categoria (cada ciclo)
+- Trade abierto / cerrado (`ENABLE_TRADE_ACTION_REPORTS=true`)
+
+---
+
+## Disclaimer estandar
+
+Todas las respuestas relevantes terminan con:
+```
+No es recomendacion financiera. Revisar manualmente.
+```
+
+Definido como constante `DISCLAIMER` en `command_handler.py`.
+
+---
+
+## Links relacionados
+
+- [[13 - Comandos Telegram]] - referencia COMPLETA de los 40+ comandos
+- [[17 - Promotion Gate y Cost Model]] - `/expectancy` detail
+- [[10 - Learning Engine]] - `/aprendizaje`, `/horizontes`, `/backtest`
