@@ -614,13 +614,14 @@ Chains: {", ".join(self.settings.chains_to_monitor)}
             f"Rendimiento desde {since} — {self.settings.app_version}",
             "Solo trades EJECUTADOS a MT5 demo y no-artifact (los que tocaron el balance).",
             "",
-            f"Trades: {summ.trades} ({summ.wins} ganados, {summ.losses} perdidos)",
+            f"Trades: {summ.trades} ({summ.wins} ganados, {summ.losses} perdidos, {summ.scratches} neutros)",
             f"Win rate: {summ.win_rate * 100:.1f}%",
-            f"R neto (neto de costos): {summ.net_r:+.2f}",
-            f"Impacto en la cuenta: {summ.account_pct:+.2f}%",
+            f"R neto (riesgo-normalizado, neto de costos modelados): {summ.net_r:+.2f}",
+            f"Impacto en la cuenta (P&L real / balance): {summ.account_pct:+.2f}%",
             "",
             "Nota: el balance real del demo NO se altera; esto mide solo el periodo "
-            "post-correccion del bug. Muestra chica: NO prueba edge.",
+            "post-correccion del bug. 'R neto' descuenta un costo modelado y puede diferir "
+            "del 'impacto' (P&L crudo, como lo registro MT5). Muestra chica: NO prueba edge.",
             "",
             DISCLAIMER,
         ]

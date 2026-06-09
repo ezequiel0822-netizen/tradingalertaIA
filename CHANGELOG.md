@@ -12,7 +12,7 @@ Hallazgo (read-only sobre la DB viva): limpio de artifacts, los trades ejecutado
 - Settings: `PERFORMANCE_BASELINE_DATE=2026-06-03` (default; ~4 dias post-correccion, configurable; vacio = desde el inicio). Sincronizado en `test_score`/`test_alert_rules`. app_version -> v3.3.0.
 - `tests/test_performance.py` (+9: filtro por baseline, exclusion de no-ejecutados y artifacts, win/loss y R neto, account_pct USD, baseline vacio, costo reduce R, balance 0 seguro, dispatch + formato del comando).
 
-515 -> **524 verdes**. Solo medicion read-only; no toca ejecucion ni real-money (`ENABLE_REAL_TRADING=false` hardcoded).
+515 -> **527 verdes** (incluye +3 de los fixes del code review: ContinuousLearner gateado tambien en enable_llm_advisor + cap por INTENTOS al LLM, y scratch_eps en /performance). Solo medicion read-only; no toca ejecucion ni real-money (`ENABLE_REAL_TRADING=false` hardcoded).
 
 ## Trading Alert AI v3.2.0
 

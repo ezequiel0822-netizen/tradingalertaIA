@@ -25,6 +25,7 @@ class PerformanceSummary:
     trades: int = 0
     wins: int = 0
     losses: int = 0
+    scratches: int = 0
     win_rate: float = 0.0
     net_r: float = 0.0
     account_pct: float = 0.0  # impacto USD / balance * 100 (mismo metodo que realized_pnl_today)
@@ -43,6 +44,7 @@ def performance_since(
     executed_ids: set[int],
     balance: float,
     cost_pct_by_category: dict[str, float] | None = None,
+    scratch_eps: float = 0.05,
 ) -> PerformanceSummary:
     """Resume los trades cerrados, ejecutados a MT5 y no-artifact con closed_at >=
     baseline. `executed_ids` = paper_trade_id con demo_order 'sent' (los que tocaron el
@@ -69,10 +71,15 @@ def performance_since(
             continue
         summary.trades += 1
         summary.net_r += r
-        if r > 0:
+        # win/loss/scratch por retorno realizado (neto de costos) con la MISMA scratch_eps
+        # que /expectancy (build_strategy_performance), para que trades = wins+losses+scratches
+        # y un R minusculo no cuente como win.
+        if ret > scratch_eps:
             summary.wins += 1
-        elif r < 0:
+        elif ret < -scratch_eps:
             summary.losses += 1
+        else:
+            summary.scratches += 1
         # Impacto USD en la cuenta: retorno final almacenado * notional real de MT5.
         final_ret = _to_float(t.get("unrealized_return_pct"))
         notional = _to_float(t.get("size_notional"))

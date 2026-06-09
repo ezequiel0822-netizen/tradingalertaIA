@@ -269,8 +269,9 @@ class Settings:
     # v3.3.0 — Performance desde un baseline limpio. El balance real NO se altera; el
     # comando /performance mide el % realizado de trades EJECUTADOS a MT5 y no-artifact
     # con closed_at >= esta fecha, para ver la cuenta limpia del periodo buggeado de mayo
-    # (feedback-loop / instant-kill / huerfanas, corregidos en v2.6.7-v2.7.1). Default ~4
-    # dias post-correccion (~30-may). Vacio = desde el inicio. Solo medicion, read-only.
+    # (feedback-loop / instant-kill / huerfanas, corregidos en v2.6.7-v2.7.1). Default
+    # 2026-06-03 (~4 dias tras la correccion de fines de mayo). Vacio = desde el inicio.
+    # Granularidad de fecha: incluye todo el dia del baseline. Solo medicion, read-only.
     performance_baseline_date: str
     # Phase 4 v2.3.0 — MT5 validation + walk-forward + data quality + CSV
     mt5_broker_profile: str

@@ -68,11 +68,13 @@ class ContinuousLearner:
 
     # -- gating ------------------------------------------------------------ #
     def _enabled(self) -> bool:
-        # Requiere AMBOS flags: el master y el de persistencia (sin corpus no hay
-        # agrupacion ni propuestas, asi que sin store el learner no tiene que hacer).
+        # Requiere los TRES flags: master, persistencia (sin corpus no hay agrupacion ni
+        # propuestas), y el asesor LLM (sin el, la leccion siempre seria None y el learner
+        # escanearia sin producir nada). Asi queda IDLE limpio si falta cualquiera.
         return bool(
             getattr(self.settings, "enable_continuous_learner", False)
             and getattr(self.settings, "store_trade_lessons", False)
+            and getattr(self.settings, "enable_llm_advisor", False)
         )
 
     def _reasoner_or_none(self) -> Any | None:
@@ -103,7 +105,10 @@ class ContinuousLearner:
             return summary
 
         for trade in closed:
-            if summary.lessons_created >= self.max_per_cycle:
+            # Cap por ciclo sobre los INTENTOS al LLM (scanned), no sobre lecciones
+            # creadas: si el advisor devolviera None, igual no se dispara una tormenta de
+            # llamadas ni un rescaneo completo del fetch.
+            if summary.scanned >= self.max_per_cycle:
                 break
             try:
                 tid = trade.get("id")

@@ -116,6 +116,33 @@ def test_disabled_when_master_flag_off():
     assert repo._lessons == []
 
 
+def test_disabled_when_advisor_off():
+    # Sin enable_llm_advisor la leccion siempre seria None -> el learner queda IDLE
+    # (no escanea ni llama al LLM), en vez de rescanear el fetch entero cada ciclo.
+    repo = _FakeRepo(trades=[_win(1)])
+    reasoner = _FakeReasoner()
+    s = ContinuousLearner(
+        replace(_cl_settings(), enable_llm_advisor=False), repo,
+        reasoner=reasoner, notifier=_Notifier(),
+    ).run()
+    assert s.enabled is False
+    assert repo._lessons == []
+    assert reasoner.win_calls == []
+
+
+def test_cap_bounds_llm_attempts_even_when_no_lessons_created():
+    # Cap sobre INTENTOS, no sobre lecciones: si el reasoner devuelve None, igual no se
+    # dispara una tormenta de llamadas (a lo sumo max_per_cycle).
+    repo = _FakeRepo(trades=[_win(10), _win(11), _win(12), _win(13), _win(14)])
+    reasoner = _FakeReasoner(win=None)  # nunca produce leccion
+    s = ContinuousLearner(
+        _cl_settings(), repo, reasoner=reasoner, notifier=_Notifier(), max_per_cycle=2
+    ).run()
+    assert s.lessons_created == 0
+    assert len(reasoner.win_calls) == 2  # acotado al cap, no 5
+    assert s.skipped_no_text == 2
+
+
 def test_disabled_when_store_flag_off():
     repo = _FakeRepo(trades=[_win(1)])
     reasoner = _FakeReasoner()

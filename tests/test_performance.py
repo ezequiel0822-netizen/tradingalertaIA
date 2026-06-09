@@ -68,6 +68,14 @@ def test_counts_wins_losses_net_r_and_win_rate():
     assert s.net_r > 0  # +3 y -2 brutos -> +1 neto aprox
 
 
+def test_near_zero_return_is_scratch():
+    # Retorno minusculo (+0.01%) -> scratch, no win (misma scratch_eps que /expectancy).
+    t = _t(1, entry=100.0, latest=100.01, ostop=99.0, closed_at="2026-06-05T10:00:00+00:00")
+    s = performance_since([t], BASE, executed_ids={1}, balance=100000.0)
+    assert s.trades == 1 and s.wins == 0 and s.losses == 0 and s.scratches == 1
+    assert s.trades == s.wins + s.losses + s.scratches  # cuadra
+
+
 def test_account_pct_from_usd_pnl():
     # win: notional 10k * +3% = +300 ; loss: 10k * -2% = -200 -> neto +100 / 100k = +0.1%
     s = performance_since([_win(1), _loss(2)], BASE, executed_ids={1, 2}, balance=100000.0)
@@ -117,8 +125,8 @@ def test_performance_command_dispatch_and_format():
     bot = BasicTelegramAssistant(replace(_settings(), performance_baseline_date=BASE), repo)
     msg = bot.handle("/performance")
     assert f"Rendimiento desde {BASE}" in msg
-    assert "Trades: 2" in msg
-    assert "Impacto en la cuenta:" in msg
+    assert "Trades: 2 (1 ganados, 1 perdidos, 0 neutros)" in msg
+    assert "Impacto en la cuenta" in msg
     assert "NO prueba edge" in msg  # disclaimer de honestidad presente
     # alias en espanol
     assert "Rendimiento desde" in bot.handle("/rendimiento")
