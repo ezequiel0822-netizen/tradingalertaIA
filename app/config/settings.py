@@ -266,6 +266,12 @@ class Settings:
     # leccion requiere enable_llm_advisor; store_trade_lessons gatea la persistencia.
     enable_continuous_learner: bool
     store_trade_lessons: bool
+    # v3.3.0 — Performance desde un baseline limpio. El balance real NO se altera; el
+    # comando /performance mide el % realizado de trades EJECUTADOS a MT5 y no-artifact
+    # con closed_at >= esta fecha, para ver la cuenta limpia del periodo buggeado de mayo
+    # (feedback-loop / instant-kill / huerfanas, corregidos en v2.6.7-v2.7.1). Default ~4
+    # dias post-correccion (~30-may). Vacio = desde el inicio. Solo medicion, read-only.
+    performance_baseline_date: str
     # Phase 4 v2.3.0 — MT5 validation + walk-forward + data quality + CSV
     mt5_broker_profile: str
     enable_walk_forward_backtest: bool
@@ -436,7 +442,7 @@ def load_settings() -> Settings:
         obsidian_vault_path = safe_obsidian
 
     return Settings(
-        app_version=os.getenv("APP_VERSION", "v3.2.0"),
+        app_version=os.getenv("APP_VERSION", "v3.3.0"),
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
         telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID"),
         dexscreener_base_url=os.getenv(
@@ -667,6 +673,7 @@ def load_settings() -> Settings:
         daily_summary_hour_utc=_get_int("DAILY_SUMMARY_HOUR_UTC", 21),
         enable_continuous_learner=_get_bool("ENABLE_CONTINUOUS_LEARNER", False),
         store_trade_lessons=_get_bool("STORE_TRADE_LESSONS", True),
+        performance_baseline_date=os.getenv("PERFORMANCE_BASELINE_DATE", "2026-06-03"),
         # Phase 4 v2.3.0
         mt5_broker_profile=os.getenv("MT5_BROKER_PROFILE", "icmarkets"),
         enable_walk_forward_backtest=_get_bool("ENABLE_WALK_FORWARD_BACKTEST", True),

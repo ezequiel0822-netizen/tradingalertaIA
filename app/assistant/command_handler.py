@@ -150,6 +150,9 @@ class BasicTelegramAssistant:
         if normalized in {"/expectancy", "expectancy", "/expectativa", "expectativa", "expectancy r"}:
             return self.expectancy_message()
 
+        if normalized in {"/performance", "performance", "/rendimiento", "rendimiento"}:
+            return self.performance_message()
+
         if normalized in {"/edge", "edge", "/edges", "/borde", "bolsillos"}:
             return self.edge_message()
 
@@ -581,6 +584,46 @@ Chains: {", ".join(self.settings.chains_to_monitor)}
         lines.extend(_render_block("SCALPING LESSONS", scalping_lessons))
         lines.append("")
         lines.append(DISCLAIMER)
+        return "\n".join(lines)
+
+    def performance_message(self) -> str:
+        """v3.3.0: /performance — rendimiento REALIZADO de trades ejecutados a MT5 (con
+        demo_order 'sent') y no-artifact, desde el baseline limpio
+        (performance_baseline_date, post-correccion de los bugs de mayo). NO altera el
+        balance real; solo recorta el periodo medido para sacar la basura del feedback-
+        loop / instant-kill / huerfanas. Honesto: el re-baseline no inventa edge."""
+        from app.learning.training_engine import _cost_map_from_settings
+        from app.portfolio.performance import performance_since
+
+        baseline = str(getattr(self.settings, "performance_baseline_date", "") or "")
+        if baseline:
+            trades = self.repository.fetch_closed_trades_since(baseline)
+        else:
+            trades = self.repository.fetch_closed_paper_trades(limit=5000)
+        executed = self.repository.fetch_executed_paper_trade_ids()
+        stored = self.repository.get_state("account_balance")
+        try:
+            balance = float(stored) if stored else float(self.settings.account_starting_balance)
+        except (TypeError, ValueError):
+            balance = float(self.settings.account_starting_balance)
+        summ = performance_since(
+            trades, baseline, executed, balance, _cost_map_from_settings(self.settings)
+        )
+        since = baseline or "el inicio"
+        lines = [
+            f"Rendimiento desde {since} — {self.settings.app_version}",
+            "Solo trades EJECUTADOS a MT5 demo y no-artifact (los que tocaron el balance).",
+            "",
+            f"Trades: {summ.trades} ({summ.wins} ganados, {summ.losses} perdidos)",
+            f"Win rate: {summ.win_rate * 100:.1f}%",
+            f"R neto (neto de costos): {summ.net_r:+.2f}",
+            f"Impacto en la cuenta: {summ.account_pct:+.2f}%",
+            "",
+            "Nota: el balance real del demo NO se altera; esto mide solo el periodo "
+            "post-correccion del bug. Muestra chica: NO prueba edge.",
+            "",
+            DISCLAIMER,
+        ]
         return "\n".join(lines)
 
     def expectancy_message(self) -> str:

@@ -11,7 +11,7 @@
 
 ## 1. Estado actual
 
-- **v3.1.0**, `origin/main`, **501 tests verdes**.
+- **v3.3.0**, **524 tests verdes**.
 - Corriendo en la Lenovo (`C:\Users\LENOVO\tradingalertaIA`, fuera de iCloud, con GPU →
   el LLM local responde rápido).
 - Operativo: MT5 demo (auto-confirm ON), lifecycle, scalping, alertas, learning, y la
@@ -26,28 +26,41 @@
 | **v2.12.0** | comandos Telegram `/market` + `/porque_perdi` |
 | **v3.0.0** | veto del ensemble Llama+Mistral en el gate (`app/intelligence/ensemble_gate.py` + `jobs._llm_ensemble_gate`, downward-only) |
 | **v3.1.0** | resumen diario por Telegram (`jobs._maybe_send_daily_summary`) |
+| **v3.2.0** | **Fase C ContinuousLearner**: leccion por trade (`app/learning/continuous_learner.py` + tabla `trade_lessons` + `reasoner.analyze_win`); agrupa lecciones y PROPONE (no aplica) |
+| **v3.3.0** | Performance desde baseline limpio (`app/portfolio/performance.py` + comando `/performance`); el −11% fue el bug de mayo, limpio queda ~plano |
 
 (Detalle completo en `CHANGELOG.md`.)
 
 ## 3. ⚠️ LA VERDAD DE FONDO (leer antes de codear)
 
-**El cuello de botella es DATA, no código.** Ninguna estrategia tiene edge aún (todas
-R-negativo neto). El LLM y el ML **filtran, explican y protegen capital — NO crean edge.**
-Lo más valioso AHORA es **dejar correr el bot para juntar muestra limpia** con los features
-técnicos que ya se persisten (v2.11.0). Sin data, las fases de abajo no rinden. No agregar
-sofisticación esperando que aparezca el edge: el edge sale de data + research.
+**El cuello de botella es DATA, no código.** Ninguna estrategia tiene edge PROBADO. La
+única +R agregada (`forex_session_breakout`/forex, +0.378R) la carga **solo el lado short
+en un régimen direccional** (shorts +1.81R n=28 vs longs −0.31R n=58; mismo patrón en gold)
+— es artefacto de régimen, no edge durable. El LLM y el ML **filtran, explican y protegen
+capital — NO crean edge.**
+
+**Sobre el −11% (corregido en v3.3.0):** ese drawdown fue sobre todo el **bug de mayo**
+(feedback-loop / instant-kill / huérfanas, ~746 artifacts 22–28 may, fixes v2.6.7–v2.7.1).
+Limpio de artifacts, los trades ejecutados suman ~−2% desde el inicio; desde el baseline
+`2026-06-03` la cuenta está **+0.17% (plana)** sobre 16 trades. O sea: **ni −11% ni
+ganador — plano, con muestra chica.** El comando `/performance` lo mide honesto.
+
+Lo más valioso AHORA sigue siendo **dejar correr el bot para juntar muestra limpia** con
+los features técnicos (v2.11.0): hoy hay **~68/400** trades con features reales (gate Fase
+D). Sin data, las fases de abajo no rinden. El edge sale de data + research, no de
+sofisticación.
 
 ## 4. Lo que FALTA (roadmap, en orden de valor)
 
-### Fase C — ContinuousLearner *(construible YA, bajo riesgo)*
+### ✅ Fase C — ContinuousLearner *(HECHO — v3.2.0)*
 - **Qué:** al cerrar cada trade, el LLM extrae una lección razonada (por qué ganó/perdió);
-  se guarda en tabla nueva `trade_lessons`; agrupa lecciones repetidas; si 10+ dicen lo
-  mismo, **propone** un ajuste para que el user apruebe (no lo aplica solo).
-- **Archivos:** `app/learning/continuous_learner.py` (NUEVO) + `db.py` (+tabla
-  `trade_lessons`) + hook en el cierre de trades (lifecycle_manager).
-- **Flags:** `ENABLE_CONTINUOUS_LEARNER=false`, `STORE_TRADE_LESSONS`.
-- **Reusar:** `reasoner.analyze_loss` ya existe; agregar `analyze_win` análogo.
-- **Riesgo:** bajo (lectura/registro; no toca ejecución).
+  se guarda en tabla `trade_lessons`; agrupa lecciones repetidas; si 10+ dicen lo
+  mismo, **propone** un ajuste por Telegram para que el user apruebe (no lo aplica solo).
+- **Implementado como job de escaneo en `run_once`** (no hook inline — hay 4 sitios de
+  cierre; un job desacoplado es más limpio), cap por ciclo, idempotente, soft-fail.
+- **Archivos:** `app/learning/continuous_learner.py` + `db.py` (tabla `trade_lessons`) +
+  `repository` helpers + `reasoner.analyze_win` + `jobs._maybe_run_continuous_learner`.
+- **Flags:** `ENABLE_CONTINUOUS_LEARNER=false` + `STORE_TRADE_LESSONS=true` (requiere ambos).
 
 ### Fase D — AdvancedPredictor *(REQUIERE DATA — no antes)*
 - **Qué:** sumar LightGBM + RandomForest al XGBoost existente, con `CalibratedClassifierCV`

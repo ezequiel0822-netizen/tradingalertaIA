@@ -581,6 +581,16 @@ class Repository:
                 ).fetchall()
         return [dict(row) for row in rows]
 
+    def fetch_executed_paper_trade_ids(self) -> set[int]:
+        """v3.3.0: set de paper_trade_id con demo_order 'sent' (ejecutados a MT5 demo —
+        los que tocaron el balance real). Para la performance desde el baseline limpio."""
+        with get_connection(self.db_path) as connection:
+            rows = connection.execute(
+                "SELECT DISTINCT paper_trade_id FROM demo_orders "
+                "WHERE status = 'sent' AND paper_trade_id IS NOT NULL"
+            ).fetchall()
+        return {int(row["paper_trade_id"]) for row in rows}
+
     def count_active_paper_trades(self) -> int:
         with get_connection(self.db_path) as connection:
             row = connection.execute(

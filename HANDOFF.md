@@ -16,7 +16,7 @@ PROYECTO: bot de trading algorítmico LOCAL en Python 3.12 (Windows, PowerShell 
 Detecta oportunidades (memecoins / acciones US / forex / oro), decide con un strategy
 router (5 swing + 2 scalping), hace paper trades y manda órdenes a MT5 demo
 (MetaQuotes-Demo). Real-money BLOQUEADO por diseño (HARDCODED).
-Estado: v3.1.0, origin/main, 501 tests verdes.
+Estado: v3.3.0, 524 tests verdes.
 
 ANTES DE TOCAR NADA leé (en el repo): CHANGELOG.md (historia completa hasta v3.1.0).
 Si los copiaste de la otra compu: CONTEXTO_MAESTRO_v2.10.0.md +
@@ -39,6 +39,10 @@ QUÉ SE CONSTRUYÓ (serie v3, todo pusheado):
 - v3.0.0: veto del ensemble Llama+Mistral en el gate (app/intelligence/ensemble_gate.py
   + jobs._llm_ensemble_gate, downward-only, opt-in OFF ENABLE_LLM_ENSEMBLE).
 - v3.1.0: resumen diario por Telegram (jobs._maybe_send_daily_summary).
+- v3.2.0: Fase C ContinuousLearner (leccion por trade -> tabla trade_lessons; agrupa y
+  PROPONE, no aplica). reasoner.analyze_win. Opt-in OFF, soft-fail, read/registro.
+- v3.3.0: comando /performance (rendimiento desde un baseline limpio post-bug de mayo;
+  no altera el balance real). El -11% fue el bug; limpio queda ~plano (+0.17% desde 3-jun).
 
 VERDAD DE FONDO: el cuello de botella es DATA, no código. Ninguna estrategia tiene edge
 aún (todas R-negativo neto). El LLM/ML filtran, explican y protegen capital — NO crean
@@ -77,4 +81,4 @@ Lo que **NO** viaja por GitHub (hay que copiarlo/instalarlo aparte):
 - **El bot corre en UNA sola máquina a la vez.** Dos máquinas contra la misma cuenta MT5
   demo = órdenes dobles y DBs divergentes. Apagá una antes de prender la otra.
 - Para correr: `cd <ruta>\tradingalertaIA` + `.\.venv\Scripts\python.exe main.py`.
-- Verificar: `/health` (versión), `/expectancy`, `/edge`, `/ml_status`, `/market`.
+- Verificar: `/health` (versión), `/expectancy`, `/edge`, `/performance`, `/ml_status`, `/market`.

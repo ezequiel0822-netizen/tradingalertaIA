@@ -1,5 +1,19 @@
 # Changelog
 
+## Trading Alert AI v3.3.0
+
+Performance desde un baseline limpio + comando `/performance`. El balance demo cayo ~11% sobre todo por el periodo buggeado de mayo (feedback-loop / instant-kill / posiciones huerfanas, ~746 artifacts entre el 22 y 28 de mayo, corregidos en v2.6.7-v2.7.1). Esto NO altera ni falsea el balance real; agrega una metrica que mide el % REALIZADO de los trades que de verdad se ejecutaron a MT5 demo (con `demo_order='sent'`) y no son artifacts, desde una fecha baseline configurable -> para ver la cuenta limpia del bug. Honesto por diseño: el re-baseline solo recorta el periodo medido, NO inventa edge (el mensaje lo dice explicito).
+
+Hallazgo (read-only sobre la DB viva): limpio de artifacts, los trades ejecutados suman ~-2% desde el inicio (no -11%); desde el baseline 2026-06-03 la cuenta esta +0.17% (plana, levemente positiva) sobre 16 trades. El R se ve fuerte (+16.7R, 69% WR) pero el impacto real es plano: lotes chicos + el mismo libro short de un regimen. Muestra chica: NO prueba edge.
+
+- `app/portfolio/performance.py` (NUEVO): `performance_since(trades, baseline_iso, executed_ids, balance, cost_pct_by_category)` -> `PerformanceSummary`. Pura/testeable. Filtra: cerrados, ejecutados a MT5 (en `executed_ids`), no-artifact, `closed_at >= baseline`. `net_r`/win-loss usan R realizado NETO de costos; `account_pct` usa el retorno final almacenado * `size_notional` / balance (misma metodologia que `realized_pnl_today` v2.7.1).
+- `app/database/repository.py`: `fetch_executed_paper_trade_ids()` (set de paper_trade_id con demo_order 'sent').
+- `app/assistant/command_handler.py`: `performance_message()` + dispatch `/performance` (aliases `/rendimiento`). Reusa `_cost_map_from_settings`.
+- Settings: `PERFORMANCE_BASELINE_DATE=2026-06-03` (default; ~4 dias post-correccion, configurable; vacio = desde el inicio). Sincronizado en `test_score`/`test_alert_rules`. app_version -> v3.3.0.
+- `tests/test_performance.py` (+9: filtro por baseline, exclusion de no-ejecutados y artifacts, win/loss y R neto, account_pct USD, baseline vacio, costo reduce R, balance 0 seguro, dispatch + formato del comando).
+
+515 -> **524 verdes**. Solo medicion read-only; no toca ejecucion ni real-money (`ENABLE_REAL_TRADING=false` hardcoded).
+
 ## Trading Alert AI v3.2.0
 
 ContinuousLearner: una leccion razonada por trade cerrado (Fase C del roadmap v3.1). Al cerrar trades, un job de escaneo en `run_once` le pide al LLM local una leccion (por que gano/perdio) y la registra en la tabla nueva `trade_lessons`; agrupa las lecciones por clave (estrategia|categoria|direccion|outcome) y, cuando 10+ comparten clave, **PROPONE** revisar esa combinacion por Telegram. NO aplica ningun cambio: el LLM sigue SUBTRACTIVO, lo mas que hace es proponer para que el humano decida. Read/registro: no toca ejecucion, ni el gate, ni `order_send`, ni real-money. Opt-in OFF + soft-fail total.
