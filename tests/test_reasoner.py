@@ -67,6 +67,13 @@ def test_analyze_loss_returns_clean_text() -> None:
     assert out and "Mal setup" in out
 
 
+def test_analyze_win_returns_clean_text() -> None:
+    proc = _FakeProc("Buen setup repetible: breakout con momentum. Repetible.")
+    r = TradingReasoner(_advisor_settings(), processor=proc)
+    out = r.analyze_win({"symbol": "EURUSD", "direction": "short", "r_multiple": 2.0})
+    assert out and "Repetible" in out
+
+
 def test_explain_setup_returns_clean_text() -> None:
     proc = _FakeProc("RSI 28 sugiere sobreventa en un rango; posible reversion.")
     r = TradingReasoner(_advisor_settings(), processor=proc)
@@ -122,6 +129,7 @@ def test_safety_invariant_advisor_exposes_no_decision() -> None:
     for forbidden in ("decide", "should_execute", "vote", "ensemble_trade_decision",
                       "reason_about_trade", "predict_win_probability"):
         assert not hasattr(r, forbidden), f"el asesor NO debe exponer {forbidden}"
-    for out in (r.assess_market(_MACRO), r.analyze_loss(_TRADE), r.explain_setup(_SETUP)):
+    for out in (r.assess_market(_MACRO), r.analyze_loss(_TRADE),
+                r.analyze_win(_TRADE), r.explain_setup(_SETUP)):
         assert out is None or isinstance(out, str)
         assert not isinstance(out, bool)

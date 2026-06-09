@@ -152,6 +152,8 @@ def _settings() -> Settings:
         ollama_second_model="mistral",
         enable_daily_summary=False,
         daily_summary_hour_utc=21,
+        enable_continuous_learner=False,
+        store_trade_lessons=True,
         mt5_broker_profile="icmarkets",
         enable_walk_forward_backtest=True,
         walk_forward_train_days=14,

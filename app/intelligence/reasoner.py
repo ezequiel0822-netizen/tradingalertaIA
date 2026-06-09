@@ -122,6 +122,35 @@ class TradingReasoner:
         )
         return self._generate(system, user, max_tokens=300)
 
+    def analyze_win(self, trade: dict[str, Any]) -> str | None:
+        """Post-mortem honesto de un trade ganador: edge repetible vs varianza.
+
+        Insumo del ContinuousLearner (Fase C). Igual que analyze_loss, solo TEXTO:
+        no da senales ni decisiones. Pide al modelo que sea esceptico de atribuir el
+        resultado a habilidad cuando pudo ser suerte."""
+        system = (
+            "Eres un coach de trading honesto. Explicas en 3-4 oraciones, en espanol, "
+            "por que un trade pudo ganar y que leccion REPETIBLE deja, sin euforia y "
+            "sin recomendaciones de compra/venta. Distingue entre 'buen setup "
+            "repetible' y 'suerte' (varianza); se esceptico de atribuir todo a "
+            "habilidad cuando la muestra es chica."
+        )
+        user = (
+            "Trade ganador:\n"
+            f"- Simbolo: {_g(trade, 'symbol')}\n"
+            f"- Direccion: {_g(trade, 'direction')}\n"
+            f"- Estrategia: {_g(trade, 'strategy_name')}\n"
+            f"- Entrada: {_g(trade, 'entry_price')}\n"
+            f"- Stop: {_g(trade, 'stop_loss')}\n"
+            f"- Resultado R: {_g(trade, 'r_multiple')}\n"
+            f"- Sesion: {_g(trade, 'session')}\n"
+            f"- RSI al entry: {_g(trade, 'rsi_entry')}\n"
+            f"- ATR%: {_g(trade, 'atr_value')}\n"
+            f"- Razon de cierre: {_g(trade, 'close_reason')}\n\n"
+            "Por que gano y que leccion repetible deja:"
+        )
+        return self._generate(system, user, max_tokens=300)
+
     def explain_setup(self, context: dict[str, Any]) -> str | None:
         """Explica un setup en lenguaje natural. Es EXPLICACION, no recomendacion."""
         system = (

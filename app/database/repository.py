@@ -509,6 +509,78 @@ class Repository:
                 ).fetchall()
         return [dict(row) for row in rows]
 
+    def insert_trade_lesson(self, lesson: dict[str, Any]) -> bool:
+        """v3.2.0 / Fase C: persiste UNA leccion por paper_trade (UNIQUE
+        paper_trade_id). Idempotente: si el trade ya tiene leccion -> no duplica y
+        devuelve False. Solo registro; no toca ninguna decision ni orden."""
+        with get_connection(self.db_path) as connection:
+            existing = connection.execute(
+                "SELECT id FROM trade_lessons WHERE paper_trade_id = ?",
+                (lesson["paper_trade_id"],),
+            ).fetchone()
+            if existing:
+                return False
+            connection.execute(
+                """
+                INSERT INTO trade_lessons (
+                    paper_trade_id, symbol, category, strategy_name, direction,
+                    outcome, r_multiple, lesson, lesson_key, created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    lesson["paper_trade_id"],
+                    lesson.get("symbol"),
+                    lesson.get("category"),
+                    lesson.get("strategy_name"),
+                    lesson.get("direction"),
+                    lesson.get("outcome"),
+                    lesson.get("r_multiple"),
+                    lesson.get("lesson"),
+                    lesson.get("lesson_key"),
+                    lesson["created_at"],
+                ),
+            )
+        return True
+
+    def fetch_trade_lesson_ids(self) -> set[int]:
+        """Set de paper_trade_id que YA tienen leccion (filtro barato de pendientes)."""
+        with get_connection(self.db_path) as connection:
+            rows = connection.execute(
+                "SELECT paper_trade_id FROM trade_lessons"
+            ).fetchall()
+        return {int(row["paper_trade_id"]) for row in rows}
+
+    def count_trade_lessons_by_key(self, lesson_key: str) -> int:
+        """Cuantas lecciones comparten la misma clave (strategy|cat|dir|outcome)."""
+        with get_connection(self.db_path) as connection:
+            row = connection.execute(
+                "SELECT COUNT(*) AS count FROM trade_lessons WHERE lesson_key = ?",
+                (lesson_key,),
+            ).fetchone()
+        return int(row["count"] if row else 0)
+
+    def fetch_trade_lessons(
+        self, lesson_key: str | None = None, limit: int = 20
+    ) -> list[dict[str, Any]]:
+        """Lecciones registradas (opcionalmente filtradas por clave), mas recientes
+        primero. Para inspeccion / comandos futuros."""
+        with get_connection(self.db_path) as connection:
+            if lesson_key:
+                rows = connection.execute(
+                    """
+                    SELECT * FROM trade_lessons WHERE lesson_key = ?
+                    ORDER BY created_at DESC LIMIT ?
+                    """,
+                    (lesson_key, limit),
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    "SELECT * FROM trade_lessons ORDER BY created_at DESC LIMIT ?",
+                    (limit,),
+                ).fetchall()
+        return [dict(row) for row in rows]
+
     def count_active_paper_trades(self) -> int:
         with get_connection(self.db_path) as connection:
             row = connection.execute(

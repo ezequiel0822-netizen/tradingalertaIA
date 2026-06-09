@@ -459,6 +459,9 @@ class TradingAlertJob:
         # v3.1.0: resumen diario por Telegram (read-only, soft-fail, gate por fecha UTC).
         self._maybe_send_daily_summary()
 
+        # v3.2.0 (Fase C): lecciones por trade + propuestas (read/registro, soft-fail).
+        self._maybe_run_continuous_learner()
+
         if self.settings.enable_price_snapshots:
             last_purge = self.repository.get_state("snapshots_last_purge")
             cutoff = minutes_ago(24 * 60)
@@ -1053,6 +1056,34 @@ class TradingAlertJob:
             lines.append("")
             lines.append(lesson)
         return "\n".join(lines)
+
+    def _maybe_run_continuous_learner(self) -> None:
+        """v3.2.0 (Fase C): al cerrar trades, extrae una leccion razonada via LLM
+        local y la registra en trade_lessons; si N lecciones comparten clave, PROPONE
+        una revision por Telegram (no la aplica). Opt-in OFF (enable_continuous_learner
+        + store_trade_lessons), soft-fail total: no toca ejecucion, gate ni order_send."""
+        if not getattr(self.settings, "enable_continuous_learner", False):
+            return
+        try:
+            from app.intelligence.reasoner import TradingReasoner
+            from app.learning.continuous_learner import ContinuousLearner
+
+            proc = (
+                self.claude_processor
+                if hasattr(self.claude_processor, "generate")
+                else None
+            )
+            reasoner = TradingReasoner(self.settings, processor=proc)
+            summary = ContinuousLearner(
+                self.settings,
+                self.repository,
+                reasoner=reasoner,
+                notifier=self.notifier,
+            ).run()
+            if summary.lessons_created or summary.proposals_made:
+                logger.info("ContinuousLearner: %s", summary)
+        except Exception:
+            logger.exception("ContinuousLearner fallo; soft-fail (no afecta el ciclo)")
 
     def _ml_gate(self, paper_trade: dict) -> tuple[bool, bool]:
         """v2.9.0: señal ML adicional para el order_send a demo. Devuelve

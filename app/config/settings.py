@@ -259,6 +259,13 @@ class Settings:
     # se mandan igual aunque Ollama este off.
     enable_daily_summary: bool
     daily_summary_hour_utc: int
+    # v3.2.0 — Fase C: ContinuousLearner. Al cerrar cada trade, el LLM local extrae una
+    # leccion razonada (analyze_win/analyze_loss) -> tabla trade_lessons; agrupa las
+    # repetidas y, si N comparten clave, PROPONE una revision por Telegram (no la aplica
+    # solo). Opt-in OFF, soft-fail, read/registro: no toca ejecucion ni el gate. La
+    # leccion requiere enable_llm_advisor; store_trade_lessons gatea la persistencia.
+    enable_continuous_learner: bool
+    store_trade_lessons: bool
     # Phase 4 v2.3.0 — MT5 validation + walk-forward + data quality + CSV
     mt5_broker_profile: str
     enable_walk_forward_backtest: bool
@@ -429,7 +436,7 @@ def load_settings() -> Settings:
         obsidian_vault_path = safe_obsidian
 
     return Settings(
-        app_version=os.getenv("APP_VERSION", "v3.1.0"),
+        app_version=os.getenv("APP_VERSION", "v3.2.0"),
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
         telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID"),
         dexscreener_base_url=os.getenv(
@@ -658,6 +665,8 @@ def load_settings() -> Settings:
         ollama_second_model=os.getenv("OLLAMA_SECOND_MODEL", "mistral"),
         enable_daily_summary=_get_bool("ENABLE_DAILY_SUMMARY", False),
         daily_summary_hour_utc=_get_int("DAILY_SUMMARY_HOUR_UTC", 21),
+        enable_continuous_learner=_get_bool("ENABLE_CONTINUOUS_LEARNER", False),
+        store_trade_lessons=_get_bool("STORE_TRADE_LESSONS", True),
         # Phase 4 v2.3.0
         mt5_broker_profile=os.getenv("MT5_BROKER_PROFILE", "icmarkets"),
         enable_walk_forward_backtest=_get_bool("ENABLE_WALK_FORWARD_BACKTEST", True),

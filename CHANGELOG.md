@@ -1,5 +1,18 @@
 # Changelog
 
+## Trading Alert AI v3.2.0
+
+ContinuousLearner: una leccion razonada por trade cerrado (Fase C del roadmap v3.1). Al cerrar trades, un job de escaneo en `run_once` le pide al LLM local una leccion (por que gano/perdio) y la registra en la tabla nueva `trade_lessons`; agrupa las lecciones por clave (estrategia|categoria|direccion|outcome) y, cuando 10+ comparten clave, **PROPONE** revisar esa combinacion por Telegram. NO aplica ningun cambio: el LLM sigue SUBTRACTIVO, lo mas que hace es proponer para que el humano decida. Read/registro: no toca ejecucion, ni el gate, ni `order_send`, ni real-money. Opt-in OFF + soft-fail total.
+
+- `app/learning/continuous_learner.py` (NUEVO): `ContinuousLearner.run() -> ContinuousLearnerSummary`. Escaneo (no hook inline — hay 4 sitios de cierre distintos, un job desacoplado es mas limpio): toma cerrados no-artifact sin leccion, clasifica win/loss por R realizado, llama `analyze_win`/`analyze_loss`, persiste. Cap por ciclo (`DEFAULT_MAX_PER_CYCLE=3`) acota costo/latencia LLM. Idempotente (UNIQUE `paper_trade_id`). Propuesta deduplicada via `bot_state` (`cl_proposed::{key}`) para no repetir cada ciclo. Soft-fail por trade: uno que falla no descarta el resto.
+- `app/intelligence/reasoner.py`: +`analyze_win(trade)` (espejo de `analyze_loss`, solo TEXTO; pide al modelo distinguir 'setup repetible' de 'suerte'). No rompe el invariante de seguridad (no expone metodos de decision).
+- `app/database/db.py`: tabla `trade_lessons` (+ indice `idx_trade_lessons_key`) via el `CREATE TABLE IF NOT EXISTS` del schema. `app/database/repository.py`: `insert_trade_lesson` (idempotente), `fetch_trade_lesson_ids`, `count_trade_lessons_by_key`, `fetch_trade_lessons`.
+- `app/scheduler/jobs.py`: `_maybe_run_continuous_learner` (espeja el wiring del processor del resumen diario) + hook en `run_once` tras el resumen diario. Soft-fail total.
+- Settings: `ENABLE_CONTINUOUS_LEARNER=false` (default) + `STORE_TRADE_LESSONS=true`. Requieren AMBOS para correr (sin corpus persistido no hay agrupacion ni propuestas). La leccion requiere `enable_llm_advisor`. Sincronizados en `test_score`/`test_alert_rules`. app_version -> v3.2.0.
+- `tests/test_continuous_learner.py` (+13: gating por los dos flags, win->analyze_win / loss->analyze_loss, exclusion de artifacts y ya-procesados, soft-fail sin texto, cap por ciclo, propuesta al umbral + dedupe, invariante sin ejecucion) + `test_reasoner.py` (+1: `analyze_win`).
+
+501 -> **515 verdes**. Cierra la Fase C del roadmap v3.1. El LLM sigue subtractivo (solo registra/propone); real-money 100% bloqueado (`ENABLE_REAL_TRADING=false` hardcoded).
+
 ## Trading Alert AI v3.1.0
 
 Resumen diario por Telegram al cierre NY (Fase B p3 — ultima pieza de Fase B). 1x/dia, tras la hora de corte (UTC), manda los trades del dia (cerrados no-artifact: ganados/perdidos/R neto) + una leccion via LLM local si el asesor esta on. Read-only, opt-in OFF, soft-fail; los numeros se mandan aunque Ollama este apagado.

@@ -155,6 +155,24 @@ def _init_db_unsafe(db_path: Path) -> None:
                 FOREIGN KEY(token_id) REFERENCES tokens(id)
             );
 
+            CREATE TABLE IF NOT EXISTS trade_lessons (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                paper_trade_id INTEGER NOT NULL UNIQUE,
+                symbol TEXT,
+                category TEXT,
+                strategy_name TEXT,
+                direction TEXT,
+                outcome TEXT,
+                r_multiple REAL,
+                lesson TEXT,
+                lesson_key TEXT,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(paper_trade_id) REFERENCES paper_trades(id)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_trade_lessons_key
+                ON trade_lessons(lesson_key);
+
             CREATE TABLE IF NOT EXISTS training_runs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 app_version TEXT,
