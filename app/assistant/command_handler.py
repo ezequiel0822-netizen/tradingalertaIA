@@ -153,6 +153,9 @@ class BasicTelegramAssistant:
         if normalized in {"/performance", "performance", "/rendimiento", "rendimiento"}:
             return self.performance_message()
 
+        if normalized in {"/readiness", "readiness", "/listo", "listo", "/real", "real money"}:
+            return self.readiness_message()
+
         if normalized in {"/edge", "edge", "/edges", "/borde", "bolsillos"}:
             return self.edge_message()
 
@@ -582,6 +585,86 @@ Chains: {", ".join(self.settings.chains_to_monitor)}
 
         lines.extend(_render_block("SWING LESSONS", swing_lessons))
         lines.extend(_render_block("SCALPING LESSONS", scalping_lessons))
+        lines.append("")
+        lines.append(DISCLAIMER)
+        return "\n".join(lines)
+
+    def readiness_message(self) -> str:
+        """v3.3.0: /readiness — evaluacion HONESTA y read-only de cuanto falta para operar
+        dinero real. NO habilita NADA (real-money sigue HARDCODED bloqueado); solo reporta
+        los gates para que el user vea el progreso real y mantenga la disciplina. El que
+        mas pesa no es codigo, es EDGE + DATA, que salen de dejar correr."""
+        from app.learning.training_engine import _cost_map_from_settings
+        from app.portfolio.performance import performance_since
+
+        lines = [
+            f"Readiness para dinero real — {self.settings.app_version}",
+            "Read-only. NO habilita nada: real-money sigue bloqueado por diseno.",
+            "",
+        ]
+
+        # Gate 1 — edge probado (alguna estrategia +R con muestra y pasando el gate)
+        rows = self.repository.fetch_strategy_performance(limit=50)
+        min_n = int(getattr(self.settings, "strategy_promotion_min_samples", 30))
+        min_r = float(getattr(self.settings, "strategy_promotion_min_expectancy_r", 0.0))
+        cands = [
+            r for r in rows
+            if int(r.get("trades") or 0) >= min_n and float(r.get("avg_r") or 0.0) > min_r
+        ]
+        if cands:
+            best = max(cands, key=lambda r: float(r.get("avg_r") or 0.0))
+            lines.append(
+                f"[!] Edge: candidato {best.get('strategy_name')}/{best.get('category')} "
+                f"(avg_r={float(best.get('avg_r') or 0.0):+.2f}, n={best.get('trades')}) — "
+                "validar que NO sea de un solo regimen/direccion. Sin confirmar."
+            )
+        else:
+            lines.append(f"[X] Edge: ninguna estrategia con avg_r>{min_r} y n>={min_n}. FALTA.")
+
+        # Gate 2 — data con features tecnicos reales (Fase D)
+        n_feat = self.repository.count_closed_trades_with_features()
+        target = int(getattr(self.settings, "ml_gate_min_samples", 400))
+        ok2 = "[OK]" if n_feat >= target else "[X]"
+        lines.append(f"{ok2} Data con features: {n_feat}/{target} trades limpios (rsi/atr/macd).")
+
+        # Gate 3 — performance limpia desde el baseline
+        baseline = str(getattr(self.settings, "performance_baseline_date", "") or "")
+        trades = (
+            self.repository.fetch_closed_trades_since(baseline) if baseline
+            else self.repository.fetch_closed_paper_trades(limit=5000)
+        )
+        executed = self.repository.fetch_executed_paper_trade_ids()
+        stored = self.repository.get_state("account_balance")
+        try:
+            balance = float(stored) if stored else float(self.settings.account_starting_balance)
+        except (TypeError, ValueError):
+            balance = float(self.settings.account_starting_balance)
+        perf = performance_since(
+            trades, baseline, executed, balance, _cost_map_from_settings(self.settings)
+        )
+        ok3 = "[!]" if (perf.net_r > 0 and perf.account_pct > 0) else "[X]"
+        lines.append(
+            f"{ok3} Performance limpia (desde {baseline or 'inicio'}): {perf.trades} trades, "
+            f"R neto {perf.net_r:+.2f}, impacto {perf.account_pct:+.2f}% (muestra chica no prueba edge)."
+        )
+
+        # Gate 4 — sizing para cuenta real micro
+        lines.append(
+            "[X] Sizing para cuenta micro: el position_sizer esta hecho para cuenta grande; "
+            "falta reconfigurar (lote 0.01, risk en centavos, kill-switch a escala chica)."
+        )
+
+        # Gate 5 — camino de ejecucion real
+        lines.append(
+            "[X] Ejecucion real: ENABLE_REAL_TRADING=false HARDCODED; el path real nunca se "
+            "ejecuto ni se audito. Requiere su propio audit + tests antes de tocar plata."
+        )
+
+        lines.append("")
+        lines.append(
+            "Veredicto: NO LISTO. Lo que mas falta NO es codigo: es EDGE + DATA (gates 1-2). "
+            "El edge no se fuerza; sale de dejar correr y juntar muestra limpia."
+        )
         lines.append("")
         lines.append(DISCLAIMER)
         return "\n".join(lines)

@@ -591,6 +591,17 @@ class Repository:
             ).fetchall()
         return {int(row["paper_trade_id"]) for row in rows}
 
+    def count_closed_trades_with_features(self) -> int:
+        """v3.3.0: cerrados (status != 'open') con rsi_entry persistido = el universo de
+        trades con features tecnicos reales (los de v2.11.0), que es el gate de la Fase D
+        y un indicador para /readiness."""
+        with get_connection(self.db_path) as connection:
+            row = connection.execute(
+                "SELECT COUNT(*) AS count FROM paper_trades "
+                "WHERE status != 'open' AND rsi_entry IS NOT NULL"
+            ).fetchone()
+        return int(row["count"] if row else 0)
+
     def count_active_paper_trades(self) -> int:
         with get_connection(self.db_path) as connection:
             row = connection.execute(

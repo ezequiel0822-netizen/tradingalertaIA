@@ -26,7 +26,7 @@ trades** y manda órdenes a **MT5 demo** (MetaQuotes-Demo). Una **capa de IA loc
 - **Todo lo nuevo es opt-in OFF + soft-fail:** si está apagado o algo falla, el bot corre
   EXACTAMENTE igual.
 - Memecoins: solo paper/lab, no ejecutan a MT5.
-- Nunca leer/mostrar el `.env` real ni secrets. **Mantener pytest verde (hoy 527).**
+- Nunca leer/mostrar el `.env` real ni secrets. **Mantener pytest verde (hoy 532).**
 - Al tocar `Settings`: sincronizar `tests/test_score._settings()` Y `tests/test_alert_rules._settings()`.
 
 ## 3. Arquitectura por capas (módulos reales)
@@ -104,7 +104,7 @@ huérfanas, ~746 artifacts 22–28 may, corregidos en v2.6.7–v2.7.1). Limpio d
 
 ## 9. Estado + gates de roadmap
 
-- **Hoy:** v3.3.0, 527 tests, demo ~$88.6k. Features-coverage **~68/400** (gate Fase D).
+- **Hoy:** v3.3.0, 532 tests, demo ~$88.6k. Features-coverage **~68/400** (gate Fase D).
 - **Fase D** (AdvancedPredictor: LightGBM+RF+calibración): **GATE DURO ≥400 trades limpios
   con features**. Dormido.
 - **Fase E** (StrategyMutator: auto-evolución, paper ≥5d + confirmación humana): **GATE DURO
@@ -114,12 +114,13 @@ huérfanas, ~746 artifacts 22–28 may, corregidos en v2.6.7–v2.7.1). Limpio d
 
 ## 10. Comandos Telegram (read-only / asesores)
 
-`/health`, `/expectancy`, `/edge`, **`/performance`** (v3.3.0), `/ml_status`, `/market`,
-`/porque_perdi`, `/gate_preview`, `/demo_close_all`.
+`/health`, `/expectancy`, `/edge`, **`/performance`** (v3.3.0), **`/readiness`** (v3.3.0,
+gates para dinero real), `/ml_status`, `/market`, `/porque_perdi`, `/gate_preview`,
+`/demo_close_all`.
 
 ## 11. Correr / testear
 
 - Correr: `cd <ruta>\tradingalertaIA` + `.\.venv\Scripts\python.exe main.py` (UNA máquina a
   la vez contra la misma cuenta MT5 demo).
-- Tests: `.\.venv\Scripts\python.exe -m pytest -q` (debe dar **527 verdes**).
+- Tests: `.\.venv\Scripts\python.exe -m pytest -q` (debe dar **532 verdes**).
 - IA local: instalar Ollama + `ollama pull llama3.1` (+ `mistral` para el veto).

@@ -11,8 +11,9 @@ Hallazgo (read-only sobre la DB viva): limpio de artifacts, los trades ejecutado
 - `app/assistant/command_handler.py`: `performance_message()` + dispatch `/performance` (aliases `/rendimiento`). Reusa `_cost_map_from_settings`.
 - Settings: `PERFORMANCE_BASELINE_DATE=2026-06-03` (default; ~4 dias post-correccion, configurable; vacio = desde el inicio). Sincronizado en `test_score`/`test_alert_rules`. app_version -> v3.3.0.
 - `tests/test_performance.py` (+9: filtro por baseline, exclusion de no-ejecutados y artifacts, win/loss y R neto, account_pct USD, baseline vacio, costo reduce R, balance 0 seguro, dispatch + formato del comando).
+- **Comando `/readiness`** (aliases `/listo`, `real money`): evaluacion HONESTA y read-only de cuanto falta para operar dinero real. Reporta 5 gates — edge probado, data >=400 con features, performance limpia, sizing para cuenta micro, camino de ejecucion real auditado — y da veredicto (hoy **NO LISTO**: lo que falta es EDGE + DATA, no codigo). NO habilita nada; real-money sigue HARDCODED bloqueado. `repository.count_closed_trades_with_features`. `tests/test_readiness.py` (+5).
 
-515 -> **527 verdes** (incluye +3 de los fixes del code review: ContinuousLearner gateado tambien en enable_llm_advisor + cap por INTENTOS al LLM, y scratch_eps en /performance). Solo medicion read-only; no toca ejecucion ni real-money (`ENABLE_REAL_TRADING=false` hardcoded).
+515 -> **532 verdes** (incluye +3 de los fixes del code review: ContinuousLearner gateado tambien en enable_llm_advisor + cap por INTENTOS al LLM, y scratch_eps en /performance; +5 de /readiness). Solo medicion read-only; no toca ejecucion ni real-money (`ENABLE_REAL_TRADING=false` hardcoded).
 
 ## Trading Alert AI v3.2.0
 
