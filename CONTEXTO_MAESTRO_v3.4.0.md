@@ -1,4 +1,4 @@
-# CONTEXTO MAESTRO — Trading Alert AI v3.3.0
+# CONTEXTO MAESTRO — Trading Alert AI v3.4.0
 
 > Referencia de arquitectura/schema **vigente** (reemplaza a `CONTEXTO_MAESTRO_v2.10.0.md`,
 > que queda como base histórica). Local, Python 3.12, Windows + PowerShell + venv.
@@ -26,7 +26,7 @@ trades** y manda órdenes a **MT5 demo** (MetaQuotes-Demo). Una **capa de IA loc
 - **Todo lo nuevo es opt-in OFF + soft-fail:** si está apagado o algo falla, el bot corre
   EXACTAMENTE igual.
 - Memecoins: solo paper/lab, no ejecutan a MT5.
-- Nunca leer/mostrar el `.env` real ni secrets. **Mantener pytest verde (hoy 532).**
+- Nunca leer/mostrar el `.env` real ni secrets. **Mantener pytest verde (hoy 554).**
 - Al tocar `Settings`: sincronizar `tests/test_score._settings()` Y `tests/test_alert_rules._settings()`.
 
 ## 3. Arquitectura por capas (módulos reales)
@@ -54,7 +54,8 @@ trades** y manda órdenes a **MT5 demo** (MetaQuotes-Demo). Una **capa de IA loc
    ML gate (`_ml_gate`) → ensemble LLM veto (`_llm_ensemble_gate`). **Todos downward-only.**
 4. `lifecycle_manager.manage_open_positions` → `mt5_reconciler.reconcile` (huérfanas/SL).
 5. Learning cycle (refresca `strategy_performance` + sliced + lessons) → retrain ML diario.
-6. Resumen diario (v3.1.0) → **ContinuousLearner** (v3.2.0, lecciones + propuestas).
+6. Resumen diario (v3.1.0) → **ContinuousLearner** (v3.2.0, lecciones + propuestas) →
+   **exit shadow** (v3.4.0, registra el camino de R de los abiertos; solo registro).
 
 ## 5. Schema de DB (SQLite, tablas reales)
 
@@ -63,12 +64,16 @@ trades** y manda órdenes a **MT5 demo** (MetaQuotes-Demo). Una **capa de IA loc
 `demo_trade_requests`, `strategy_lessons`, `realized_feature_lessons`, `strategy_performance`,
 `strategy_performance_sliced`, `training_runs`, `walk_forward_results`, `price_snapshots`,
 `macro_snapshots`, `economic_events`, `mt5_historical_cache`, `data_quality_log`,
-`security_checks`, `daily_pnl_log`, `bot_state`, **`trade_lessons` (v3.2.0)**.
+`security_checks`, `daily_pnl_log`, `bot_state`, **`trade_lessons` (v3.2.0)**,
+**`trade_r_samples` (v3.4.0)**.
 
 - **`trade_lessons`** (v3.2.0): una lección por trade cerrado. PK `id`, `paper_trade_id`
   UNIQUE (idempotente), `outcome` (win/loss), `r_multiple`, `lesson` (texto LLM),
   `lesson_key` (`strategy|category|direction|outcome`, indexado), `created_at`. FK a
   `paper_trades(id)`. Solo registro; no afecta decisiones.
+- **`trade_r_samples`** (v3.4.0): el camino de R no-realizado de cada trade abierto, una
+  muestra por ciclo (`paper_trade_id`, `unrealized_r`, `recorded_at`, indexado). Insumo de
+  `/exit_analysis`; poda diaria de muestras > 7 días. Solo registro; no afecta salidas.
 
 ## 6. Las capas de IA (todas subtractivas, opt-in OFF)
 
@@ -90,6 +95,14 @@ trades** y manda órdenes a **MT5 demo** (MetaQuotes-Demo). Una **capa de IA loc
   no-artifact desde `PERFORMANCE_BASELINE_DATE` (default `2026-06-03`). `net_r` y win/loss
   netos de costos con `scratch_eps`; `account_pct` = P&L crudo / balance (idem
   `realized_pnl_today`). **No altera el balance real.** Comando `/performance`.
+- **`exit_shadow` (v3.4.0):** mide si un trailing stop mejoraría las salidas. Hallazgo que
+  lo motiva: en `lifecycle_manager`, forex/oro caen al `else` del trailing y usan los params
+  de MEMECOIN (activación +50%, inalcanzable en forex) → **no tienen trailing efectivo** y
+  devuelven ganancia (capture ~0.68; 24% de winners devuelven ≥1R desde el pico). El shadow
+  simula el trailing sobre el camino REAL de R (`trade_r_samples` + el R realizado final),
+  exitando en el PRIMER giveback (honesto: captura el costo de cortar runners, que el techo
+  mfe/mae ignora). Flag `ENABLE_EXIT_SHADOW=false`; comando `/exit_analysis`. **Solo mide;
+  el trailing real de forex se cambia únicamente si la data lo banca.**
 
 ## 8. La verdad de fondo
 
@@ -104,7 +117,7 @@ huérfanas, ~746 artifacts 22–28 may, corregidos en v2.6.7–v2.7.1). Limpio d
 
 ## 9. Estado + gates de roadmap
 
-- **Hoy:** v3.3.0, 532 tests, demo ~$88.6k. Features-coverage **~68/400** (gate Fase D).
+- **Hoy:** v3.4.0, 554 tests, demo ~$88.6k. Features-coverage **~69/400** (gate Fase D).
 - **Fase D** (AdvancedPredictor: LightGBM+RF+calibración): **GATE DURO ≥400 trades limpios
   con features**. Dormido.
 - **Fase E** (StrategyMutator: auto-evolución, paper ≥5d + confirmación humana): **GATE DURO
@@ -115,12 +128,12 @@ huérfanas, ~746 artifacts 22–28 may, corregidos en v2.6.7–v2.7.1). Limpio d
 ## 10. Comandos Telegram (read-only / asesores)
 
 `/health`, `/expectancy`, `/edge`, **`/performance`** (v3.3.0), **`/readiness`** (v3.3.0,
-gates para dinero real), `/ml_status`, `/market`, `/porque_perdi`, `/gate_preview`,
-`/demo_close_all`.
+gates para dinero real), **`/exit_analysis`** (v3.4.0, trailing simulado vs salida real),
+`/ml_status`, `/market`, `/porque_perdi`, `/gate_preview`, `/demo_close_all`.
 
 ## 11. Correr / testear
 
 - Correr: `cd <ruta>\tradingalertaIA` + `.\.venv\Scripts\python.exe main.py` (UNA máquina a
   la vez contra la misma cuenta MT5 demo).
-- Tests: `.\.venv\Scripts\python.exe -m pytest -q` (debe dar **532 verdes**).
+- Tests: `.\.venv\Scripts\python.exe -m pytest -q` (debe dar **554 verdes**).
 - IA local: instalar Ollama + `ollama pull llama3.1` (+ `mistral` para el veto).

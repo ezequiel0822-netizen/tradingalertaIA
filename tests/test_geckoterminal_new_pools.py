@@ -1,5 +1,6 @@
 """Tests para GeckoTerminal new_pools endpoint + filter por edad + caché/cooldown (v3.3.1)."""
 
+import time
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
@@ -184,8 +185,9 @@ def test_429_sets_cooldown_and_serves_stale_cache() -> None:
         first = collector.collect()
     assert any(s.token_address == "solana_warm" for s in first)
 
-    # Vencer el TTL para forzar que intente la red, y simular 429 en todas.
-    collector._list_cache = {k: (0.0, v[1]) for k, v in collector._list_cache.items()}
+    # Vencer el TTL (pero NO el tope de staleness) para forzar la red, y simular 429.
+    aged = time.monotonic() - 400  # > TTL 300, < tope stale 1800
+    collector._list_cache = {k: (aged, v[1]) for k, v in collector._list_cache.items()}
     err = requests.HTTPError()
     err.response = MagicMock(status_code=429)
     bad = MagicMock()
@@ -195,3 +197,26 @@ def test_429_sets_cooldown_and_serves_stale_cache() -> None:
 
     assert any(s.token_address == "solana_warm" for s in second)  # sirvio stale, no []
     assert collector._list_cooldown_until > 0  # quedo en cooldown
+
+
+def test_stale_cache_not_served_when_too_old() -> None:
+    """Bajo 429 sostenido, pasado el tope de staleness devuelve []: mejor nada que
+    reciclar precios congelados de hace mas de 30 min como si fueran frescos."""
+    settings = _enable_early(_settings())
+    collector = GeckoTerminalCollector(settings)
+
+    ok = MagicMock()
+    ok.raise_for_status = MagicMock()
+    ok.json.return_value = _pool_payload("solana_ancient", pool_age_hours=2)
+    with patch.object(collector.session, "get", return_value=ok):
+        collector.collect()
+
+    ancient = time.monotonic() - 2000  # > tope stale 1800
+    collector._list_cache = {k: (ancient, v[1]) for k, v in collector._list_cache.items()}
+    err = requests.HTTPError()
+    err.response = MagicMock(status_code=429)
+    bad = MagicMock()
+    bad.raise_for_status = MagicMock(side_effect=err)
+    with patch.object(collector.session, "get", return_value=bad):
+        out = collector.collect()
+    assert out == []

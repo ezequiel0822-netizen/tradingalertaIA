@@ -610,6 +610,8 @@ Chains: {", ".join(self.settings.chains_to_monitor)}
         lines = [
             f"Exit analysis (forex) — {self.settings.app_version}",
             "Trailing simulado sobre el camino REAL de R vs la salida real (honesto, no el techo).",
+            "Metodo: trail se arma en +1R; excluye scalps, partial-close y caminos a mitad "
+            "de vida. Fill asumido en el nivel del trail (en gaps reales puede ser peor).",
             "",
         ]
         if n == 0:

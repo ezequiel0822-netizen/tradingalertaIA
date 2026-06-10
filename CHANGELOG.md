@@ -10,9 +10,11 @@ En vez de adivinar una distancia (o creerle al "techo" optimista que con solo mf
 - `db.py`: tabla `trade_r_samples` (+indice). `repository.py`: `insert_r_sample`, `fetch_r_path`, `prune_r_samples`.
 - `jobs._maybe_record_exit_shadow` + hook en `run_once` (tras lifecycle, latest_price fresco) + poda diaria de muestras > 7 dias. `command_handler`: comando `/exit_analysis` (aliases `/salidas`, `/trailing`).
 - Settings: `ENABLE_EXIT_SHADOW=false`. Sincronizado en `test_score`/`test_alert_rules`. app_version -> v3.4.0.
-- `tests/test_exit_shadow.py` (+13: simulacion (giveback/runner/loser/activacion), compare, captura, analisis, comando on/off).
+- `tests/test_exit_shadow.py` (+14: simulacion (giveback/runner/loser/activacion), compare, captura, analisis, comando on/off, y el fix de salida real).
+- Fix pre-merge: `analyze_closed_trades` anexa el R realizado VERDADERO del trade al camino (la ultima muestra era del ultimo ciclo abierto; un stop intra-ciclo podia diferir y sesgaba la comparacion actual-vs-trailing).
+- Fixes del code review (2 revisores independientes, pre-merge): (1) la poda ahora es por `closed_at` del trade (>7 dias cerrado) — podar por `recorded_at` decapitaba el camino (perdia el pico) de trades longevos, justo lo que el shadow mide; (2) `activation=1.0R` en el analisis — con activation=0 la simulacion "mejoraba" perdedores con un stop mas apretado inimplementable e inflaba el delta; (3) excluye scalps (3 min de vida, poblacion distinta) y partial-close (R blended a media pendiente = unidades mezcladas; ademas ya tienen breakeven); (4) excluye caminos que arrancan a mitad de vida (|primera muestra|>0.5R: pico previo no registrado); (5) el mensaje de /exit_analysis declara el metodo (activation, exclusiones, fill asumido en el trail — gaps reales pueden ser peores). En el collector Gecko (v3.3.1): tope de staleness 30 min para el stale (bajo 429 sostenido, mejor [] que reciclar precios congelados como frescos), cache key por (chain, network) (evita mislabel con alias de chain), y new_pools sirve stale ante payload vacio (simetria de soft-fail). +6 tests.
 
-534 -> **547 verdes**. Shadow read-only: no cambia ninguna salida ni ejecucion; real-money sigue HARDCODED bloqueado.
+534 -> **554 verdes**. Shadow read-only: no cambia ninguna salida ni ejecucion; real-money sigue HARDCODED bloqueado.
 
 ## Trading Alert AI v3.3.1
 

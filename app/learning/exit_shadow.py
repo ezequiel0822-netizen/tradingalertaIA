@@ -99,6 +99,8 @@ def record_open_trade_samples(
         tid = trade.get("id")
         if tid is None:
             continue
+        if int(trade.get("is_scalping") or 0):
+            continue  # scalps (~3 min de vida) no son la poblacion del trailing swing
         r = r_multiple(trade)
         if r is None:
             continue
@@ -116,11 +118,22 @@ def analyze_closed_trades(
     category: str | None = None,
     since_iso: str = "",
     min_samples: int = 3,
+    activation: float = 1.0,
 ) -> list[TrailingComparison]:
     """Toma los trades cerrados no-artifact (opcionalmente de una categoria), reconstruye
     su camino de R desde trade_r_samples y compara el trailing simulado vs la salida real.
-    Honesto: usa el camino, no el techo mfe/mae."""
-    from app.learning.trade_outcomes import is_artifact
+    Honesto: usa el camino, no el techo mfe/mae.
+
+    Decisiones anti-sesgo (del code review):
+    - `activation=1.0`: el trail se arma recien con el trade en +1R. Con activation=0 la
+      simulacion "mejoraba" perdedores con un stop mas apretado inimplementable (eso no
+      es un trailing) e inflaba el delta.
+    - Excluye scalps (poblacion distinta, 3 min de vida) y partial-close (post-TP1 el R
+      es blended a media pendiente -> una distancia D significaria 2D en la pierna viva;
+      ademas ya tienen proteccion de breakeven).
+    - Excluye caminos que arrancan a mitad de vida (|primera muestra| > 0.5R): la feature
+      se prendio con el trade abierto y el pico previo no esta registrado."""
+    from app.learning.trade_outcomes import is_artifact, r_multiple
 
     if since_iso:
         trades = repository.fetch_closed_trades_since(since_iso)
@@ -132,10 +145,23 @@ def analyze_closed_trades(
             continue
         if category and str(trade.get("category")) != category:
             continue
+        if int(trade.get("is_scalping") or 0):
+            continue
+        if int(trade.get("partial_closed") or 0):
+            continue
         tid = trade.get("id")
         if tid is None:
             continue
         path = repository.fetch_r_path(int(tid))
-        if len(path) >= min_samples:
-            paths.append(path)
-    return compare_trailing(paths, distances)
+        if len(path) < min_samples:
+            continue
+        if abs(path[0]) > 0.5:
+            continue  # camino a mitad de vida: el pico previo no quedo registrado
+        # La ultima muestra es del ultimo ciclo ABIERTO; el cierre real (p.ej. un
+        # stop-out intra-ciclo) puede diferir. Anexamos el R realizado verdadero para
+        # que la comparacion actual-vs-trailing use la salida real, no una aproximacion.
+        final_r = r_multiple(trade)
+        if final_r is not None:
+            path.append(round(final_r, 4))
+        paths.append(path)
+    return compare_trailing(paths, distances, activation)

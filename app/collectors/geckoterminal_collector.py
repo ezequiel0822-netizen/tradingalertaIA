@@ -15,8 +15,12 @@ logger = logging.getLogger(__name__)
 # v3.3.1: caché de las listas (trending/new_pools) para no pegarle a GeckoTerminal cada
 # ciclo. Las pools trending no cambian cada 2-3 min; cacheamos 5 min. En 429, ademas, un
 # cooldown corto evita el spam de "Too Many Requests" reintentando cada ciclo.
+# El stale (ultimo valor conocido) se sirve SOLO hasta LIST_STALE_MAX_AGE_SECONDS: bajo
+# un 429 sostenido, mejor devolver [] que reciclar precios congelados de hace horas
+# (se registrarian como snapshots "frescos" y congelarian el mark-to-market memecoin).
 LIST_CACHE_TTL_SECONDS = 300.0
 LIST_429_COOLDOWN_SECONDS = 120.0
+LIST_STALE_MAX_AGE_SECONDS = 1800.0
 
 
 def _to_float(value: Any) -> float | None:
@@ -56,9 +60,12 @@ class GeckoTerminalCollector:
         return None
 
     def _stale_cached_list(self, cache_key: str) -> list[TokenSnapshot]:
-        """Ultimo valor conocido (aunque haya vencido el TTL) o [] si nunca hubo."""
+        """Ultimo valor conocido (aunque haya vencido el TTL), acotado por edad maxima:
+        pasado LIST_STALE_MAX_AGE_SECONDS devuelve [] (mejor nada que precios congelados)."""
         entry = self._list_cache.get(cache_key)
-        return list(entry[1]) if entry else []
+        if entry and (time.monotonic() - entry[0]) < LIST_STALE_MAX_AGE_SECONDS:
+            return list(entry[1])
+        return []
 
     def collect(self) -> list[TokenSnapshot]:
         snapshots: list[TokenSnapshot] = []
@@ -89,7 +96,7 @@ class GeckoTerminalCollector:
     ) -> list[TokenSnapshot]:
         """Fetch pools recien creados (sorted desc por pool_created_at).
         Filtra los que tienen edad > max_early_pool_age_hours."""
-        cache_key = f"newpools:{network}"
+        cache_key = f"newpools:{chain}:{network}"
         fresh = self._fresh_cached_list(cache_key)
         if fresh is not None:
             return fresh
@@ -113,7 +120,9 @@ class GeckoTerminalCollector:
             return self._stale_cached_list(cache_key)
 
         if not payload:
-            return []
+            # 200 con JSON invalido/vacio (safe_json -> {}): mismo soft-fail que los
+            # otros caminos de error — servir el ultimo valor conocido (acotado por edad).
+            return self._stale_cached_list(cache_key)
 
         max_age = self.settings.max_early_pool_age_hours
         now = datetime.now(timezone.utc)
@@ -159,7 +168,9 @@ class GeckoTerminalCollector:
     def _collect_trending_for_network(
         self, chain: str, network: str
     ) -> list[TokenSnapshot]:
-        cache_key = f"trending:{network}"
+        # Key por (chain, network): dos alias de chain pueden mapear a la misma network
+        # y los snapshots cacheados llevan el chain que los fetcheo (evita mislabel/dedup).
+        cache_key = f"trending:{chain}:{network}"
         fresh = self._fresh_cached_list(cache_key)
         if fresh is not None:
             return fresh

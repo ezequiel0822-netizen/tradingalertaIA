@@ -122,10 +122,92 @@ def test_analyze_closed_trades_builds_comparisons_from_paths():
     assert comps[0].policy_avg_r == 2.0  # trailing corto en el giveback (3-1)
 
 
+def test_analyze_appends_true_final_r_from_trade():
+    # El camino registrado termina en +2.8 (ultimo ciclo abierto), pero el trade cerro
+    # en -2 (stop intra-ciclo): la comparacion debe usar el R realizado VERDADERO como
+    # salida real, no la ultima muestra.
+    repo = _FakeRepo(closed=[_closed_forex(1, 98.0)], paths={1: [0.0, 3.0, 2.8]})
+    comps = analyze_closed_trades(repo, [1.0], category="forex")
+    c = comps[0]
+    assert c.trades == 1
+    assert c.actual_avg_r == -2.0   # salida real (98 vs entry 100, riesgo 1%)
+    assert c.policy_avg_r == 2.0    # trailing D=1 salia en 3-1=2
+    assert c.improved == 1
+
+
 def test_analyze_skips_trades_without_enough_samples():
     repo = _FakeRepo(closed=[_closed_forex(1, 103.0)], paths={1: [0.0]})  # 1 muestra < 3
     comps = analyze_closed_trades(repo, [1.0], category="forex", min_samples=3)
     assert comps[0].trades == 0
+
+
+def test_record_skips_scalping_trades():
+    repo = _FakeRepo()
+    t = _open(1, 100.0, 102.0, 99.0)
+    t["is_scalping"] = 1
+    n = record_open_trade_samples(repo, [t], "2026-06-09T00:00:00+00:00")
+    assert n == 0 and repo.samples == []
+
+
+def test_analyze_excludes_scalping_and_partial_closed():
+    sc = _closed_forex(1, 103.0)
+    sc["is_scalping"] = 1
+    pc = _closed_forex(2, 103.0)
+    pc["partial_closed"] = 1
+    repo = _FakeRepo(closed=[sc, pc], paths={1: [0.0, 1.0, 2.0], 2: [0.0, 1.0, 2.0]})
+    assert analyze_closed_trades(repo, [1.0], category="forex")[0].trades == 0
+
+
+def test_analyze_activation_does_not_tighten_plain_losers():
+    # Perdedor que nunca llego a +1R: el trail (activation=1R) jamas se arma -> la
+    # 'policy' es la salida real, NO un stop mas apretado inimplementable. Sin esto,
+    # la simulacion inflaba el delta "mejorando" perdedores con stop-tightening.
+    repo = _FakeRepo(closed=[_closed_forex(1, 98.0)], paths={1: [0.1, -0.5, -1.5]})
+    c = analyze_closed_trades(repo, [0.5], category="forex")[0]
+    assert c.actual_avg_r == -2.0 and c.policy_avg_r == -2.0 and c.delta_avg_r == 0.0
+
+
+def test_analyze_excludes_midlife_paths():
+    # Camino que arranca en +1.2R: la feature se prendio con el trade ya a mitad de
+    # vida -> el pico previo no esta registrado; se excluye para no fabricar picos.
+    repo = _FakeRepo(closed=[_closed_forex(1, 103.0)], paths={1: [1.2, 0.6, 0.3]})
+    assert analyze_closed_trades(repo, [1.0], category="forex")[0].trades == 0
+
+
+def test_prune_only_drops_samples_of_long_closed_trades(tmp_path):
+    import sqlite3
+
+    from app.database.db import init_db
+    from app.database.repository import Repository
+
+    db = tmp_path / "prune.db"
+    init_db(db)
+    repo = Repository(db)
+    with sqlite3.connect(db) as con:
+        con.execute(
+            "INSERT INTO paper_trades (id, alert_id, token_id, status, opened_at, "
+            "updated_at, closed_at) VALUES (1, 1, 1, 'open', "
+            "'2026-05-01T00:00:00+00:00', '2026-05-01T00:00:00+00:00', NULL)"
+        )
+        con.execute(
+            "INSERT INTO paper_trades (id, alert_id, token_id, status, opened_at, "
+            "updated_at, closed_at) VALUES (2, 2, 2, 'closed', "
+            "'2026-05-01T00:00:00+00:00', '2026-05-02T00:00:00+00:00', "
+            "'2026-05-02T00:00:00+00:00')"
+        )
+        con.execute(
+            "INSERT INTO paper_trades (id, alert_id, token_id, status, opened_at, "
+            "updated_at, closed_at) VALUES (3, 3, 3, 'closed', "
+            "'2026-06-08T00:00:00+00:00', '2026-06-09T00:00:00+00:00', "
+            "'2026-06-09T00:00:00+00:00')"
+        )
+    for tid in (1, 2, 3):
+        repo.insert_r_sample(tid, 1.0, "2026-05-01T01:00:00+00:00")  # muestra VIEJA
+    deleted = repo.prune_r_samples("2026-06-03T00:00:00+00:00")
+    assert deleted == 1                   # solo el trade 2 (cerrado hace mucho)
+    assert repo.fetch_r_path(1) == [1.0]  # abierto: jamas se poda (aunque sea viejo)
+    assert repo.fetch_r_path(2) == []
+    assert repo.fetch_r_path(3) == [1.0]  # cerrado reciente: camino intacto
 
 
 # ----------------------- comando /exit_analysis -------------------------- #

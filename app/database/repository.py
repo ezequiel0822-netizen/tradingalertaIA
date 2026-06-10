@@ -612,10 +612,19 @@ class Repository:
         return [float(r["unrealized_r"]) for r in rows]
 
     def prune_r_samples(self, before_iso: str) -> int:
-        """Borra muestras viejas (recorded_at < before_iso). Devuelve filas borradas."""
+        """Borra las muestras de trades CERRADOS hace mas de `before_iso` (por closed_at).
+        Nunca poda trades abiertos ni recien cerrados: podar por recorded_at decapitaba el
+        camino (perdia el pico temprano) de trades longevos — justo lo que el shadow mide.
+        Devuelve filas borradas."""
         with get_connection(self.db_path) as connection:
             cur = connection.execute(
-                "DELETE FROM trade_r_samples WHERE recorded_at < ?", (before_iso,)
+                """
+                DELETE FROM trade_r_samples WHERE paper_trade_id IN (
+                    SELECT id FROM paper_trades
+                    WHERE status != 'open' AND closed_at IS NOT NULL AND closed_at < ?
+                )
+                """,
+                (before_iso,),
             )
             return int(cur.rowcount or 0)
 

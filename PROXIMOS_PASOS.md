@@ -11,7 +11,7 @@
 
 ## 1. Estado actual
 
-- **v3.4.0**, **547 tests verdes**.
+- **v3.4.0**, **554 tests verdes**.
 - Corriendo en la Lenovo (`C:\Users\LENOVO\tradingalertaIA`, fuera de iCloud, con GPU →
   el LLM local responde rápido).
 - Operativo: MT5 demo (auto-confirm ON), lifecycle, scalping, alertas, learning, y la

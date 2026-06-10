@@ -1092,7 +1092,8 @@ class TradingAlertJob:
         """v3.4.0: cada ciclo registra el R no-realizado de los trades abiertos en
         trade_r_samples (camino de R) para medir si un trailing mejoraria las salidas
         (/exit_analysis). SOLO registro: no toca ninguna salida ni ejecucion. Opt-in OFF,
-        soft-fail. Poda muestras > 7 dias 1x/dia (gate por fecha) para no crecer sin fin."""
+        soft-fail. Poda 1x/dia (gate por fecha) las muestras de trades CERRADOS hace > 7
+        dias — nunca de abiertos, para no decapitar el camino de trades longevos."""
         if not getattr(self.settings, "enable_exit_shadow", False):
             return
         try:
