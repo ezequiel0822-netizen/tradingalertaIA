@@ -16,7 +16,7 @@ PROYECTO: bot de trading algorítmico LOCAL en Python 3.12 (Windows, PowerShell 
 Detecta oportunidades (memecoins / acciones US / forex / oro), decide con un strategy
 router (5 swing + 2 scalping), hace paper trades y manda órdenes a MT5 demo
 (MetaQuotes-Demo). Real-money BLOQUEADO por diseño (HARDCODED).
-Estado: v3.3.0, 532 tests verdes.
+Estado: v3.4.0, 534 tests verdes.
 
 ANTES DE TOCAR NADA leé (en el repo): CHANGELOG.md (historia completa hasta v3.1.0).
 Si los copiaste de la otra compu: CONTEXTO_MAESTRO_v2.10.0.md +

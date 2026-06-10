@@ -11,7 +11,7 @@
 
 ## 1. Estado actual
 
-- **v3.3.0**, **532 tests verdes**.
+- **v3.4.0**, **534 tests verdes**.
 - Corriendo en la Lenovo (`C:\Users\LENOVO\tradingalertaIA`, fuera de iCloud, con GPU →
   el LLM local responde rápido).
 - Operativo: MT5 demo (auto-confirm ON), lifecycle, scalping, alertas, learning, y la
@@ -27,7 +27,8 @@
 | **v3.0.0** | veto del ensemble Llama+Mistral en el gate (`app/intelligence/ensemble_gate.py` + `jobs._llm_ensemble_gate`, downward-only) |
 | **v3.1.0** | resumen diario por Telegram (`jobs._maybe_send_daily_summary`) |
 | **v3.2.0** | **Fase C ContinuousLearner**: leccion por trade (`app/learning/continuous_learner.py` + tabla `trade_lessons` + `reasoner.analyze_win`); agrupa lecciones y PROPONE (no aplica) |
-| **v3.3.0** | Performance desde baseline limpio (`app/portfolio/performance.py` + comando `/performance`); el −11% fue el bug de mayo, limpio queda ~plano |
+| **v3.3.0** | Performance desde baseline limpio (`app/portfolio/performance.py` + comando `/performance`); el −11% fue el bug de mayo, limpio queda ~plano. + comando `/readiness` (gates para dinero real) |
+| **v3.4.0** | Caché + cooldown 429 para las listas de GeckoTerminal (`geckoterminal_collector.py`); saca el spam de "Too Many Requests" y acelera el ciclo |
 
 (Detalle completo en `CHANGELOG.md`.)
 

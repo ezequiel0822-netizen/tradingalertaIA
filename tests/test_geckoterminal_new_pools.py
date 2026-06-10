@@ -1,7 +1,9 @@
-"""Tests para GeckoTerminal new_pools endpoint + filter por edad."""
+"""Tests para GeckoTerminal new_pools endpoint + filter por edad + caché/cooldown (v3.4.0)."""
 
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
+
+import requests
 
 from app.collectors.geckoterminal_collector import GeckoTerminalCollector
 from tests.test_score import _settings
@@ -147,3 +149,49 @@ def test_new_pools_dedup_with_trending() -> None:
 
     matches = [s for s in snapshots if s.token_address == "solana_dup"]
     assert len(matches) == 1
+
+
+# ----------------------- v3.4.0: caché + cooldown 429 --------------------- #
+def test_list_cache_avoids_refetch_within_ttl() -> None:
+    """El 2do collect() dentro del TTL sirve del caché y NO vuelve a pegarle a la API."""
+    settings = _enable_early(_settings())
+    collector = GeckoTerminalCollector(settings)
+
+    def fake_get(url, **kwargs):
+        r = MagicMock()
+        r.raise_for_status = MagicMock()
+        r.json.return_value = _pool_payload("solana_cached", pool_age_hours=2)
+        return r
+
+    with patch.object(collector.session, "get", side_effect=fake_get) as mock_get:
+        collector.collect()
+        first = mock_get.call_count          # trending + new_pools (1 chain) = 2
+        collector.collect()                  # dentro del TTL -> 0 llamadas nuevas
+        second = mock_get.call_count
+    assert first == 2
+    assert second == first  # el 2do ciclo no pego a GeckoTerminal
+
+
+def test_429_sets_cooldown_and_serves_stale_cache() -> None:
+    """Un 429 NO devuelve [] si hay caché previo: sirve el ultimo conocido + arma cooldown."""
+    settings = _enable_early(_settings())
+    collector = GeckoTerminalCollector(settings)
+
+    ok = MagicMock()
+    ok.raise_for_status = MagicMock()
+    ok.json.return_value = _pool_payload("solana_warm", pool_age_hours=2)
+    with patch.object(collector.session, "get", return_value=ok):
+        first = collector.collect()
+    assert any(s.token_address == "solana_warm" for s in first)
+
+    # Vencer el TTL para forzar que intente la red, y simular 429 en todas.
+    collector._list_cache = {k: (0.0, v[1]) for k, v in collector._list_cache.items()}
+    err = requests.HTTPError()
+    err.response = MagicMock(status_code=429)
+    bad = MagicMock()
+    bad.raise_for_status = MagicMock(side_effect=err)
+    with patch.object(collector.session, "get", return_value=bad):
+        second = collector.collect()
+
+    assert any(s.token_address == "solana_warm" for s in second)  # sirvio stale, no []
+    assert collector._list_cooldown_until > 0  # quedo en cooldown
