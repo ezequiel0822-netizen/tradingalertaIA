@@ -1,13 +1,13 @@
 # Changelog
 
-## Trading Alert AI v3.4.0
+## Trading Alert AI v3.3.1
 
 Caché + cooldown 429 para las listas de GeckoTerminal (saca el spam de "Too Many Requests" y acelera el ciclo). El collector pegaba a la API de memecoins cada ciclo (4 chains x trending + new_pools = 8 llamadas), y las listas no tenian manejo de 429 (solo el OHLCV lo tenia) -> reintentaba cada ciclo y se comia el rate limit. Como las pools trending no cambian cada 2-3 min, ahora se cachean.
 
 - `app/collectors/geckoterminal_collector.py`: caché TTL en memoria (`LIST_CACHE_TTL_SECONDS=300`) por (endpoint, network) para trending y new_pools -> dentro del TTL sirve del caché sin pegarle a la API. En 429, un cooldown corto (`LIST_429_COOLDOWN_SECONDS=120`) deja de reintentar y **sirve el ultimo valor conocido** (stale) en vez de `[]`, evitando el spam de warnings. Helpers `_fresh_cached_list`/`_stale_cached_list`/`_note_list_http_error`. Sin settings nuevos (constantes de modulo) ni deps nuevas.
 - `tests/test_geckoterminal_new_pools.py` (+2: el 2do ciclo dentro del TTL no re-pega a la API; un 429 sirve el caché stale y arma cooldown). Los 4 tests previos del collector siguen verdes.
 
-app_version -> v3.4.0. 532 -> **534 verdes**. Read-only sobre mercados; real-money sigue HARDCODED bloqueado.
+app_version -> v3.3.1. 532 -> **534 verdes**. Read-only sobre mercados; real-money sigue HARDCODED bloqueado.
 
 ## Trading Alert AI v3.3.0
 

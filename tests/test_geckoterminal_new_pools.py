@@ -1,4 +1,4 @@
-"""Tests para GeckoTerminal new_pools endpoint + filter por edad + caché/cooldown (v3.4.0)."""
+"""Tests para GeckoTerminal new_pools endpoint + filter por edad + caché/cooldown (v3.3.1)."""
 
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
@@ -151,7 +151,7 @@ def test_new_pools_dedup_with_trending() -> None:
     assert len(matches) == 1
 
 
-# ----------------------- v3.4.0: caché + cooldown 429 --------------------- #
+# ----------------------- v3.3.1: caché + cooldown 429 --------------------- #
 def test_list_cache_avoids_refetch_within_ttl() -> None:
     """El 2do collect() dentro del TTL sirve del caché y NO vuelve a pegarle a la API."""
     settings = _enable_early(_settings())

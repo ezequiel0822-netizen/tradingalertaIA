@@ -12,7 +12,7 @@ from app.utils.rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
 
-# v3.4.0: caché de las listas (trending/new_pools) para no pegarle a GeckoTerminal cada
+# v3.3.1: caché de las listas (trending/new_pools) para no pegarle a GeckoTerminal cada
 # ciclo. Las pools trending no cambian cada 2-3 min; cacheamos 5 min. En 429, ademas, un
 # cooldown corto evita el spam de "Too Many Requests" reintentando cada ciclo.
 LIST_CACHE_TTL_SECONDS = 300.0
@@ -44,7 +44,7 @@ class GeckoTerminalCollector:
         self.session = requests.Session()
         self.session.headers.update({"User-Agent": "TradingAlertAI/2.4"})
         self.ohlcv_cooldown_until = 0.0
-        # v3.4.0: caché TTL + cooldown 429 para las listas (key -> (monotonic, snapshots)).
+        # v3.3.1: caché TTL + cooldown 429 para las listas (key -> (monotonic, snapshots)).
         self._list_cache: dict[str, tuple[float, list[TokenSnapshot]]] = {}
         self._list_cooldown_until = 0.0
 

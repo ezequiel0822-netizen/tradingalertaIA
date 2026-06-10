@@ -1,0 +1,8 @@
+chore: renumerar v3.4.0 -> v3.3.1 (el cache 429 es un patch, no un minor)
+
+El cache + cooldown 429 de GeckoTerminal es un fix chico (mejora interna),
+no una feature nueva -> corresponde un PATCH (v3.3.1), no un salto de minor.
+Convencion del proyecto: patch (3.3.x) para fixes; minor (3.4.0) para features
+reales. Sin saltos de version.
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
