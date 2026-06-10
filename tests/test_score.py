@@ -155,6 +155,7 @@ def _settings() -> Settings:
         enable_continuous_learner=False,
         store_trade_lessons=True,
         performance_baseline_date="2026-06-03",
+        enable_exit_shadow=False,
         mt5_broker_profile="icmarkets",
         enable_walk_forward_backtest=True,
         walk_forward_train_days=14,

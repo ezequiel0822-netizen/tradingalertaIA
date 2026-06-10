@@ -273,6 +273,12 @@ class Settings:
     # 2026-06-03 (~4 dias tras la correccion de fines de mayo). Vacio = desde el inicio.
     # Granularidad de fecha: incluye todo el dia del baseline. Solo medicion, read-only.
     performance_baseline_date: str
+    # v3.4.0 — Exit shadow: mide si un trailing stop mejoraria las salidas (hallazgo:
+    # forex/oro usan los params de trailing de memecoin -> activacion +50% que nunca se
+    # alcanza -> no tienen trailing efectivo). Cada ciclo registra el R no-realizado de los
+    # trades abiertos en trade_r_samples; /exit_analysis simula el trailing sobre ese camino
+    # vs la salida real. SOLO medicion, opt-in OFF: NO cambia ninguna salida ni ejecucion.
+    enable_exit_shadow: bool
     # Phase 4 v2.3.0 — MT5 validation + walk-forward + data quality + CSV
     mt5_broker_profile: str
     enable_walk_forward_backtest: bool
@@ -443,7 +449,7 @@ def load_settings() -> Settings:
         obsidian_vault_path = safe_obsidian
 
     return Settings(
-        app_version=os.getenv("APP_VERSION", "v3.3.1"),
+        app_version=os.getenv("APP_VERSION", "v3.4.0"),
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
         telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID"),
         dexscreener_base_url=os.getenv(
@@ -675,6 +681,7 @@ def load_settings() -> Settings:
         enable_continuous_learner=_get_bool("ENABLE_CONTINUOUS_LEARNER", False),
         store_trade_lessons=_get_bool("STORE_TRADE_LESSONS", True),
         performance_baseline_date=os.getenv("PERFORMANCE_BASELINE_DATE", "2026-06-03"),
+        enable_exit_shadow=_get_bool("ENABLE_EXIT_SHADOW", False),
         # Phase 4 v2.3.0
         mt5_broker_profile=os.getenv("MT5_BROKER_PROFILE", "icmarkets"),
         enable_walk_forward_backtest=_get_bool("ENABLE_WALK_FORWARD_BACKTEST", True),

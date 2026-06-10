@@ -591,6 +591,34 @@ class Repository:
             ).fetchall()
         return {int(row["paper_trade_id"]) for row in rows}
 
+    def insert_r_sample(self, paper_trade_id: int, unrealized_r: float, at_iso: str) -> None:
+        """v3.4.0 / exit shadow: registra el R no-realizado de un trade abierto en este
+        ciclo. Construye el camino de R para simular salidas con trailing (read/registro)."""
+        with get_connection(self.db_path) as connection:
+            connection.execute(
+                "INSERT INTO trade_r_samples (paper_trade_id, unrealized_r, recorded_at) "
+                "VALUES (?, ?, ?)",
+                (int(paper_trade_id), float(unrealized_r), at_iso),
+            )
+
+    def fetch_r_path(self, paper_trade_id: int) -> list[float]:
+        """Camino cronologico de R no-realizado de un trade (para la simulacion de salida)."""
+        with get_connection(self.db_path) as connection:
+            rows = connection.execute(
+                "SELECT unrealized_r FROM trade_r_samples WHERE paper_trade_id = ? "
+                "ORDER BY recorded_at ASC, id ASC",
+                (int(paper_trade_id),),
+            ).fetchall()
+        return [float(r["unrealized_r"]) for r in rows]
+
+    def prune_r_samples(self, before_iso: str) -> int:
+        """Borra muestras viejas (recorded_at < before_iso). Devuelve filas borradas."""
+        with get_connection(self.db_path) as connection:
+            cur = connection.execute(
+                "DELETE FROM trade_r_samples WHERE recorded_at < ?", (before_iso,)
+            )
+            return int(cur.rowcount or 0)
+
     def count_closed_trades_with_features(self) -> int:
         """v3.3.0: cerrados (status != 'open') con rsi_entry persistido = el universo de
         trades con features tecnicos reales (los de v2.11.0), que es el gate de la Fase D

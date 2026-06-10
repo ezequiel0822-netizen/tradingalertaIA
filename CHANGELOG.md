@@ -1,5 +1,19 @@
 # Changelog
 
+## Trading Alert AI v3.4.0
+
+Exit shadow: mide HONESTO si un trailing stop mejoraria las salidas, sin tocar ninguna salida real. Motivado por un hallazgo concreto: en `lifecycle_manager`, los trades de forex/oro caen al `else` y usan los params de trailing de MEMECOIN (activacion +50%), que en forex NUNCA se alcanza -> forex/oro **no tienen trailing efectivo** y devuelven ganancia (capture ratio ~0.68; 24% de winners devuelven >=1R desde el pico).
+
+En vez de adivinar una distancia (o creerle al "techo" optimista que con solo mfe/mae ignora recuperaciones), el shadow registra el camino REAL de R de cada trade abierto cada ciclo y simula el trailing sobre ese camino, exitando en el PRIMER giveback. Asi el numero es honesto (captura el downside de cortar runners). SOLO medicion / opt-in OFF / soft-fail.
+
+- `app/learning/exit_shadow.py` (NUEVO): `simulate_trailing_exit(r_path, distance, activation)` (pura: exita en el primer giveback, maneja recuperaciones), `compare_trailing(paths, distances)` (actual vs trailing, con counts de mejora/empeora), `record_open_trade_samples` (captura por ciclo) y `analyze_closed_trades` (reconstruye caminos y compara).
+- `db.py`: tabla `trade_r_samples` (+indice). `repository.py`: `insert_r_sample`, `fetch_r_path`, `prune_r_samples`.
+- `jobs._maybe_record_exit_shadow` + hook en `run_once` (tras lifecycle, latest_price fresco) + poda diaria de muestras > 7 dias. `command_handler`: comando `/exit_analysis` (aliases `/salidas`, `/trailing`).
+- Settings: `ENABLE_EXIT_SHADOW=false`. Sincronizado en `test_score`/`test_alert_rules`. app_version -> v3.4.0.
+- `tests/test_exit_shadow.py` (+13: simulacion (giveback/runner/loser/activacion), compare, captura, analisis, comando on/off).
+
+534 -> **547 verdes**. Shadow read-only: no cambia ninguna salida ni ejecucion; real-money sigue HARDCODED bloqueado.
+
 ## Trading Alert AI v3.3.1
 
 Caché + cooldown 429 para las listas de GeckoTerminal (saca el spam de "Too Many Requests" y acelera el ciclo). El collector pegaba a la API de memecoins cada ciclo (4 chains x trending + new_pools = 8 llamadas), y las listas no tenian manejo de 429 (solo el OHLCV lo tenia) -> reintentaba cada ciclo y se comia el rate limit. Como las pools trending no cambian cada 2-3 min, ahora se cachean.

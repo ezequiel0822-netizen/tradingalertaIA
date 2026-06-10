@@ -462,6 +462,9 @@ class TradingAlertJob:
         # v3.2.0 (Fase C): lecciones por trade + propuestas (read/registro, soft-fail).
         self._maybe_run_continuous_learner()
 
+        # v3.4.0 (exit shadow): registra el camino de R de los abiertos (read/registro).
+        self._maybe_record_exit_shadow()
+
         if self.settings.enable_price_snapshots:
             last_purge = self.repository.get_state("snapshots_last_purge")
             cutoff = minutes_ago(24 * 60)
@@ -1084,6 +1087,32 @@ class TradingAlertJob:
                 logger.info("ContinuousLearner: %s", summary)
         except Exception:
             logger.exception("ContinuousLearner fallo; soft-fail (no afecta el ciclo)")
+
+    def _maybe_record_exit_shadow(self) -> None:
+        """v3.4.0: cada ciclo registra el R no-realizado de los trades abiertos en
+        trade_r_samples (camino de R) para medir si un trailing mejoraria las salidas
+        (/exit_analysis). SOLO registro: no toca ninguna salida ni ejecucion. Opt-in OFF,
+        soft-fail. Poda muestras > 7 dias 1x/dia (gate por fecha) para no crecer sin fin."""
+        if not getattr(self.settings, "enable_exit_shadow", False):
+            return
+        try:
+            from datetime import timedelta
+
+            from app.learning.exit_shadow import record_open_trade_samples
+            from app.utils.time_utils import utc_now, utc_now_iso
+
+            open_trades = self.repository.fetch_open_positions_full()
+            record_open_trade_samples(self.repository, open_trades, utc_now_iso())
+
+            today = utc_now().date().isoformat()
+            if self.repository.get_state("r_samples_last_prune") != today:
+                cutoff = (utc_now() - timedelta(days=7)).isoformat()
+                deleted = self.repository.prune_r_samples(cutoff)
+                self.repository.set_state("r_samples_last_prune", today)
+                if deleted:
+                    logger.info("exit shadow: podadas %s muestras viejas", deleted)
+        except Exception:
+            logger.exception("exit shadow capture fallo; soft-fail")
 
     def _ml_gate(self, paper_trade: dict) -> tuple[bool, bool]:
         """v2.9.0: señal ML adicional para el order_send a demo. Devuelve

@@ -156,6 +156,9 @@ class BasicTelegramAssistant:
         if normalized in {"/readiness", "readiness", "/listo", "listo", "/real", "real money"}:
             return self.readiness_message()
 
+        if normalized in {"/exit_analysis", "exit analysis", "/salidas", "salidas", "/trailing"}:
+            return self.exit_analysis_message()
+
         if normalized in {"/edge", "edge", "/edges", "/borde", "bolsillos"}:
             return self.edge_message()
 
@@ -585,6 +588,57 @@ Chains: {", ".join(self.settings.chains_to_monitor)}
 
         lines.extend(_render_block("SWING LESSONS", swing_lessons))
         lines.extend(_render_block("SCALPING LESSONS", scalping_lessons))
+        lines.append("")
+        lines.append(DISCLAIMER)
+        return "\n".join(lines)
+
+    def exit_analysis_message(self) -> str:
+        """v3.4.0: /exit_analysis — mide HONESTO si un trailing stop mejoraria las salidas
+        de forex, simulando sobre el camino REAL de R de cada trade cerrado
+        (trade_r_samples) vs la salida real. SOLO medicion; no cambia ninguna salida.
+        Requiere ENABLE_EXIT_SHADOW=true + unos dias de data registrada."""
+        from app.learning.exit_shadow import analyze_closed_trades
+
+        if not getattr(self.settings, "enable_exit_shadow", False):
+            return (
+                "El exit shadow esta apagado. Activalo con ENABLE_EXIT_SHADOW=true para que "
+                "el bot registre el camino de R de los trades y poder medir el trailing."
+            )
+        distances = [0.5, 1.0, 1.5, 2.0]
+        comps = analyze_closed_trades(self.repository, distances, category="forex")
+        n = comps[0].trades if comps else 0
+        lines = [
+            f"Exit analysis (forex) — {self.settings.app_version}",
+            "Trailing simulado sobre el camino REAL de R vs la salida real (honesto, no el techo).",
+            "",
+        ]
+        if n == 0:
+            lines.append(
+                "(sin datos todavia — necesita ENABLE_EXIT_SHADOW on + unos dias de trades "
+                "forex cerrados con camino registrado)"
+            )
+            lines.append("")
+            lines.append(DISCLAIMER)
+            return "\n".join(lines)
+        lines.append(f"Trades forex con camino: {n}")
+        for c in comps:
+            lines.append(
+                f"  trail D={c.distance}R: real {c.actual_avg_r:+.3f}R -> trailing "
+                f"{c.policy_avg_r:+.3f}R (delta {c.delta_avg_r:+.3f}R/trade | mejora "
+                f"{c.improved}, empeora {c.hurt})"
+            )
+        best = max(comps, key=lambda c: c.delta_avg_r)
+        lines.append("")
+        if best.delta_avg_r > 0.05:
+            lines.append(
+                f"Mejor: D={best.distance}R (delta {best.delta_avg_r:+.3f}R). Si se sostiene "
+                "con mas muestra, vale activar un trailing para forex con esa distancia."
+            )
+        else:
+            lines.append(
+                "Ningun trailing mejora claro: las salidas actuales estan OK (o falta muestra)."
+            )
+        lines.append("Shadow read-only; no cambia ninguna salida. Decidir con muestra suficiente.")
         lines.append("")
         lines.append(DISCLAIMER)
         return "\n".join(lines)

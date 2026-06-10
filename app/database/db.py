@@ -173,6 +173,17 @@ def _init_db_unsafe(db_path: Path) -> None:
             CREATE INDEX IF NOT EXISTS idx_trade_lessons_key
                 ON trade_lessons(lesson_key);
 
+            CREATE TABLE IF NOT EXISTS trade_r_samples (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                paper_trade_id INTEGER NOT NULL,
+                unrealized_r REAL NOT NULL,
+                recorded_at TEXT NOT NULL,
+                FOREIGN KEY(paper_trade_id) REFERENCES paper_trades(id)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_trade_r_samples_trade
+                ON trade_r_samples(paper_trade_id, recorded_at);
+
             CREATE TABLE IF NOT EXISTS training_runs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 app_version TEXT,

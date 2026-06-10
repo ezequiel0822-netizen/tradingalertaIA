@@ -11,7 +11,7 @@
 
 ## 1. Estado actual
 
-- **v3.3.1**, **534 tests verdes**.
+- **v3.4.0**, **547 tests verdes**.
 - Corriendo en la Lenovo (`C:\Users\LENOVO\tradingalertaIA`, fuera de iCloud, con GPU →
   el LLM local responde rápido).
 - Operativo: MT5 demo (auto-confirm ON), lifecycle, scalping, alertas, learning, y la
@@ -29,6 +29,7 @@
 | **v3.2.0** | **Fase C ContinuousLearner**: leccion por trade (`app/learning/continuous_learner.py` + tabla `trade_lessons` + `reasoner.analyze_win`); agrupa lecciones y PROPONE (no aplica) |
 | **v3.3.0** | Performance desde baseline limpio (`app/portfolio/performance.py` + comando `/performance`); el −11% fue el bug de mayo, limpio queda ~plano. + comando `/readiness` (gates para dinero real) |
 | **v3.3.1** | Caché + cooldown 429 para las listas de GeckoTerminal (`geckoterminal_collector.py`); saca el spam de "Too Many Requests" y acelera el ciclo |
+| **v3.4.0** | Exit shadow (`exit_shadow.py` + tabla `trade_r_samples` + `/exit_analysis`): mide si un trailing mejoraria las salidas (forex/oro NO tienen trailing efectivo); read-only, no toca salidas |
 
 (Detalle completo en `CHANGELOG.md`.)
 
