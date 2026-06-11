@@ -1,21 +1,24 @@
-# start_bot.ps1 — Arranque del bot con contraseña (opt-in).
+# start_bot.ps1 - Arranque del bot con contrasena (opt-in).
 #
 # USO:
-#   1. Configurar la contraseña (una sola vez):
+#   1. Configurar la contrasena (una sola vez):
 #        .\start_bot.ps1 -SetPassword
-#      Te pide la contraseña 2 veces y te muestra la linea STARTUP_PASSWORD_SHA256=...
-#      para pegar en tu .env (no toca el .env automaticamente, lo pegas vos).
+#      Te pide la contrasena 2 veces y te muestra la linea STARTUP_PASSWORD_SHA256=...
+#      para pegar en tu .env (no toca el .env automaticamente, la pegas vos).
 #   2. Arrancar el bot:
 #        .\start_bot.ps1
-#      Pide la contraseña (3 intentos) y si es correcta lanza main.py.
+#      Pide la contrasena (3 intentos) y si es correcta lanza main.py.
 #
 # HONESTIDAD SOBRE LO QUE PROTEGE: esto frena que alguien con acceso casual a tu
 # sesion arranque el bot. NO protege los archivos: quien pueda leer tu disco puede
 # leer el .env (tokens/credenciales) o lanzar python main.py directo. La proteccion
-# real de los secretos es la contraseña de tu cuenta de Windows + BitLocker.
+# real de los secretos es la contrasena de tu cuenta de Windows + BitLocker.
 #
 # Si STARTUP_PASSWORD_SHA256 no esta en el .env, arranca directo (comportamiento
-# identico a antes; la contraseña es opt-in).
+# identico a antes; la contrasena es opt-in).
+#
+# NOTA: archivo en ASCII puro a proposito (PowerShell 5.1 lee .ps1 sin BOM como
+# ANSI y los acentos/UTF-8 rompen el parseo).
 
 param(
     [switch]$SetPassword
@@ -42,7 +45,7 @@ function Read-PlainPassword([string]$prompt) {
 }
 
 if ($SetPassword) {
-    $p1 = Read-PlainPassword "Nueva contraseña de arranque"
+    $p1 = Read-PlainPassword "Nueva contrasena de arranque"
     $p2 = Read-PlainPassword "Repetila"
     if ($p1 -ne $p2) { Write-Host "No coinciden. Nada cambiado."; exit 1 }
     if ($p1.Length -lt 6) { Write-Host "Muy corta (minimo 6). Nada cambiado."; exit 1 }
@@ -66,14 +69,14 @@ if (Test-Path $envFile) {
 if ($expected) {
     $ok = $false
     for ($i = 1; $i -le 3; $i++) {
-        $given = Read-PlainPassword "Contraseña para iniciar Trading Alert AI"
+        $given = Read-PlainPassword "Contrasena para iniciar Trading Alert AI"
         if ((Get-Sha256Hex $given) -eq $expected) { $ok = $true; break }
         Write-Host "Incorrecta ($i/3)."
     }
     if (-not $ok) { Write-Host "Demasiados intentos. No se inicia."; exit 1 }
     Write-Host "OK. Iniciando..."
 } else {
-    Write-Host "(Sin STARTUP_PASSWORD_SHA256 en .env — arranque directo. Para activar: .\start_bot.ps1 -SetPassword)"
+    Write-Host "(Sin STARTUP_PASSWORD_SHA256 en .env - arranque directo. Para activar: .\start_bot.ps1 -SetPassword)"
 }
 
 & (Join-Path $root ".venv\Scripts\python.exe") (Join-Path $root "main.py")
