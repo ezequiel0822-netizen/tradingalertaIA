@@ -279,6 +279,18 @@ class Settings:
     # trades abiertos en trade_r_samples; /exit_analysis simula el trailing sobre ese camino
     # vs la salida real. SOLO medicion, opt-in OFF: NO cambia ninguna salida ni ejecucion.
     enable_exit_shadow: bool
+    # v3.5.0 — Calendar gate: no ejecutar a MT5 (swing ni scalping) con un evento
+    # high-impact de la moneda del par dentro de calendar_buffer_minutes. Conecta el
+    # is_safe_window que existia huerfano desde v2.x (el 10-jun-2026 el bot abrio USDCAD
+    # 18 min antes del BOC que estaba en su propia DB). Downward-only: solo baja a
+    # paper-only. Requiere enable_economic_calendar (la fuente de eventos). Opt-in OFF.
+    enable_calendar_gate: bool
+    # v3.5.0 — Cap de exposicion neta USD: bloquea ejecutar a MT5 un candidato que
+    # concentre la apuesta al dolar mas alla del cap (el 10-jun 7 posiciones eran 1
+    # sola apuesta long-USD y un movimiento las barrio juntas). Solo bloquea
+    # concentracion ADICIONAL (downward-only). Opt-in OFF. Comando /exposicion.
+    enable_usd_exposure_cap: bool
+    max_net_usd_exposure: int
     # Phase 4 v2.3.0 — MT5 validation + walk-forward + data quality + CSV
     mt5_broker_profile: str
     enable_walk_forward_backtest: bool
@@ -449,7 +461,7 @@ def load_settings() -> Settings:
         obsidian_vault_path = safe_obsidian
 
     return Settings(
-        app_version=os.getenv("APP_VERSION", "v3.4.0"),
+        app_version=os.getenv("APP_VERSION", "v3.5.0"),
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
         telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID"),
         dexscreener_base_url=os.getenv(
@@ -682,6 +694,9 @@ def load_settings() -> Settings:
         store_trade_lessons=_get_bool("STORE_TRADE_LESSONS", True),
         performance_baseline_date=os.getenv("PERFORMANCE_BASELINE_DATE", "2026-06-03"),
         enable_exit_shadow=_get_bool("ENABLE_EXIT_SHADOW", False),
+        enable_calendar_gate=_get_bool("ENABLE_CALENDAR_GATE", False),
+        enable_usd_exposure_cap=_get_bool("ENABLE_USD_EXPOSURE_CAP", False),
+        max_net_usd_exposure=_get_int("MAX_NET_USD_EXPOSURE", 3),
         # Phase 4 v2.3.0
         mt5_broker_profile=os.getenv("MT5_BROKER_PROFILE", "icmarkets"),
         enable_walk_forward_backtest=_get_bool("ENABLE_WALK_FORWARD_BACKTEST", True),

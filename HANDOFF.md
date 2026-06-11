@@ -16,7 +16,7 @@ PROYECTO: bot de trading algorítmico LOCAL en Python 3.12 (Windows, PowerShell 
 Detecta oportunidades (memecoins / acciones US / forex / oro), decide con un strategy
 router (5 swing + 2 scalping), hace paper trades y manda órdenes a MT5 demo
 (MetaQuotes-Demo). Real-money BLOQUEADO por diseño (HARDCODED).
-Estado: v3.4.0, 554 tests verdes.
+Estado: v3.5.0, 572 tests verdes.
 
 ANTES DE TOCAR NADA leé (en el repo): CHANGELOG.md (historia completa hasta v3.1.0).
 Si los copiaste de la otra compu: CONTEXTO_MAESTRO_v2.10.0.md +
@@ -43,6 +43,14 @@ QUÉ SE CONSTRUYÓ (serie v3, todo pusheado):
   PROPONE, no aplica). reasoner.analyze_win. Opt-in OFF, soft-fail, read/registro.
 - v3.3.0: comando /performance (rendimiento desde un baseline limpio post-bug de mayo;
   no altera el balance real). El -11% fue el bug; limpio queda ~plano (+0.17% desde 3-jun).
+  + /readiness (gates honestos para real-money). v3.3.1: cache+cooldown 429 Gecko.
+- v3.4.0: exit shadow (mide si un trailing mejoraria las salidas; forex/oro no tenian
+  trailing efectivo). /exit_analysis. Read-only.
+- v3.5.0: calendar gate (conecta is_safe_window que estaba HUERFANO — el 10-jun abrio
+  USDCAD 18 min antes del BOC) + cap de exposicion neta USD (7 posiciones eran 1 sola
+  apuesta long-USD). /exposicion. Ambos downward-only, opt-in OFF.
+- GO_LIVE_RUNBOOK.md: el camino completo a real-money (gates, broker, codigo del dia-D,
+  checklist). Real-money sigue HARDCODED bloqueado hasta que /readiness este verde.
 
 VERDAD DE FONDO: el cuello de botella es DATA, no código. Ninguna estrategia tiene edge
 aún (todas R-negativo neto). El LLM/ML filtran, explican y protegen capital — NO crean

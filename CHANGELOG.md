@@ -1,5 +1,25 @@
 # Changelog
 
+## Trading Alert AI v3.5.0
+
+Proteccion de capital: calendar gate + cap de exposicion USD. Las DOS lecciones del 10-jun-2026 (CPI 12:30 + BOC 13:45): el bot abrio USDCAD 18 min antes de un rate statement que estaba en su propia DB, y tenia 7 posiciones forex que eran UNA SOLA apuesta (long-USD) — un movimiento del dolar las stoppeo juntas (~-7R). Ambos gates son downward-only (solo bajan a paper-only, jamas habilitan), opt-in OFF, soft-fail total.
+
+**Calendar gate (arregla un BUG de integracion).** `is_safe_window` (calendar_filter) existia y el colector llenaba `economic_events`, pero NADIE lo llamaba — `CALENDAR_BUFFER_MINUTES` no hacia nada. Ahora:
+- `jobs._calendar_gate` + hook en `_try_prepare_demo_order` (tras el ensemble veto): no ejecuta a MT5 si hay un evento high-impact de la(s) moneda(s) del par dentro del buffer.
+- Hook tambien en `scalping_engine._open_scalping_trade` (un spike de noticia mata un scalp de 6 pips al instante).
+- `calendar_filter.currencies_for_symbol` ahora parsea pares genericos: `EURUSD` (formato MT5 del scalping) y `EURUSD=X` (Yahoo) -> {EUR, USD}. Antes el formato MT5 caia al default {USD} y perdia eventos de la otra moneda.
+- Flag `ENABLE_CALENDAR_GATE=false`; requiere `ENABLE_ECONOMIC_CALENDAR=true` (la fuente).
+
+**Cap de exposicion neta USD.** `app/risk/exposure.py` (NUEVO, puro): `usd_direction` (+1 long-USD / -1 short-USD / 0 sin pata USD), `net_usd_exposure`, `would_exceed_cap` (solo bloquea concentracion ADICIONAL: reducir el neto siempre pasa; en el cap exacto pasa).
+- `jobs._usd_exposure_gate` + hook en `_try_prepare_demo_order`: bloquea ejecutar un candidato que deje |neto| > cap, contando solo abiertos forex YA ejecutados a MT5.
+- Comando `/exposicion` (aliases `/exposure`, `/usd`): neto actual + detalle por posicion + estado del gate.
+- Flags `ENABLE_USD_EXPOSURE_CAP=false`, `MAX_NET_USD_EXPOSURE=3`.
+
+- Settings sincronizados en `test_score`/`test_alert_rules`. app_version -> v3.5.0. `.env.example`.
+- `tests/test_exposure.py` (+17: direccion USD por tipo de par, neto, cap (bloquea concentracion / permite reducir / cap exacto / simetrico short / sin pata USD), parsing de simbolos MT5, gates de jobs (off-por-default, bloqueo, soft-fail), comando).
+
+554 -> **572 verdes**. Ningun gate puede causar un order_send: solo prevenirlo. Real-money sigue HARDCODED bloqueado.
+
 ## Trading Alert AI v3.4.0
 
 Exit shadow: mide HONESTO si un trailing stop mejoraria las salidas, sin tocar ninguna salida real. Motivado por un hallazgo concreto: en `lifecycle_manager`, los trades de forex/oro caen al `else` y usan los params de trailing de MEMECOIN (activacion +50%), que en forex NUNCA se alcanza -> forex/oro **no tienen trailing efectivo** y devuelven ganancia (capture ratio ~0.68; 24% de winners devuelven >=1R desde el pico).

@@ -1,4 +1,4 @@
-# CONTEXTO MAESTRO — Trading Alert AI v3.4.0
+# CONTEXTO MAESTRO — Trading Alert AI v3.5.0
 
 > Referencia de arquitectura/schema **vigente** (reemplaza a `CONTEXTO_MAESTRO_v2.10.0.md`,
 > que queda como base histórica). Local, Python 3.12, Windows + PowerShell + venv.
@@ -26,7 +26,7 @@ trades** y manda órdenes a **MT5 demo** (MetaQuotes-Demo). Una **capa de IA loc
 - **Todo lo nuevo es opt-in OFF + soft-fail:** si está apagado o algo falla, el bot corre
   EXACTAMENTE igual.
 - Memecoins: solo paper/lab, no ejecutan a MT5.
-- Nunca leer/mostrar el `.env` real ni secrets. **Mantener pytest verde (hoy 554).**
+- Nunca leer/mostrar el `.env` real ni secrets. **Mantener pytest verde (hoy 572).**
 - Al tocar `Settings`: sincronizar `tests/test_score._settings()` Y `tests/test_alert_rules._settings()`.
 
 ## 3. Arquitectura por capas (módulos reales)
@@ -36,7 +36,7 @@ trades** y manda órdenes a **MT5 demo** (MetaQuotes-Demo). Una **capa de IA loc
 | **Colectores** | `app/collectors/*` (dexscreener, forex, stock, macro, news, sec, economic_calendar, geckoterminal, goplus) | Traen data cruda de mercado/macro/noticias |
 | **Analizadores** | `app/analyzers/*` (token_score, technical_patterns, alert_decision_engine, learned_weights, learning_gate, risk_analyzer, pro_intelligence, ...) | Puntúan, deciden si alertar, aplican aprendizaje |
 | **Estrategias** | `app/strategies/*` — swing: `breakout`, `forex_session_breakout`, `mean_reversion`, `momentum`, `news_catalyst`; scalping: `scalping_breakout`, `scalping_mean_reversion`; `strategy_router` | Eligen el candidato de trade |
-| **Riesgo** | `app/risk/` — `risk_manager` (can_open, cooldowns), `position_sizer` (sizing; hoy para ~$100k) | Gate de riesgo + tamaño |
+| **Riesgo** | `app/risk/` — `risk_manager` (can_open, cooldowns), `position_sizer` (sizing; hoy para ~$100k), **`exposure` (v3.5.0, neto USD)** | Gate de riesgo + tamaño + correlación |
 | **Brokers** | `app/brokers/` — `mt5_demo_trader` (ÚNICO order_send), `mt5_reader`, `mt5_symbol_map`, `mt5_historical` | Ejecución demo + lectura MT5 |
 | **Portfolio** | `app/portfolio/` — `portfolio_manager` (balance, realized_pnl_today), `mt5_reconciler` (huérfanas/SL), **`performance` (v3.3.0, baseline limpio)** | Estado de cuenta + reconciliación + medición |
 | **IA local** | `app/intelligence/` — `ollama_processor` (transporte HTTP), `reasoner` (asesor texto), `ensemble_gate` (veto), `macro_context`, `claude_processor` (alt) | Asesora / vetea (subtractivo) |
@@ -51,7 +51,9 @@ trades** y manda órdenes a **MT5 demo** (MetaQuotes-Demo). Una **capa de IA loc
 2. Abrir paper_trades (swing) / `scalping_engine` (scalping). Al abrir swing live se
    persisten `rsi_entry`/`atr_value`/`macd_*` (v2.11.0 — features ML reales).
 3. **Gate de promoción** antes del `order_send` a demo: reglas (`should_execute_live`) →
-   ML gate (`_ml_gate`) → ensemble LLM veto (`_llm_ensemble_gate`). **Todos downward-only.**
+   ML gate (`_ml_gate`) → ensemble LLM veto (`_llm_ensemble_gate`) → **calendar gate**
+   (v3.5.0, evento high-impact cerca) → **cap de exposición USD** (v3.5.0, no concentrar
+   la apuesta al dólar). **Todos downward-only.**
 4. `lifecycle_manager.manage_open_positions` → `mt5_reconciler.reconcile` (huérfanas/SL).
 5. Learning cycle (refresca `strategy_performance` + sliced + lessons) → retrain ML diario.
 6. Resumen diario (v3.1.0) → **ContinuousLearner** (v3.2.0, lecciones + propuestas) →
@@ -117,7 +119,7 @@ huérfanas, ~746 artifacts 22–28 may, corregidos en v2.6.7–v2.7.1). Limpio d
 
 ## 9. Estado + gates de roadmap
 
-- **Hoy:** v3.4.0, 554 tests, demo ~$88.6k. Features-coverage **~69/400** (gate Fase D).
+- **Hoy:** v3.5.0, 572 tests, demo ~$88.8k. Features-coverage **~70/400** (gate Fase D).
 - **Fase D** (AdvancedPredictor: LightGBM+RF+calibración): **GATE DURO ≥400 trades limpios
   con features**. Dormido.
 - **Fase E** (StrategyMutator: auto-evolución, paper ≥5d + confirmación humana): **GATE DURO
@@ -129,11 +131,12 @@ huérfanas, ~746 artifacts 22–28 may, corregidos en v2.6.7–v2.7.1). Limpio d
 
 `/health`, `/expectancy`, `/edge`, **`/performance`** (v3.3.0), **`/readiness`** (v3.3.0,
 gates para dinero real), **`/exit_analysis`** (v3.4.0, trailing simulado vs salida real),
-`/ml_status`, `/market`, `/porque_perdi`, `/gate_preview`, `/demo_close_all`.
+**`/exposicion`** (v3.5.0, neto USD), `/ml_status`, `/market`, `/porque_perdi`,
+`/gate_preview`, `/demo_close_all`.
 
 ## 11. Correr / testear
 
 - Correr: `cd <ruta>\tradingalertaIA` + `.\.venv\Scripts\python.exe main.py` (UNA máquina a
   la vez contra la misma cuenta MT5 demo).
-- Tests: `.\.venv\Scripts\python.exe -m pytest -q` (debe dar **554 verdes**).
+- Tests: `.\.venv\Scripts\python.exe -m pytest -q` (debe dar **572 verdes**).
 - IA local: instalar Ollama + `ollama pull llama3.1` (+ `mistral` para el veto).

@@ -159,6 +159,9 @@ class BasicTelegramAssistant:
         if normalized in {"/exit_analysis", "exit analysis", "/salidas", "salidas", "/trailing"}:
             return self.exit_analysis_message()
 
+        if normalized in {"/exposicion", "exposicion", "/exposure", "exposure", "/usd"}:
+            return self.exposure_message()
+
         if normalized in {"/edge", "edge", "/edges", "/borde", "bolsillos"}:
             return self.edge_message()
 
@@ -588,6 +591,42 @@ Chains: {", ".join(self.settings.chains_to_monitor)}
 
         lines.extend(_render_block("SWING LESSONS", swing_lessons))
         lines.extend(_render_block("SCALPING LESSONS", scalping_lessons))
+        lines.append("")
+        lines.append(DISCLAIMER)
+        return "\n".join(lines)
+
+    def exposure_message(self) -> str:
+        """v3.5.0: /exposicion — exposicion neta USD de las posiciones forex abiertas
+        que ejecutaron a MT5. Muestra cuantas 'apuestas al dolar' hay concentradas
+        (la leccion del 10-jun: 7 posiciones = 1 apuesta). Read-only."""
+        from app.risk.exposure import net_usd_exposure, usd_direction
+
+        try:
+            open_trades = [
+                t for t in self.repository.fetch_open_positions_full()
+                if str(t.get("category") or "") == "forex"
+                and t.get("id") is not None
+                and self.repository.has_successful_demo_order(int(t["id"]))
+            ]
+        except Exception:
+            return "No pude leer las posiciones abiertas (error de repositorio)."
+        net = net_usd_exposure(open_trades)
+        cap_on = bool(getattr(self.settings, "enable_usd_exposure_cap", False))
+        max_net = int(getattr(self.settings, "max_net_usd_exposure", 3))
+        lines = [
+            f"Exposicion neta USD (forex ejecutado a MT5) — {self.settings.app_version}",
+            f"Neto: {net:+d}  (+1 por posicion long-USD, -1 por short-USD)",
+            f"Cap: |{max_net}| — gate {'ACTIVO' if cap_on else 'APAGADO (solo medicion)'}",
+            "",
+        ]
+        if not open_trades:
+            lines.append("(sin posiciones forex abiertas ejecutadas)")
+        for t in open_trades:
+            d = usd_direction(str(t.get("symbol") or ""), str(t.get("direction") or ""))
+            tag = "+1 long-USD" if d > 0 else ("-1 short-USD" if d < 0 else " 0 sin USD")
+            lines.append(
+                f"  {str(t.get('symbol') or '?'):10} {str(t.get('direction') or '?'):5} [{tag}]"
+            )
         lines.append("")
         lines.append(DISCLAIMER)
         return "\n".join(lines)

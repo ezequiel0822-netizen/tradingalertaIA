@@ -1,11 +1,11 @@
-# Estado Actual — v3.4.0 (2026-06-09)
+# Estado Actual — v3.5.0 (2026-06-11)
 
 > Reemplaza a [[14 - Estado Actual v2.7.0]] como nota de estado vigente.
-> Detalle por versión en `CHANGELOG.md`; arquitectura en `CONTEXTO_MAESTRO_v3.4.0.md`.
+> Detalle por versión en `CHANGELOG.md`; arquitectura en `CONTEXTO_MAESTRO_v3.5.0.md`.
 
 ## Dónde estamos
 
-- **v3.4.0**, **554 tests verdes**, corriendo en la Lenovo contra MT5 demo.
+- **v3.5.0**, **572 tests verdes**, corriendo en la Lenovo contra MT5 demo.
 - Real-money **BLOQUEADO** (HARDCODED). El comando `/readiness` muestra los gates
   honestos para algún día desbloquearlo. Veredicto hoy: **NO LISTO** (falta edge + data).
 - Balance demo ~$88.6k. **El −11% fue sobre todo el bug de mayo** (~746 artifacts,
@@ -22,6 +22,7 @@
 | v3.3.0 | `/performance` (baseline limpio post-bug) + `/readiness` (gates para real-money) |
 | v3.3.1 | Caché + cooldown 429 para GeckoTerminal (saca el spam de rate limit) |
 | v3.4.0 | **Exit shadow**: mide si un trailing mejoraría las salidas (forex/oro NO tienen trailing efectivo — usan params de memecoin con activación +50% inalcanzable). `/exit_analysis` |
+| v3.5.0 | **Calendar gate** (conecta `is_safe_window` que estaba huérfano: el 10-jun abrió USDCAD 18 min antes del BOC) + **cap de exposición USD** (7 posiciones = 1 apuesta). `/exposicion`. Downward-only, opt-in OFF |
 
 ## Hallazgos clave (honestos)
 

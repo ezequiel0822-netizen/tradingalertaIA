@@ -27,9 +27,16 @@ _SYMBOL_CURRENCIES = {
 def currencies_for_symbol(symbol: str) -> set[str]:
     if symbol in _SYMBOL_CURRENCIES:
         return _SYMBOL_CURRENCIES[symbol]
-    upper = symbol.upper()
+    upper = str(symbol or "").upper().strip()
     if upper in _SYMBOL_CURRENCIES:
         return _SYMBOL_CURRENCIES[upper]
+    # v3.5.0: parsear pares genericos — 'EURUSD' (formato MT5 del scalping) o
+    # 'EURUSD=X' (Yahoo) -> {EUR, USD}. Antes el formato MT5 caia al default y
+    # perdia los eventos de la moneda no-USD (p.ej. un rate decision del BCE).
+    if upper.endswith("=X"):
+        upper = upper[:-2]
+    if len(upper) == 6 and upper.isalpha():
+        return {upper[:3], upper[3:]}
     # Default conservador: bloquear con eventos USD si no se reconoce
     return {"USD"}
 

@@ -81,6 +81,10 @@ class _StubJob:
     _llm_ensemble_gate = TradingAlertJob._llm_ensemble_gate
     # v2.9.0: ML off en estos tests -> _ml_gate retorna (True, False) sin tocar nada
     _ml_predictor = None
+    # v3.5.0: calendar gate y cap USD off en estos tests -> retornan True (allow)
+    # sin tocar el repo (guard temprano por los flags default False).
+    _calendar_gate = TradingAlertJob._calendar_gate
+    _usd_exposure_gate = TradingAlertJob._usd_exposure_gate
 
 
 def test_enable_auto_confirm_demo_default_false(monkeypatch) -> None:

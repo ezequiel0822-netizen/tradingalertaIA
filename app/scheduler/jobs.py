@@ -1200,6 +1200,65 @@ class TradingAlertJob:
             logger.exception("LLM ensemble gate fallo; soft-fail (sin cambios)")
             return True
 
+    def _calendar_gate(self, paper_trade: dict) -> bool:
+        """v3.5.0: True = permitir order_send. Bloquea si hay un evento high-impact de
+        la(s) moneda(s) del simbolo dentro de calendar_buffer_minutes. SOLO baja a
+        paper-only (downward-only); soft-fail = permitir. Requiere ambos flags
+        (enable_calendar_gate + enable_economic_calendar, que llena la tabla)."""
+        if not getattr(self.settings, "enable_calendar_gate", False):
+            return True
+        if not getattr(self.settings, "enable_economic_calendar", False):
+            return True  # sin colector no hay eventos: el gate seria un no-op enganoso
+        try:
+            from app.intelligence.calendar_filter import is_safe_window
+
+            safe, reason = is_safe_window(
+                str(paper_trade.get("symbol") or ""),
+                utc_now(),
+                self.repository,
+                int(getattr(self.settings, "calendar_buffer_minutes", 30)),
+            )
+            if not safe:
+                logger.info(
+                    "Calendar gate: paper-only symbol=%s reason=%s",
+                    paper_trade.get("symbol"), reason,
+                )
+            return safe
+        except Exception:
+            logger.exception("Calendar gate fallo; soft-fail -> permitir")
+            return True
+
+    def _usd_exposure_gate(self, paper_trade: dict) -> bool:
+        """v3.5.0: True = permitir order_send. Bloquea si abrir el candidato dejaria la
+        exposicion neta USD (de los abiertos YA ejecutados a MT5) mas alla del cap.
+        SOLO bloquea concentracion adicional (downward-only); soft-fail = permitir."""
+        if not getattr(self.settings, "enable_usd_exposure_cap", False):
+            return True
+        try:
+            from app.risk.exposure import would_exceed_cap
+
+            open_executed = [
+                t for t in self.repository.fetch_open_positions_full()
+                if str(t.get("category") or "") == "forex"
+                and t.get("id") is not None
+                and self.repository.has_successful_demo_order(int(t["id"]))
+            ]
+            blocked, reason = would_exceed_cap(
+                open_executed,
+                str(paper_trade.get("symbol") or ""),
+                str(paper_trade.get("direction") or "long"),
+                int(getattr(self.settings, "max_net_usd_exposure", 3)),
+            )
+            if blocked:
+                logger.info(
+                    "USD exposure gate: paper-only symbol=%s reason=%s",
+                    paper_trade.get("symbol"), reason,
+                )
+            return not blocked
+        except Exception:
+            logger.exception("USD exposure gate fallo; soft-fail -> permitir")
+            return True
+
     def _try_prepare_demo_order(self, paper_trade: dict) -> None:
         """Phase 5: create a pending MT5 demo order request.
 
@@ -1270,6 +1329,18 @@ class TradingAlertJob:
         # aprobado. Soft-fail; SOLO veta (downward-only). No toca mt5_demo_trader.
         if not self._llm_ensemble_gate(paper_trade):
             return  # el ensemble veta -> paper-only (sin order_send a MT5)
+
+        # v3.5.0 calendar gate: no ejecutar a MT5 con un evento high-impact de la
+        # moneda del par dentro del buffer (el 10-jun abrio USDCAD 18 min antes del
+        # BOC que estaba en su propia DB). Downward-only + soft-fail.
+        if not self._calendar_gate(paper_trade):
+            return  # evento cerca -> paper-only (sin order_send a MT5)
+
+        # v3.5.0 cap de exposicion USD: no concentrar mas la apuesta al dolar (el
+        # 10-jun 7 posiciones eran 1 sola apuesta long-USD y un movimiento las barrio
+        # juntas). Downward-only + soft-fail.
+        if not self._usd_exposure_gate(paper_trade):
+            return  # concentraria la apuesta USD -> paper-only (sin order_send)
 
         from app.brokers.mt5_demo_trader import MT5DemoTrader
 

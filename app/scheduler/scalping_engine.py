@@ -593,6 +593,32 @@ class ScalpingEngine:
                 )
                 return True
 
+        # v3.5.0 calendar gate: no ejecutar scalps a MT5 con un evento high-impact
+        # cerca (un spike de noticia mata un scalp de 6 pips al instante).
+        # Downward-only + soft-fail: si falla, permite (comportamiento previo).
+        if getattr(self.settings, "enable_calendar_gate", False) and getattr(
+            self.settings, "enable_economic_calendar", False
+        ):
+            try:
+                from datetime import datetime, timezone
+
+                from app.intelligence.calendar_filter import is_safe_window
+
+                safe, cal_reason = is_safe_window(
+                    signal.symbol,
+                    datetime.now(timezone.utc),
+                    self.repository,
+                    int(getattr(self.settings, "calendar_buffer_minutes", 30)),
+                )
+                if not safe:
+                    logger.info(
+                        "Scalping calendar gate: paper-only %s reason=%s",
+                        signal.symbol, cal_reason,
+                    )
+                    return True
+            except Exception:
+                logger.exception("Scalping calendar gate fallo; soft-fail -> permitir")
+
         # 3. Ejecutar a MT5 demo via trader. Construye request directo.
         paper_id = self._fetch_latest_scalping_trade_id(signal.symbol)
         if paper_id is None:
