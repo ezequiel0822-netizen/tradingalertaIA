@@ -35,11 +35,27 @@
 4. **Hardware**: la GPU no banca un LLM local rápido (~50s/respuesta). El ContinuousLearner
    quedó OFF en esta máquina; el asesor (`/market`) funciona a demanda con paciencia.
 
+## Cierre de sesión 2026-06-11 (deployado y verificado)
+
+- **Config ACTIVA en el `.env` del user**: `ENABLE_CALENDAR_GATE=true`,
+  `ENABLE_USD_EXPOSURE_CAP=true` (|3|), `STRATEGY_SYMBOL_COOLDOWN_MINUTES=60`,
+  `ENABLE_EXIT_SHADOW=true` (~6.000 muestras acumulándose), `APP_VERSION=v3.5.0`.
+- **Arranque oficial**: `.\start_bot.ps1` — pide contraseña (hash SHA-256 en `.env`,
+  opt-in). Script en ASCII puro (PS 5.1 rompe con acentos/UTF-8 sin BOM).
+- **Auditoría de seguridad: limpia.** Telegram autoriza por chat_id exacto; `.env`
+  jamás commiteado; LogRedactor enmascara el token; SQL parametrizado; sin eval/exec;
+  timeouts en toda la red. Menores aceptados: email en este vault (repo privado),
+  pickle de modelos locales.
+- **`GO_LIVE_RUNBOOK.md`**: el camino completo a real-money quedó documentado
+  (5 gates, broker, código del día-D, checklist). Real-money sigue bloqueado.
+- **`RESUMEN_COMPLETO.md`**: todo el proyecto en un solo documento, para retomar
+  en cualquier chat nuevo.
+
 ## Qué sigue
 
-1. Dejar correr (data 69→400 es el cuello de botella real).
-2. Activar `ENABLE_EXIT_SHADOW=true` unos días → `/exit_analysis` → si el delta es
-   positivo y robusto, cambiar el trailing de forex **con evidencia**.
+1. Dejar correr (data ~70→400 es el cuello de botella real).
+2. En 3-5 días: `/exit_analysis` → si el delta es positivo y robusto, cambiar el
+   trailing de forex **con evidencia**.
 3. Fase D (ensemble ML) recién con ≥400; Fase E con edge + 3 meses.
-4. Real-money: solo cuando `/readiness` esté verde en gates 1-2, con sizing micro
-   reconstruido + audit del camino real + decisión deliberada y explícita.
+4. Real-money: `GO_LIVE_RUNBOOK.md` cuando `/readiness` esté verde en gates 1-2,
+   con decisión deliberada y explícita.

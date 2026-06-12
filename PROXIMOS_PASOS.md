@@ -5,18 +5,24 @@
 > - `HANDOFF.md` — setup de la máquina + prompt de arranque.
 > - `Trading Alert AI v3.1 Plan Arquitectura MEJORADO.md` — el plan/arquitectura completo.
 > - `CHANGELOG.md` — historia detallada de cada versión.
-> - `CONTEXTO_MAESTRO_v2.10.0.md` — arquitectura/schema exhaustivos (base histórica).
+> - `CONTEXTO_MAESTRO_v3.5.0.md` — arquitectura/schema **vigentes** (el v2.10.0 queda histórico).
+> - `GO_LIVE_RUNBOOK.md` — el camino completo a real-money (gates, broker, día-D).
+> - `RESUMEN_COMPLETO.md` — TODO el proyecto en un solo documento (para arrancar un chat nuevo).
 
 ---
 
 ## 1. Estado actual
 
-- **v3.5.0**, **572 tests verdes**.
-- Corriendo en la Lenovo (`C:\Users\LENOVO\tradingalertaIA`, fuera de iCloud, con GPU →
-  el LLM local responde rápido).
-- Operativo: MT5 demo (auto-confirm ON), lifecycle, scalping, alertas, learning, y la
-  **capa LLM asesora** (Ollama + `llama3.1`) verificada con `/market`.
-- Balance demo ~$88,6xx. **Real-money BLOQUEADO (HARDCODED).**
+- **v3.5.0**, **572 tests verdes**. Todo mergeado a `main` y deployado.
+- Corriendo en la Lenovo (`C:\Users\LENOVO\tradingalertaIA`). Arranque oficial:
+  **`.\start_bot.ps1`** (pide contraseña, opt-in, hash en `.env`).
+- ⚠️ **Hardware**: la GPU NO banca un LLM local rápido (~50s/respuesta, corre en CPU).
+  Por eso el asesor (`/market`) es a-demanda-con-paciencia, `ENABLE_CONTINUOUS_LEARNER=false`
+  en esta máquina (el código v3.2.0 está sano; es límite de hardware), y el LLM jamás va
+  en el hot path del ciclo.
+- **Protecciones v3.5.0 ACTIVAS** en el `.env` del user: calendar gate, cap USD (|3|),
+  cooldown 60 min, exit shadow registrando (~6k muestras al 11-jun).
+- Balance demo ~$88,8xx. **Real-money BLOQUEADO (HARDCODED)** — camino en `GO_LIVE_RUNBOOK.md`.
 
 ## 2. Lo que YA construimos (serie v3 — toda pusheada)
 
@@ -49,7 +55,7 @@ Limpio de artifacts, los trades ejecutados suman ~−2% desde el inicio; desde e
 ganador — plano, con muestra chica.** El comando `/performance` lo mide honesto.
 
 Lo más valioso AHORA sigue siendo **dejar correr el bot para juntar muestra limpia** con
-los features técnicos (v2.11.0): hoy hay **~68/400** trades con features reales (gate Fase
+los features técnicos (v2.11.0): hoy hay **~70/400** trades con features reales (gate Fase
 D). Sin data, las fases de abajo no rinden. El edge sale de data + research, no de
 sofisticación.
 
@@ -85,11 +91,13 @@ sofisticación.
 - TickAnalyzer (micro-patrones en ticks), SentimentAnalyzer, AnomalyDetector,
   DynamicRiskAdjuster. Evaluar cuando C–E estén firmes y haya data.
 
-### Opciones inmediatas *(sin código)*
-- **Activar el veto:** en la Lenovo `ollama pull mistral` + `ENABLE_LLM_ENSEMBLE=true`.
-  Solo *frena* trades (baja a paper), nunca abre.
-- **Sacar gold** (`XAUUSD,GOLD`) de `DEMO_ALLOWED_SYMBOLS` — sigue tóxico (−2.79R, 0/12).
-- **Dejar correr** para juntar data (lo más importante).
+### Lo inmediato *(estado al 11-jun-2026)*
+- **Dejar correr** para juntar data (lo más importante; 70→400 es el cuello de botella).
+- **En 3-5 días**: `/exit_analysis` → si el trailing simulado da delta +R robusto, activar
+  el trailing real de forex CON evidencia (hoy forex/oro no tienen trailing efectivo).
+- Gold ya NO está en `DEMO_ALLOWED_SYMBOLS` (paper-only). Calendar gate + cap USD ya activos.
+- El veto LLM (`ENABLE_LLM_ENSEMBLE`) queda OFF en esta máquina: agregaría llamadas de
+  ~50s al gate (límite de hardware, ver §1).
 
 ## 5. Cómo construir (convenciones INAMOVIBLES)
 
@@ -98,10 +106,11 @@ sofisticación.
   a paper, JAMÁS fuerzan una orden). No tocar `mt5_demo_trader.py` ni `mt5_reconciler.py`.
 - **Todo opt-in OFF + soft-fail:** cada capa nueva default `false`; si está apagada o algo
   falla, el bot corre EXACTAMENTE igual.
-- **Mantener pytest verde (501).** Al tocar `Settings`: sincronizar
+- **Mantener pytest verde (572).** Al tocar `Settings`: sincronizar
   `tests/test_score._settings()` Y `tests/test_alert_rules._settings()`.
-- **Versionado:** serie **v3.x** (la próxima feature = v3.2.0). Bump `app_version` +
-  `CHANGELOG.md` + `.env.example` al cerrar cada versión.
+- **Versionado (regla del user):** patch (v3.5.1) para fixes; minor (v3.6.0) SOLO para
+  features reales; nunca saltar números. Bump `app_version` + `CHANGELOG.md` +
+  `.env.example` + docs al cerrar cada versión.
 - **Cada módulo nuevo trae su test file.** No mergear sin todos los tests verdes.
 - Nunca leer/mostrar el `.env` real ni secrets.
 
@@ -111,19 +120,27 @@ Abrí Claude Code en `C:\Users\LENOVO\tradingalertaIA` y pegá esto como primer 
 
 ```
 Retomamos Trading Alert AI (bot de trading algorítmico LOCAL, Python 3.12, Windows).
-Estado: v3.1.0, origin/main, 501 tests verdes, corriendo en esta máquina (Lenovo, GPU).
+Estado: v3.5.0, main, 572 tests verdes, corriendo en esta máquina (Lenovo) vía
+.\start_bot.ps1. Protecciones activas: calendar gate, cap USD, exit shadow registrando.
 
-Leé en este orden ANTES de tocar nada: PROXIMOS_PASOS.md (qué sigue + reglas),
-HANDOFF.md, CHANGELOG.md, y "Trading Alert AI v3.1 Plan Arquitectura MEJORADO.md".
+Leé en este orden ANTES de tocar nada: RESUMEN_COMPLETO.md (todo el proyecto en uno),
+PROXIMOS_PASOS.md (qué sigue + reglas), CONTEXTO_MAESTRO_v3.5.0.md (arquitectura),
+CHANGELOG.md, y GO_LIVE_RUNBOOK.md (camino a real-money).
 
-Reglas inamovibles: real-money BLOQUEADO (ENABLE_REAL_TRADING=false HARDCODED);
-order_send solo en mt5_demo_trader.py; LLM/ML SUBTRACTIVOS (solo vetan, nunca fuerzan);
-todo opt-in OFF + soft-fail; mantener 501 tests verdes; al tocar Settings sincronizar
-los _settings() de test_score y test_alert_rules.
+Reglas inamovibles: real-money BLOQUEADO (ENABLE_REAL_TRADING=false HARDCODED) hasta
+que /readiness esté verde — el user ya lo pidió 3+ veces, la respuesta es el runbook,
+no el flag; order_send solo en mt5_demo_trader.py; LLM/ML SUBTRACTIVOS (solo vetan,
+nunca fuerzan); todo opt-in OFF + soft-fail; mantener 572 tests verdes; al tocar
+Settings sincronizar los _settings() de test_score y test_alert_rules; versionado:
+patch para fixes, minor para features, sin saltos.
 
-La verdad de fondo: el cuello de botella es DATA, no código. Ninguna estrategia tiene
-edge; dejar correr para juntar muestra. No empezar Fase D/E sin la data que piden.
+Límite de hardware: la GPU no banca LLM local rápido (~50s/gen) — nada de LLM en el
+hot path del ciclo; ContinuousLearner queda OFF en esta máquina.
 
-Decime qué querés hacer: (A) Fase C ContinuousLearner; (B) activar el veto/ajustes de
-config; (C) revisar la data acumulada (/expectancy, /edge, /ml_status); (D) otra cosa.
+La verdad de fondo: el cuello de botella es DATA (70/400), no código. El único +R es
+régimen-short (no edge durable). Dejar correr; no empezar Fase D/E sin sus gates.
+
+Decime qué querés hacer: (A) revisar la data (/performance, /readiness, /exit_analysis,
+/exposicion); (B) si /exit_analysis ya da delta +R robusto, activar el trailing de forex
+con evidencia; (C) Fase D si la data llegó a 400; (D) otra cosa.
 ```

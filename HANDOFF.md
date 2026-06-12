@@ -18,9 +18,10 @@ router (5 swing + 2 scalping), hace paper trades y manda órdenes a MT5 demo
 (MetaQuotes-Demo). Real-money BLOQUEADO por diseño (HARDCODED).
 Estado: v3.5.0, 572 tests verdes.
 
-ANTES DE TOCAR NADA leé (en el repo): CHANGELOG.md (historia completa hasta v3.1.0).
-Si los copiaste de la otra compu: CONTEXTO_MAESTRO_v2.10.0.md +
-"Trading Alert AI v3.1 Plan Arquitectura MEJORADO.md" + la carpeta de memoria de Claude.
+ANTES DE TOCAR NADA leé (en el repo, en este orden): RESUMEN_COMPLETO.md (todo en uno),
+PROXIMOS_PASOS.md, CONTEXTO_MAESTRO_v3.5.0.md (arquitectura vigente), CHANGELOG.md
+(historia hasta v3.5.0), GO_LIVE_RUNBOOK.md (camino a real-money).
+Si los copiaste de la otra compu: la carpeta de memoria de Claude.
 
 REGLAS INAMOVIBLES (no romper nunca):
 - ENABLE_REAL_TRADING=false HARDCODED. Real-money prohibido sin autorización nueva y
@@ -29,8 +30,11 @@ REGLAS INAMOVIBLES (no romper nunca):
 - El LLM y el ML son SUBTRACTIVOS: solo pueden vetar / bajar-a-paper, JAMÁS forzar una orden.
 - Todo lo nuevo (Ollama, asesor, ensemble veto, resumen diario) es opt-in OFF + soft-fail:
   si está apagado, el bot corre idéntico a antes.
-- Nunca leer/mostrar el .env real ni secrets. Mantener pytest verde (501). Al tocar
+- Nunca leer/mostrar el .env real ni secrets. Mantener pytest verde (572). Al tocar
   Settings, sincronizar tests/test_score._settings() Y tests/test_alert_rules._settings().
+- Versionado: patch para fixes, minor SOLO para features reales, sin saltar números.
+- Real-money: el user ya lo pidió 3+ veces; la respuesta es GO_LIVE_RUNBOOK.md +
+  /readiness, NO desbloquear el flag. Memoria de Claude lo documenta.
 
 QUÉ SE CONSTRUYÓ (serie v3, todo pusheado):
 - v2.11.0: rsi/atr/macd persistidos al entry (desbloquea features ML reales) +
@@ -52,20 +56,23 @@ QUÉ SE CONSTRUYÓ (serie v3, todo pusheado):
 - GO_LIVE_RUNBOOK.md: el camino completo a real-money (gates, broker, codigo del dia-D,
   checklist). Real-money sigue HARDCODED bloqueado hasta que /readiness este verde.
 
-VERDAD DE FONDO: el cuello de botella es DATA, no código. Ninguna estrategia tiene edge
-aún (todas R-negativo neto). El LLM/ML filtran, explican y protegen capital — NO crean
-edge. Lo más valioso ahora: DEJAR CORRER para juntar muestra limpia con los features
-técnicos que ya se persisten.
+VERDAD DE FONDO: el cuello de botella es DATA (70/400 trades con features), no código.
+No hay edge PROBADO: el único +R (forex_session_breakout +0.38R) lo carga el lado SHORT
+de un régimen — no durable. El −11% del demo fue el bug de mayo; limpio queda ~plano.
+El LLM/ML filtran, explican y protegen capital — NO crean edge. Lo más valioso: DEJAR
+CORRER. Hardware: la GPU no banca LLM local rápido (~50s/gen) — nada de LLM en el hot
+path; ContinuousLearner OFF en la Lenovo (código sano, límite de hardware).
 
-PRÓXIMOS PASOS (roadmap v3.1): Fase C = ContinuousLearner (tabla trade_lessons);
-Fase D = AdvancedPredictor (sumar LightGBM/RF al XGBoost) SOLO con ≥400 trades + features
-reales; Fase E = StrategyMutator SOLO con ≥1 estrategia R+ neto + 3 meses data.
-Diferidos: tick analyzer, sentiment, anomaly.
+PRÓXIMOS PASOS: 1) dejar correr (data 70→400); 2) /exit_analysis cuando haya días de
+muestra → activar trailing forex SOLO con delta +R robusto; 3) Fase D (LightGBM/RF) SOLO
+con ≥400 trades + features; 4) Fase E (StrategyMutator) SOLO con edge + 3 meses;
+5) real-money: GO_LIVE_RUNBOOK.md cuando /readiness esté verde.
 
 PRIMERA TAREA EN ESTA COMPU:
-1. ollama pull llama3.1 (+ mistral si vas a usar el veto). Con GPU va rápido.
-2. correr: .\.venv\Scripts\python.exe main.py
-3. verificar en Telegram: /health (debe decir v3.1.0) + /market (debería responder rápido).
+1. ollama pull llama3.2:3b (o llama3.1 si la GPU es mejor que la Lenovo).
+2. correr: .\start_bot.ps1 (pide contraseña si STARTUP_PASSWORD_SHA256 está en .env).
+3. verificar en Telegram: /health (debe decir v3.5.0) + /readiness + /exposicion.
+   /market tarda ~50s en hardware chico — es normal, no es un bug.
 4. si OK, dejar correr.
 ```
 
@@ -88,5 +95,6 @@ Lo que **NO** viaja por GitHub (hay que copiarlo/instalarlo aparte):
 
 - **El bot corre en UNA sola máquina a la vez.** Dos máquinas contra la misma cuenta MT5
   demo = órdenes dobles y DBs divergentes. Apagá una antes de prender la otra.
-- Para correr: `cd <ruta>\tradingalertaIA` + `.\.venv\Scripts\python.exe main.py`.
+- Para correr: `cd <ruta>\tradingalertaIA` + **`.\start_bot.ps1`** (arranque oficial,
+  con contraseña opt-in). Directo sin contraseña: `.\.venv\Scripts\python.exe main.py`.
 - Verificar: `/health` (versión), `/expectancy`, `/edge`, `/performance`, `/readiness`, `/exit_analysis`, `/ml_status`, `/market`.

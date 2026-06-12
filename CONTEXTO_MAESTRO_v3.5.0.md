@@ -4,6 +4,7 @@
 > que queda como base histórica). Local, Python 3.12, Windows + PowerShell + venv.
 > Para el roadmap y las reglas de cómo construir: `PROXIMOS_PASOS.md`. Para la historia
 > versión por versión: `CHANGELOG.md`. Para retomar en otra máquina: `HANDOFF.md`.
+> Para el camino a real-money: `GO_LIVE_RUNBOOK.md`. Todo-en-uno: `RESUMEN_COMPLETO.md`.
 
 ---
 
@@ -28,6 +29,10 @@ trades** y manda órdenes a **MT5 demo** (MetaQuotes-Demo). Una **capa de IA loc
 - Memecoins: solo paper/lab, no ejecutan a MT5.
 - Nunca leer/mostrar el `.env` real ni secrets. **Mantener pytest verde (hoy 572).**
 - Al tocar `Settings`: sincronizar `tests/test_score._settings()` Y `tests/test_alert_rules._settings()`.
+- **Auditoría de seguridad (2026-06-11): limpia.** Telegram autoriza por chat_id exacto;
+  `.env` jamás commiteado; `LogRedactor` enmascara el token (valor + patrón); SQL
+  parametrizado; sin eval/exec/shell=True; timeouts en toda la red; repo privado.
+  Menores aceptados: email personal en un doc de obsidian; `pickle.load` de modelos locales.
 
 ## 3. Arquitectura por capas (módulos reales)
 
@@ -136,7 +141,10 @@ gates para dinero real), **`/exit_analysis`** (v3.4.0, trailing simulado vs sali
 
 ## 11. Correr / testear
 
-- Correr: `cd <ruta>\tradingalertaIA` + `.\.venv\Scripts\python.exe main.py` (UNA máquina a
-  la vez contra la misma cuenta MT5 demo).
-- Tests: `.\.venv\Scripts\python.exe -m pytest -q` (debe dar **572 verdes**).
-- IA local: instalar Ollama + `ollama pull llama3.1` (+ `mistral` para el veto).
+- Correr: `cd <ruta>\tradingalertaIA` + **`.\start_bot.ps1`** (arranque oficial; pide
+  contraseña si `STARTUP_PASSWORD_SHA256` está en el `.env` — opt-in, SHA-256, el script
+  está en ASCII puro a propósito por PS 5.1). UNA máquina a la vez contra la misma cuenta.
+- Tests: `.\.venv\Scripts\python.exe -m pytest -q` (debe dar **572 verdes**). OJO: si se
+  corre con `| tail`, el exit code es el del pipe — verificar el conteo, no el exit.
+- IA local: Ollama + `llama3.2:3b` (Lenovo) o `llama3.1`. ⚠️ En la Lenovo el LLM corre
+  mayormente en CPU (~50s/gen): el asesor es a-demanda; nada de LLM en el hot path.
