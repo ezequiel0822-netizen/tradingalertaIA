@@ -1833,3 +1833,246 @@ class Repository:
                 (horizon_hours, since_iso, limit),
             ).fetchall()
         return [dict(row) for row in rows]
+
+    # v3.6.0 — Backtest Replay Harness (ESPEC_BACKTEST_REPLAY_v1.md §5).
+    # CRUD de tablas backtest_* SOLAMENTE: nada de esto toca tablas vivas y
+    # nada del ciclo vivo lo llama. Cero contaminacion de la medicion viva.
+    def insert_backtest_run(self, run: dict[str, Any]) -> int:
+        with get_connection(self.db_path) as connection:
+            cursor = connection.execute(
+                """
+                INSERT INTO backtest_runs (
+                    created_at_utc, git_commit, mode, timeframe, symbols,
+                    strategies, data_ranges_json, config_json,
+                    cost_multiplier, n_configs_tested, notes
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    run.get("created_at_utc") or utc_now_iso(),
+                    run.get("git_commit"),
+                    run.get("mode", "A"),
+                    run.get("timeframe"),
+                    run.get("symbols"),
+                    run.get("strategies"),
+                    run.get("data_ranges_json"),
+                    run.get("config_json"),
+                    run.get("cost_multiplier"),
+                    run.get("n_configs_tested", 0),
+                    run.get("notes"),
+                ),
+            )
+            return int(cursor.lastrowid)
+
+    def fetch_backtest_run(self, run_id: int) -> dict[str, Any] | None:
+        with get_connection(self.db_path) as connection:
+            row = connection.execute(
+                "SELECT * FROM backtest_runs WHERE id = ?", (run_id,)
+            ).fetchone()
+        return dict(row) if row else None
+
+    def fetch_backtest_runs(self, limit: int = 20) -> list[dict[str, Any]]:
+        with get_connection(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM backtest_runs
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def update_backtest_run_notes(self, run_id: int, notes: str) -> None:
+        """Documenta el porque de un re-run (anti data-dredging, ESPEC §10):
+        el historial de intentos es parte de la evidencia."""
+        with get_connection(self.db_path) as connection:
+            connection.execute(
+                "UPDATE backtest_runs SET notes = ? WHERE id = ?",
+                (notes, run_id),
+            )
+
+    def insert_backtest_trades(
+        self, run_id: int, trades: list[dict[str, Any]]
+    ) -> int:
+        """Inserta los trades simulados de un run (bulk). Devuelve cuantos."""
+        if not trades:
+            return 0
+        with get_connection(self.db_path) as connection:
+            connection.executemany(
+                """
+                INSERT INTO backtest_trades (
+                    run_id, config_id, strategy, symbol, category, direction,
+                    signal_bar_utc, entry_utc, entry_price, sl_initial,
+                    tp_initial, exit_utc, exit_price, exit_reason, bars_held,
+                    r_gross, cost_r, r_net, mfe_r, mae_r, session,
+                    regime_trend, regime_vol, year
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        run_id,
+                        t.get("config_id"),
+                        t["strategy"],
+                        t["symbol"],
+                        t.get("category"),
+                        t["direction"],
+                        t.get("signal_bar_utc"),
+                        t.get("entry_utc"),
+                        t.get("entry_price"),
+                        t.get("sl_initial"),
+                        t.get("tp_initial"),
+                        t.get("exit_utc"),
+                        t.get("exit_price"),
+                        t.get("exit_reason"),
+                        t.get("bars_held"),
+                        t.get("r_gross"),
+                        t.get("cost_r"),
+                        t.get("r_net"),
+                        t.get("mfe_r"),
+                        t.get("mae_r"),
+                        t.get("session"),
+                        t.get("regime_trend"),
+                        t.get("regime_vol"),
+                        t.get("year"),
+                    )
+                    for t in trades
+                ],
+            )
+        return len(trades)
+
+    def fetch_backtest_trades(
+        self,
+        run_id: int,
+        strategy: str | None = None,
+        symbol: str | None = None,
+    ) -> list[dict[str, Any]]:
+        clauses = ["run_id = ?"]
+        params: list[Any] = [run_id]
+        if strategy is not None:
+            clauses.append("strategy = ?")
+            params.append(strategy)
+        if symbol is not None:
+            clauses.append("symbol = ?")
+            params.append(symbol)
+        with get_connection(self.db_path) as connection:
+            rows = connection.execute(
+                f"""
+                SELECT * FROM backtest_trades
+                WHERE {' AND '.join(clauses)}
+                ORDER BY entry_utc ASC, id ASC
+                """,
+                params,
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def insert_backtest_walkforward(self, row: dict[str, Any]) -> int:
+        with get_connection(self.db_path) as connection:
+            cursor = connection.execute(
+                """
+                INSERT INTO backtest_walkforward (
+                    run_id, config_id, train_from, train_to, test_from,
+                    test_to, strategy, n, avg_r_net, median_r_net,
+                    win_rate, max_dd_r, profit_factor
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    row["run_id"],
+                    row.get("config_id"),
+                    row.get("train_from"),
+                    row.get("train_to"),
+                    row.get("test_from"),
+                    row.get("test_to"),
+                    row["strategy"],
+                    row.get("n", 0),
+                    row.get("avg_r_net"),
+                    row.get("median_r_net"),
+                    row.get("win_rate"),
+                    row.get("max_dd_r"),
+                    row.get("profit_factor"),
+                ),
+            )
+            return int(cursor.lastrowid)
+
+    def fetch_backtest_walkforward(self, run_id: int) -> list[dict[str, Any]]:
+        with get_connection(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM backtest_walkforward
+                WHERE run_id = ?
+                ORDER BY test_from ASC, id ASC
+                """,
+                (run_id,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def upsert_mt5_cache_candles(
+        self, symbol: str, timeframe: int, candles: list[dict[str, Any]]
+    ) -> int:
+        """Bulk upsert de velas al cache historico (una sola transaccion).
+
+        El upsert_mt5_cache_candle existente abre una conexion por vela;
+        para profundidad maxima (miles de barras D1/H1) eso es inviable y
+        alarga la ventana de lock contra el bot vivo. Devuelve cuantas filas
+        se escribieron (0 en soft-fail)."""
+        if not candles:
+            return 0
+        rows = [
+            (
+                symbol,
+                timeframe,
+                int(c.get("time") or 0),
+                c.get("open"),
+                c.get("high"),
+                c.get("low"),
+                c.get("close"),
+                c.get("volume"),
+            )
+            for c in candles
+        ]
+        try:
+            with get_connection(self.db_path) as connection:
+                connection.executemany(
+                    """
+                    INSERT INTO mt5_historical_cache (
+                        symbol, timeframe, time, open, high, low, close, volume
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(symbol, timeframe, time) DO UPDATE SET
+                        open = excluded.open,
+                        high = excluded.high,
+                        low = excluded.low,
+                        close = excluded.close,
+                        volume = excluded.volume
+                    """,
+                    rows,
+                )
+            return len(rows)
+        except Exception:
+            return 0
+
+    def fetch_mt5_cache_depth(
+        self, symbol: str, timeframe: int
+    ) -> dict[str, Any]:
+        """Profundidad REAL del cache historico para (symbol, timeframe):
+        cuantas barras hay y el rango [first, last] en epoch. Nunca asumir
+        profundidad: se mide (ESPEC §4)."""
+        with get_connection(self.db_path) as connection:
+            row = connection.execute(
+                """
+                SELECT COUNT(*) AS bars,
+                       MIN(time) AS first_epoch,
+                       MAX(time) AS last_epoch
+                FROM mt5_historical_cache
+                WHERE symbol = ? AND timeframe = ?
+                """,
+                (symbol, timeframe),
+            ).fetchone()
+        return {
+            "bars": int(row["bars"] or 0),
+            "first_epoch": row["first_epoch"],
+            "last_epoch": row["last_epoch"],
+        }

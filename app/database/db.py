@@ -413,6 +413,80 @@ def _init_db_unsafe(db_path: Path) -> None:
                 PRIMARY KEY (feature, category)
             );
 
+            -- v3.6.0 — Backtest Replay Harness (ESPEC_BACKTEST_REPLAY_v1.md §5).
+            -- Tablas SEPARADAS de la medicion viva: cero FKs hacia tablas vivas,
+            -- nada del ciclo vivo las lee. El backtest NO cuenta para /readiness,
+            -- /expectancy, /edge ni los 400 de Fase D.
+            CREATE TABLE IF NOT EXISTS backtest_runs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at_utc TEXT NOT NULL,
+                git_commit TEXT,
+                mode TEXT NOT NULL DEFAULT 'A',
+                timeframe TEXT,
+                symbols TEXT,
+                strategies TEXT,
+                data_ranges_json TEXT,
+                config_json TEXT,
+                cost_multiplier REAL,
+                n_configs_tested INTEGER NOT NULL DEFAULT 0,
+                notes TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS backtest_trades (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id INTEGER NOT NULL,
+                config_id TEXT,
+                strategy TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                category TEXT,
+                direction TEXT NOT NULL,
+                signal_bar_utc TEXT,
+                entry_utc TEXT,
+                entry_price REAL,
+                sl_initial REAL,
+                tp_initial REAL,
+                exit_utc TEXT,
+                exit_price REAL,
+                exit_reason TEXT,
+                bars_held INTEGER,
+                r_gross REAL,
+                cost_r REAL,
+                r_net REAL,
+                mfe_r REAL,
+                mae_r REAL,
+                session TEXT,
+                regime_trend TEXT,
+                regime_vol TEXT,
+                year INTEGER,
+                FOREIGN KEY(run_id) REFERENCES backtest_runs(id)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_backtest_trades_run
+                ON backtest_trades(run_id);
+            CREATE INDEX IF NOT EXISTS idx_backtest_trades_strategy_symbol
+                ON backtest_trades(strategy, symbol);
+
+            CREATE TABLE IF NOT EXISTS backtest_walkforward (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id INTEGER NOT NULL,
+                config_id TEXT,
+                train_from TEXT,
+                train_to TEXT,
+                test_from TEXT,
+                test_to TEXT,
+                strategy TEXT NOT NULL,
+                n INTEGER NOT NULL DEFAULT 0,
+                avg_r_net REAL,
+                median_r_net REAL,
+                win_rate REAL,
+                max_dd_r REAL,
+                profit_factor REAL,
+                FOREIGN KEY(run_id) REFERENCES backtest_runs(id)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_backtest_wf_run
+                ON backtest_walkforward(run_id);
+
             CREATE INDEX IF NOT EXISTS idx_alerts_token_type_time
                 ON alerts(chain, token_address, alert_type, created_at);
             CREATE INDEX IF NOT EXISTS idx_alerts_created_at

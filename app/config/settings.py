@@ -392,6 +392,20 @@ class Settings:
     ml_retrain_min_new_trades: int
     ml_conf_pass: float
     ml_conf_low: float
+    # v3.6.0 — Backtest Replay Harness (ESPEC_BACKTEST_REPLAY_v1.md). Tooling
+    # OFFLINE (CLI): nada de esto corre en el ciclo vivo. Opt-in OFF + soft-fail;
+    # con el flag en false el bot es identico. Los parametros de ESTRATEGIA no
+    # van aca: viven en el config_json de cada run (autodescrito, §13).
+    enable_backtest_harness: bool
+    backtest_timeframe: str
+    backtest_symbols: list[str]
+    backtest_cost_multiplier: float
+    backtest_stress_cost_multiplier: float
+    backtest_sl_slippage_atr: float
+    backtest_intrabar_rule: str
+    backtest_max_configs_per_run: int
+    backtest_wf_train_months: int
+    backtest_wf_test_months: int
 
     def __repr__(self) -> str:
         parts: list[str] = []
@@ -817,4 +831,32 @@ def load_settings() -> Settings:
         ml_retrain_min_new_trades=_get_int("ML_RETRAIN_MIN_NEW_TRADES", 20),
         ml_conf_pass=_get_float("ML_CONF_PASS", 0.65),
         ml_conf_low=_get_float("ML_CONF_LOW", 0.50),
+        # v3.6.0 — Backtest Replay Harness (offline, opt-in OFF + soft-fail).
+        enable_backtest_harness=_get_bool("ENABLE_BACKTEST_HARNESS", False),
+        backtest_timeframe=os.getenv("BACKTEST_TIMEFRAME", "D1"),
+        backtest_symbols=[
+            s.upper()
+            for s in _get_list(
+                "BACKTEST_SYMBOLS",
+                [
+                    "EURUSD",
+                    "GBPUSD",
+                    "USDJPY",
+                    "USDCHF",
+                    "AUDUSD",
+                    "USDCAD",
+                    "NZDUSD",
+                    "XAUUSD",
+                ],
+            )
+        ],
+        backtest_cost_multiplier=_get_float("BACKTEST_COST_MULTIPLIER", 1.25),
+        backtest_stress_cost_multiplier=_get_float(
+            "BACKTEST_STRESS_COST_MULTIPLIER", 1.5
+        ),
+        backtest_sl_slippage_atr=_get_float("BACKTEST_SL_SLIPPAGE_ATR", 0.05),
+        backtest_intrabar_rule=os.getenv("BACKTEST_INTRABAR_RULE", "pessimistic"),
+        backtest_max_configs_per_run=_get_int("BACKTEST_MAX_CONFIGS_PER_RUN", 9),
+        backtest_wf_train_months=_get_int("BACKTEST_WF_TRAIN_MONTHS", 24),
+        backtest_wf_test_months=_get_int("BACKTEST_WF_TEST_MONTHS", 6),
     )

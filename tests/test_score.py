@@ -228,6 +228,26 @@ def _settings() -> Settings:
         ml_retrain_min_new_trades=20,
         ml_conf_pass=0.65,
         ml_conf_low=0.50,
+        # v3.6.0 — Backtest Replay Harness (sync con settings.py)
+        enable_backtest_harness=False,
+        backtest_timeframe="D1",
+        backtest_symbols=[
+            "EURUSD",
+            "GBPUSD",
+            "USDJPY",
+            "USDCHF",
+            "AUDUSD",
+            "USDCAD",
+            "NZDUSD",
+            "XAUUSD",
+        ],
+        backtest_cost_multiplier=1.25,
+        backtest_stress_cost_multiplier=1.5,
+        backtest_sl_slippage_atr=0.05,
+        backtest_intrabar_rule="pessimistic",
+        backtest_max_configs_per_run=9,
+        backtest_wf_train_months=24,
+        backtest_wf_test_months=6,
     )
 
 
