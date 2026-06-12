@@ -23,6 +23,34 @@ respuesta acordada es el `GO_LIVE_RUNBOOK.md`, no el flag. Razones: el dinero re
 entrena mejor que el demo (misma data, mismos outcomes), el apalancamiento hace que
 "300 pesos" no sea la pérdida máxima, y no hay edge probado.
 
+## 1.5 Qué hace, paso a paso (el ciclo, cada ~2-3 minutos)
+
+1. **Recolecta**: precios y datos de memecoins (DexScreener/GeckoTerminal), acciones US,
+   forex y oro (Yahoo/MT5), noticias, filings SEC, contexto macro (VIX/DXY) y el
+   calendario económico (eventos high-impact).
+2. **Analiza y puntúa**: cada candidato pasa por análisis técnico (RSI, ATR, MACD,
+   patrones), scoring (0-100), chequeos de seguridad (para memecoins: honeypot, liquidez)
+   y los pesos aprendidos de resultados pasados.
+3. **Alerta**: lo mejor del ciclo te llega por Telegram (con caps por categoría y dedup
+   para no spamear).
+4. **Decide trades**: el strategy router elige la estrategia (breakout, mean reversion,
+   session breakout, etc.) y abre **paper trades** (apuestas simuladas que registran
+   todo: entrada, stop, target, features técnicos al momento de entrar).
+5. **Ejecuta a MT5 demo** SOLO los paper trades de forex que sobreviven TODA la cadena
+   de gates (§5). Memecoins y acciones quedan paper-only siempre.
+6. **Gestiona lo abierto**: cada ciclo revisa las posiciones (trailing, breakeven
+   post-TP1, salida por tiempo, por invalidación), reconcilia contra MT5 (cierra
+   huérfanas, sincroniza stops) y registra el camino de R (exit shadow).
+7. **Aprende**: al cerrar trades mide el R realizado neto de costos (excluyendo
+   artifacts), refresca la expectancy por estrategia y por slice (sesión/dirección),
+   ajusta pesos, y reentrenaría el ML si hubiera muestra (≥400).
+8. **Reporta**: resumen diario al cierre NY, avisos de apertura/cierre, y responde
+   tus comandos de Telegram en cualquier momento.
+
+En una frase: **observa los mercados, apuesta en simulado, ejecuta a demo solo lo que
+pasa todos los filtros, gestiona y mide cada posición con honestidad brutal, y aprende
+de los resultados — sin tocar jamás dinero real.**
+
 ## 2. Estado EXACTO al 11-jun-2026
 
 | Qué | Estado |
