@@ -64,6 +64,36 @@ de los resultados — sin tocar jamás dinero real.**
 | Real-money | BLOQUEADO; `/readiness` = NO LISTO |
 | Seguridad | Auditoría 2026-06-11 **limpia** (ver §7) |
 
+## 2.5 Serie v3.6.0 — Backtest Replay Harness — EN CURSO (actualizado 2026-06-14)
+
+> El 12-jun se decidió una rama nueva: el **Backtest Replay Harness** (reproduce
+> la historia de MT5 barra por barra con las estrategias REALES, mide R neto con
+> honestidad brutal — para que el backtest DESCUBRA y el demo CONFIRME). Fuente de
+> verdad: `ESPEC_BACKTEST_REPLAY_v1.md` (el cómo, sesiones S1→S5) y
+> `MAPA_DE_EDGE_Y_RUTA.md` (el porqué + la ruta v3.6→v3.8). Esto NO toca el bot
+> vivo, NO cuenta para `/readiness` ni para los 400 de Fase D, y vive en tablas
+> `backtest_*` separadas.
+
+| Sesión | Qué | Estado |
+|---|---|---|
+| **S1** | Tablas `backtest_*` + repository CRUD + `historical_loader` + tests | **HECHA y en `main`** (commit `caff8c1`) |
+| **S2** | `context_builder` + `regime_filter` + canario anti-look-ahead + tests | **HECHA en branch** (lista para merge; +21 tests) |
+| S3 | `trade_simulator` (long/short/gaps/costos/slippage, B1–B13) | Pendiente |
+| S4 | `replay_harness` + `report` + primer run Modo A real | Pendiente |
+| S5 | `trend_following_d1` + veredicto §11 + bump v3.6.0 + merge final | Pendiente |
+
+**Profundidad histórica REAL medida el 14-jun** (loader corrido contra MT5 demo,
+cache en SQLite): D1 con décadas — EURUSD/USDCHF/USDJPY **desde 1971**, AUDUSD/
+GBPUSD/USDCAD/NZDUSD desde 1993-94, XAUUSD desde 2004 (5.654–14.300 barras). H1
+**topado en 50.000 barras** por símbolo (~desde may-2018; es el límite del broker,
+no truncamiento). **Caveat de honestidad:** el D1 pre-1999 de EUR es sintético
+(el euro no existía); tratar esa franja con escepticismo (el ×1.25 de costos ya
+empuja a lo conservador). El motor D1 (trend-following) tiene la profundidad que
+necesita; el régimen-slicing va a poder responder si el +R del session breakout
+era estructura o coyuntura.
+
+**Tests:** 572 (v3.5.0) → 593 (S1) → **614 (S2)**, todos verdes por conteo.
+
 ## 3. La verdad de fondo (la filosofía del proyecto)
 
 1. **El cuello de botella es DATA, no código.** No hay edge probado: el único +R agregado
@@ -126,7 +156,11 @@ contraseña de Windows + BitLocker.
 
 ## 8. Roadmap — qué sigue y sus GATES (no negociables)
 
-1. **AHORA: dejar correr.** La data (70→400) es lo único que destraba todo. No es código.
+1. **AHORA (dos frentes en paralelo):** (a) **dejar correr** el libro vivo — la data
+   (70→400) es lo único que destraba Fase D; (b) **serie v3.6.0 — Backtest Replay
+   Harness** (ver §2.5): el código activo, para que el backtest descubra/descarte
+   en horas lo que el demo tardaría meses. Van juntos sin pisarse: el harness no
+   toca el ciclo vivo.
 2. **En días**: `/exit_analysis` con muestra → si delta +R robusto, activar trailing de
    forex CON evidencia (cambiar los params de `lifecycle_manager` para forex).
 3. **Fase D — AdvancedPredictor** (LightGBM+RF+calibración sobre el XGBoost): GATE ≥400
