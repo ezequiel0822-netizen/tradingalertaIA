@@ -104,6 +104,18 @@ def _profit_factor(r_nets: list[float]) -> float:
     return gains / losses
 
 
+def _top_trade_share(r_nets: list[float]) -> tuple[float, float]:
+    """Cuanta de la ganancia BRUTA la cargan el mejor trade y el top-10. Si un
+    solo trade explica casi todo, el 'edge' es un artefacto (data sintetica, un
+    outlier), no una ventaja repetible. Es la defensa anti-autoengaño del reporte
+    contra un avg/PF inflado por pocos monstruos."""
+    gains = sorted((r for r in r_nets if r > 0), reverse=True)
+    total = sum(gains)
+    if total <= 0:
+        return 0.0, 0.0
+    return gains[0] / total, sum(gains[:10]) / total
+
+
 def _stress_r_nets(trades: list[dict], settings: Settings) -> list[float]:
     out = []
     for t in trades:
@@ -228,6 +240,23 @@ def _build_markdown(run, run_id, trades, by_strategy, settings) -> str:
             f"{(wins / len(r) * 100 if r else 0):.0f}% | {sum(r):+.2f} | "
             f"{_max_drawdown_r(r):.2f} | {pf_s} |"
         )
+    lines.append("")
+
+    # concentracion: anti-autoengaño contra un avg/PF inflado por pocos outliers
+    lines.append("## Concentracion (robustez del resultado)")
+    lines.append("")
+    lines.append("Que parte de la ganancia BRUTA cargan el mejor trade y el top-10. "
+                 "Si un solo trade explica casi todo, el 'edge' es un artefacto "
+                 "(data sintetica / outlier), no una ventaja repetible.")
+    lines.append("")
+    lines.append("| estrategia | mejor trade % | top-10 % | aviso |")
+    lines.append("|---|---|---|---|")
+    for strategy in sorted(by_strategy):
+        r = [float(t["r_net"]) for t in by_strategy[strategy]]
+        top1, top10 = _top_trade_share(r)
+        warn = "ARTEFACTO: 1 trade carga el resultado" if top1 >= 0.5 else (
+            "concentrado" if top10 >= 0.8 else "")
+        lines.append(f"| {strategy} | {top1 * 100:.0f}% | {top10 * 100:.0f}% | {warn} |")
     lines.append("")
 
     # slices por estrategia

@@ -1,5 +1,24 @@
 # Changelog
 
+## Trading Alert AI v3.6.0
+
+**Backtest Replay Harness** (offline, opt-in, soft-fail): reproduce la historia D1 de MT5 barra por barra con las estrategias REALES del bot y mide R neto de costos con pesimismo brutal, en tablas `backtest_*` separadas. Proposito: invertir el descubrimiento — el backtest descarta en horas lo que el demo tardaria meses; la data viva pasa a CONFIRMAR en vez de descubrir. NO toca el ciclo vivo (ni importa `mt5_demo_trader`/`reconciler`), NO cuenta para `/readiness` ni para los 400 de la Fase D, y `ENABLE_REAL_TRADING=false` sigue HARDCODED.
+
+Construido en 5 sesiones con gate de verificacion cada una (ESPEC_BACKTEST_REPLAY_v1.md):
+- **S1** — tablas `backtest_*` + repository CRUD + `historical_loader` (mide la profundidad REAL por simbolo: D1 con decadas, H1 topado en 50k barras por el broker).
+- **S2** — `context_builder` (ventanas que terminan en N) + `regime_filter` (SMA200+pendiente / terciles de ATR) + canario anti-look-ahead (un spike en N+5 no cambia el contexto en N).
+- **S3** — `trade_simulator`: vida completa del trade con B1-B13 (empate intrabar -> SL; gaps asimetricos; trailing solo al close y tighten-only; time exit al open siguiente; direction-aware; slippage). Numeros dorados calculados a mano. Costos (B8) con el cost map REAL de `training_engine`.
+- **S4** — `replay_harness` (orquestador, paridad `STRATEGY_MIN_CONFIDENCE`, B12 una posicion por simbolo/estrategia) + `report` (slices por simbolo/sesion/direccion/año/regimen, veredicto §11 criterio por criterio, stress ×1.5, concentracion). Optimizacion: al regimen se le pasa solo su ventana de cola -> replay O(n).
+- **S5** — `trend_following_d1`: estrategia Donchian D1 nueva, **hipotesis CONGELADA antes de mirar la data** (anti data-dredging). Salida trailing Donchian close-confirmada (extiende el simulador con `close_exit_fn`).
+
+**Veredicto del run Modo A real (8 simbolos D1, decadas de historia):**
+- Las 4 estrategias existentes **NO PASAN** §11: `mean_reversion` -0.123R, `momentum` -0.004R, `breakout` n=15. `forex_session_breakout` no dispara en D1 (`macro=None`, B11).
+- `trend_following_d1`: avg +4.7R que **parece un edge enorme pero es un ARTEFACTO** — un solo trade de +3724R sobre data sintetica pre-1999 de USDCHF carga el 91% del P&L (mediana real -1.03R, GBPUSD -0.26R). El veredicto §11 lo rechaza correctamente (drawdown 57.5R > 25R, consistencia 58% < 60%), y la nueva metrica de **concentracion** del reporte lo grita. **NO PASA. NO se promueve a Modo B.** Exactamente para lo que existe el harness: atrapar el falso positivo seductor en vez de creerle.
+
+Lo correcto cuando una hipotesis no pasa es documentarlo, no ajustar hasta que pase. El edge no esta en estas estrategias sobre D1; el camino sigue (COT, instrumentos descorrelacionados) en `MAPA_DE_EDGE_Y_RUTA.md`.
+
+572 -> **657 verdes**. app_version -> v3.6.0. `.env.example` con el bloque del harness. El backtest abre la puerta de PAPER, nunca la de MT5.
+
 ## Trading Alert AI v3.5.0
 
 Proteccion de capital: calendar gate + cap de exposicion USD. Las DOS lecciones del 10-jun-2026 (CPI 12:30 + BOC 13:45): el bot abrio USDCAD 18 min antes de un rate statement que estaba en su propia DB, y tenia 7 posiciones forex que eran UNA SOLA apuesta (long-USD) — un movimiento del dolar las stoppeo juntas (~-7R). Ambos gates son downward-only (solo bajan a paper-only, jamas habilitan), opt-in OFF, soft-fail total.

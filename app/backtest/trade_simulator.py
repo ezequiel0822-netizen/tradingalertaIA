@@ -42,6 +42,13 @@ EXIT_GAP_SL = "gap_sl"
 # lo llama al close de cada barra y SOLO aprieta el stop (B5).
 TrailFn = Callable[[int, dict, float], "float | None"]
 
+# close_exit_fn(idx, candle) -> True si la regla de salida CONFIRMADA AL CLOSE se
+# dispara en esta barra. El simulador ejecuta al OPEN de la barra siguiente
+# (mismo patron B2/B6 que el time exit), reason 'trail'. Es la salida trailing
+# Donchian de trend_following_d1 (§9): close-confirmada, NO intrabar — el SL duro
+# sigue siendo lo unico intrabar.
+CloseExitFn = Callable[[int, dict], bool]
+
 
 @dataclass(frozen=True)
 class TradeSetup:
@@ -71,6 +78,7 @@ def simulate_trade(
     *,
     sl_slippage_price: float = 0.0,
     trail_fn: TrailFn | None = None,
+    close_exit_fn: CloseExitFn | None = None,
 ) -> TradeResult:
     """Simula el trade completo y devuelve su outcome. `forward_candles[0]` es la
     barra de entrada (N+1); la entrada ya ocurrio a su OPEN (B2)."""
@@ -100,6 +108,7 @@ def simulate_trade(
     slip = float(sl_slippage_price or 0.0)
     current_stop = sl
     trailed = False
+    pending_close_exit = False  # salida confirmada al close de la barra previa (B6-like)
     mfe_r = 0.0
     mae_r = 0.0
 
@@ -131,6 +140,9 @@ def simulate_trade(
                 if gap_through_tp:  # B4: gap a favor MAS ALLA del TP -> fill en TP
                     return _result(t, tp, EXIT_TP, idx, r_of(tp),
                                    max(mfe_r, r_of(tp)), mae_r, trailed)
+            if pending_close_exit:  # salida Donchian (§9): señal al close previo -> open
+                return _result(t, o, EXIT_TRAIL, idx, r_of(o),
+                               max(mfe_r, r_of(o)), max(mae_r, -r_of(o)), trailed)
             if idx == setup.time_exit_bars:  # B6: time exit al open de la barra K
                 return _result(t, o, EXIT_TIME, idx, r_of(o),
                                max(mfe_r, r_of(o)), max(mae_r, -r_of(o)), trailed)
@@ -159,6 +171,10 @@ def simulate_trade(
                     current_stop, trailed = proposed, True
                 elif (not is_long) and proposed < current_stop:
                     current_stop, trailed = proposed, True
+
+        # -- salida confirmada al close (Donchian §9) -> ejecuta al open de N+1
+        if close_exit_fn is not None and close_exit_fn(idx, candle):
+            pending_close_exit = True
 
     # -- se acabo la data: cierre forzoso al ultimo close (reason time) -------
     last = forward_candles[-1]

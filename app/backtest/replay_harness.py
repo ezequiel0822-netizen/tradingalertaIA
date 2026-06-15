@@ -74,19 +74,21 @@ class RunConfig:
 
 
 def default_strategy_registry() -> dict:
-    """Las 4 estrategias backtesteables con honestidad en v1 (ESPEC §3). Se
-    instancian DIRECTO, sin filtrar por su enabled_setting_key: el backtest mide
-    aunque la estrategia este apagada en vivo (caso de `momentum`)."""
+    """Las 5 estrategias backtesteables con honestidad (ESPEC §3). Se instancian
+    DIRECTO, sin filtrar por su enabled_setting_key: el backtest mide aunque la
+    estrategia este apagada en vivo (caso de `momentum` y `trend_following_d1`)."""
     from app.strategies.breakout import BreakoutStrategy
     from app.strategies.forex_session_breakout import ForexSessionBreakoutStrategy
     from app.strategies.mean_reversion import MeanReversionStrategy
     from app.strategies.momentum import MomentumStrategy
+    from app.strategies.trend_following_d1 import TrendFollowingD1Strategy
 
     instances = [
         BreakoutStrategy(),
         MeanReversionStrategy(),
         MomentumStrategy(),
         ForexSessionBreakoutStrategy(),
+        TrendFollowingD1Strategy(),
     ]
     return {s.name: s for s in instances}
 
@@ -223,7 +225,8 @@ class ReplayHarness:
                     continue
 
                 trade = self._open_and_simulate(
-                    name, symbol, category, candles, n, sig, tf_minutes, lookback, regime
+                    strat, name, symbol, category, candles, n, sig,
+                    tf_minutes, lookback, regime
                 )
                 if trade is None:
                     continue
@@ -232,7 +235,7 @@ class ReplayHarness:
                 next_free[name] = exit_idx  # B12: libre recien al cerrar
 
     def _open_and_simulate(
-        self, name, symbol, category, candles, n, sig, tf_minutes, lookback, regime
+        self, strat, name, symbol, category, candles, n, sig, tf_minutes, lookback, regime
     ) -> dict | None:
         entry_bar = candles[n + 1]
         entry_price = float(entry_bar.get("open") or 0.0)
@@ -252,8 +255,19 @@ class ReplayHarness:
         slippage_price = (
             float(self.settings.backtest_sl_slippage_atr) * (atr_pct / 100.0) * entry_price
         )
+        # Hook opcional de salida confirmada al close (Donchian de trend_following).
+        close_exit_fn = None
+        hook = getattr(strat, "backtest_close_exit", None)
+        if callable(hook):
+            try:
+                close_exit_fn = hook(candles, n + 1, sig.direction, self.settings)
+            except Exception:
+                close_exit_fn = None
         try:
-            res = simulate_trade(setup, candles[n + 1:], sl_slippage_price=slippage_price)
+            res = simulate_trade(
+                setup, candles[n + 1:],
+                sl_slippage_price=slippage_price, close_exit_fn=close_exit_fn,
+            )
         except ValueError:
             return None  # geometria invalida (p.ej. sl del lado equivocado) -> skip soft
 

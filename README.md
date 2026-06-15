@@ -1,4 +1,4 @@
-# Trading Alert AI v2.10.0
+# Trading Alert AI v3.6.0
 
 Trader engine algoritmico **local** (Python 3.12, Windows) que monitorea memecoins, acciones US, forex y oro. Observa datos publicos, guarda historial en SQLite, decide entradas/salidas con un strategy router (5 estrategias swing + 2 de scalping), opera paper trades simulados, aprende del P&L realizado neto de costos, y puede enviar ordenes **solo a cuenta MT5 demo** (con confirmacion manual o auto-confirmacion opt-in).
 
@@ -14,6 +14,7 @@ Trader engine algoritmico **local** (Python 3.12, Windows) que monitorea memecoi
 - Decide con un strategy router: breakout, mean_reversion, momentum, news_catalyst, forex_session_breakout (swing) + scalping_breakout y scalping_mean_reversion (scalping en thread aparte).
 - Dimensiona posiciones por riesgo (`balance x risk% / |entry - stop|`) y gestiona el ciclo de vida (trailing stop, SL a breakeven post-TP1, partial close, salida por tiempo).
 - Risk manager con kill-switch (manual o automatico por max drawdown diario), caps por categoria y cooldown por simbolo.
+- **Backtest Replay Harness (v3.6.0, offline)**: reproduce la historia D1 de MT5 barra por barra con las estrategias REALES y mide R neto de costos con pesimismo (anti look-ahead), en tablas `backtest_*` separadas. NO toca el ciclo vivo, NO cuenta para `/readiness` ni para la Fase D. Opt-in (`ENABLE_BACKTEST_HARNESS=false`). CLI: `python -m app.backtest.replay_harness --config <run.json> --report`.
 - Guarda snapshots historicos de precio y mide resultado por horizonte (1h, 6h, 24h, 7d) con MFE/MAE.
 - Aprende del **P&L realizado en R-multiples, neto de costos** (spread + comision), no de una metrica de drift ficticia.
 - Promotion gate: no ejecuta a MT5 las estrategias con edge negativo probado (quedan paper-only / SHADOW).

@@ -239,3 +239,42 @@ def test_net_r_applies_real_cost_map() -> None:
     cost_r_u, r_net_u = net_r(2.0, 100.0, 98.0, "desconocida", s)
     assert cost_r_u == 0.0
     assert r_net_u == pytest.approx(2.0)
+
+
+# == salida confirmada al close (Donchian §9, close_exit_fn) ==============
+
+
+def test_close_exit_signals_and_exits_at_next_open() -> None:
+    # close_exit_fn dispara en idx 1 -> ejecucion al OPEN de idx 2 (reason trail).
+    fwd = [
+        _c(100, 100.5, 99.6, 100, 0),
+        _c(100, 100.8, 99.7, 100.2, 1),  # señal al close de esta barra
+        _c(101, 101.5, 100.5, 101, 2),   # ejecuta al open (101)
+    ]
+    res = simulate_trade(_long(tp=None), fwd, close_exit_fn=lambda i, c: i == 1)
+    assert res.exit_reason == "trail"
+    assert res.exit_price == 101.0
+    assert res.r_gross == pytest.approx(0.5)
+    assert res.bars_held == 2
+
+
+def test_hard_sl_gap_beats_pending_close_exit() -> None:
+    # Señal Donchian en idx 1, pero idx 2 gapea BAJO el SL duro -> gana gap_sl
+    # (el SL duro es lo unico intrabar y un gap a traves es peor).
+    fwd = [
+        _c(100, 100.5, 99.6, 100, 0),
+        _c(100, 100.8, 99.7, 100.2, 1),
+        _c(96, 97, 95, 95.5, 2),
+    ]
+    res = simulate_trade(_long(tp=None), fwd, close_exit_fn=lambda i, c: i == 1)
+    assert res.exit_reason == "gap_sl"
+    assert res.exit_price == 96.0
+    assert res.r_gross == pytest.approx(-2.0)
+
+
+def test_close_exit_fn_does_not_shadow_hard_sl() -> None:
+    # Con close_exit_fn presente pero sin disparar, el SL duro intrabar sigue mandando.
+    fwd = [_c(100, 100.5, 99.6, 100, 0), _c(100, 100.5, 97, 98, 1)]
+    res = simulate_trade(_long(tp=None), fwd, close_exit_fn=lambda i, c: False)
+    assert res.exit_reason == "sl"
+    assert res.r_gross == pytest.approx(-1.0)

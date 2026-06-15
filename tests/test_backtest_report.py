@@ -97,3 +97,27 @@ def test_verdict_criteria_cover_all_seven() -> None:
     assert len(verdict["criteria"]) == 7     # los 7 criterios del §11
     # la robustez de vecindad es N/A en Modo A (ok=None)
     assert any(ok is None for _, ok, _ in verdict["criteria"])
+
+
+def test_top_trade_share_isolates_outlier() -> None:
+    from app.backtest.report import _top_trade_share
+    top1, top10 = _top_trade_share([100.0, 1.0, 1.0, -2.0])
+    assert abs(top1 - 100.0 / 102.0) < 1e-9   # gananacia bruta = 102
+
+
+def test_concentration_flags_single_trade_artifact(tmp_path) -> None:
+    # 20 trades chicos + 1 monstruo (la situacion real de trend_following_d1 en
+    # USDCHF sintetico): el reporte tiene que GRITAR que es un artefacto.
+    repo = _repo()
+    run_id = repo.insert_backtest_run({
+        "mode": "A", "timeframe": "D1", "symbols": "USDCHF",
+        "strategies": "trend_following_d1", "cost_multiplier": 1.25,
+        "n_configs_tested": 1, "config_json": "{}", "notes": "test",
+    })
+    trades = [_trade(i, "long", 0.05, 2020) for i in range(20)]
+    trades.append(_trade(999, "long", 500.0, 2020))  # un solo trade carga todo
+    repo.insert_backtest_trades(run_id, trades)
+    paths = generate_report(repo, run_id, _settings(), out_base=str(tmp_path))
+    md = Path(paths["report_md"]).read_text(encoding="utf-8")
+    assert "Concentracion" in md
+    assert "ARTEFACTO" in md
