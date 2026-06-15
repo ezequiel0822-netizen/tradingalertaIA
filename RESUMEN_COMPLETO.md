@@ -78,9 +78,11 @@ de los resultados — sin tocar jamás dinero real.**
 |---|---|---|
 | **S1** | Tablas `backtest_*` + repository CRUD + `historical_loader` + tests | **HECHA y en `main`** (commit `caff8c1`) |
 | **S2** | `context_builder` + `regime_filter` + canario anti-look-ahead + tests | **HECHA y en `main`** (commit `c6efe6b`; +21 tests) |
-| **S3** | `trade_simulator` (long/short/gaps/costos/slippage, B1–B13) + tests | **HECHA en branch** (lista para merge; +21 tests, números dorados a mano) |
-| S4 | `replay_harness` + `report` + primer run Modo A real | Pendiente |
+| **S3** | `trade_simulator` (long/short/gaps/costos/slippage, B1–B13) + tests | **HECHA y en `main`** (commit `307f5d3`; +21 tests, números dorados a mano) |
+| **S4** | `replay_harness` + `report` + primer run Modo A real + tests | **HECHA en branch** (lista para merge; +9 tests) |
 | S5 | `trend_following_d1` + veredicto §11 + bump v3.6.0 + merge final | Pendiente |
+
+**Primer run Modo A real (S4, 14-jun)** — 4 estrategias existentes × 8 símbolos D1, **6.798 trades** simulados sobre décadas de historia en ~3 min. **Veredicto: las 3 que dispararon NO PASAN** (§11) — `mean_reversion` −0.123R (PF 0.60, n=1026), `momentum` −0.004R (~plano, n=5757), `breakout` +0.043R pero n=15. `forex_session_breakout` no disparó (en D1 `macro=None`, B11). Exactamente para lo que existe el harness: **descartó en minutos lo que el demo tardaría meses**, y confirmó que el edge no está en estas estrategias sobre D1. El reporte vive en `exports/backtest_1/` (gitignored).
 
 **Profundidad histórica REAL medida el 14-jun** (loader corrido contra MT5 demo,
 cache en SQLite): D1 con décadas — EURUSD/USDCHF/USDJPY **desde 1971**, AUDUSD/
@@ -92,7 +94,7 @@ empuja a lo conservador). El motor D1 (trend-following) tiene la profundidad que
 necesita; el régimen-slicing va a poder responder si el +R del session breakout
 era estructura o coyuntura.
 
-**Tests:** 572 (v3.5.0) → 593 (S1) → 614 (S2) → **635 (S3)**, todos verdes por conteo.
+**Tests:** 572 (v3.5.0) → 593 (S1) → 614 (S2) → 635 (S3) → **644 (S4)**, todos verdes por conteo.
 
 ## 3. La verdad de fondo (la filosofía del proyecto)
 
