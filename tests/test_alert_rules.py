@@ -118,6 +118,7 @@ def _settings() -> Settings:
         enable_invalidation_exit=True,
         lifecycle_reeval_every_n_cycles=5,
         enable_memecoin_telegram=False,
+        enable_memecoin_engine=True,
         enable_mt5_reader=False,
         mt5_path=None,
         mt5_login=None,

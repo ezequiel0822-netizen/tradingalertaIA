@@ -205,6 +205,10 @@ class Settings:
     enable_invalidation_exit: bool
     lifecycle_reeval_every_n_cycles: int
     enable_memecoin_telegram: bool
+    # v3.7.0 — master del motor de memecoins. En false, el ciclo NI SIQUIERA
+    # colecta memecoins (DEX/Gecko): libera presupuesto del ciclo para la bolsa.
+    # Default true = backward-compat. enable_memecoin_telegram solo silencia alertas.
+    enable_memecoin_engine: bool
     enable_mt5_reader: bool
     mt5_path: str | None
     mt5_login: int | None
@@ -475,7 +479,7 @@ def load_settings() -> Settings:
         obsidian_vault_path = safe_obsidian
 
     return Settings(
-        app_version=os.getenv("APP_VERSION", "v3.6.0"),
+        app_version=os.getenv("APP_VERSION", "v3.7.0"),
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
         telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID"),
         dexscreener_base_url=os.getenv(
@@ -660,6 +664,7 @@ def load_settings() -> Settings:
         # forzado defienden contra ruido). Quien quiera silencio sigue con
         # ENABLE_MEMECOIN_TELEGRAM=false en .env.
         enable_memecoin_telegram=_get_bool("ENABLE_MEMECOIN_TELEGRAM", True),
+        enable_memecoin_engine=_get_bool("ENABLE_MEMECOIN_ENGINE", True),
         enable_mt5_reader=_get_bool("ENABLE_MT5_READER", False),
         # mt5_path validado: solo paths absolutos a archivo existente (None si invalido)
         mt5_path=str(safe_optional_file(os.getenv("MT5_PATH"))) if safe_optional_file(os.getenv("MT5_PATH")) else None,

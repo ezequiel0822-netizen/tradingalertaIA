@@ -508,12 +508,16 @@ class TradingAlertJob:
 
     def _collect_snapshots(self) -> list[TokenSnapshot]:
         snapshots: list[TokenSnapshot] = []
-        for collector_name, collector in (
-            ("DEX Screener", self.dexscreener),
-            ("GeckoTerminal", self.geckoterminal),
-            ("Stocks", self.stocks),
-            ("Forex", self.forex),
-        ):
+        collectors: list[tuple[str, object]] = []
+        # v3.7.0: el motor de memecoins (DEX/Gecko) solo corre si esta encendido.
+        # Apagado => el ciclo no gasta tiempo/red en memecoins y le sobra
+        # presupuesto a la bolsa (acciones/forex/oro).
+        if self.settings.enable_memecoin_engine:
+            collectors.append(("DEX Screener", self.dexscreener))
+            collectors.append(("GeckoTerminal", self.geckoterminal))
+        collectors.append(("Stocks", self.stocks))
+        collectors.append(("Forex", self.forex))
+        for collector_name, collector in collectors:
             try:
                 snapshots.extend(collector.collect())
             except Exception:

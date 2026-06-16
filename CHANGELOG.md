@@ -1,5 +1,17 @@
 # Changelog
 
+## Trading Alert AI v3.7.0
+
+**Refocus a la bolsa: corte del motor de memecoins.** El user montó un bot aparte para memecoins; este queda 100% mercados (acciones + forex + oro).
+
+- **`ENABLE_MEMECOIN_ENGINE`** (NUEVO, default `true` para backward-compat): master del motor de memecoins. En `false`, `jobs._collect_snapshots` ni siquiera corre los collectors de DEX Screener / GeckoTerminal — el ciclo deja de gastar tiempo y red en memecoins y le queda más presupuesto a la bolsa. Hallazgo que lo motivó: esos collectors corrían SIEMPRE; los flags `ENABLE_MEMECOIN_TELEGRAM`/`_HUNTER`/`_DETECTION` solo silenciaban las alertas, no la colección.
+- Recomendado para el refocus (en `.env`): `ENABLE_MEMECOIN_ENGINE=false`, `ENABLE_MEMECOIN_TELEGRAM=false`, `ENABLE_SCALPING_ENGINE=false` (scalping tenía 1 trade -0.36R y settings agresivos), y `ENABLE_STOCK_TELEGRAM=true` (las acciones estaban mudas en Telegram).
+- `tests/test_memecoin_engine_gate.py` (+3, patrón `_StubJob`): con el motor off no se llaman los collectors de memecoins y SÍ los de bolsa; default on (backward-compat). Settings sincronizados en `test_score`/`test_alert_rules`.
+
+Honestidad: esto mejora la EFICIENCIA del ciclo (analiza la bolsa más a fondo y rápido), NO el % de ganados — el edge sale de data + research, no de velocidad. El lever honesto para el win rate es el backtest de acciones (próxima serie) + mantener los filtros estrictos.
+
+657 -> **660 verdes**. app_version -> v3.7.0. `.env.example`.
+
 ## Trading Alert AI v3.6.0
 
 **Backtest Replay Harness** (offline, opt-in, soft-fail): reproduce la historia D1 de MT5 barra por barra con las estrategias REALES del bot y mide R neto de costos con pesimismo brutal, en tablas `backtest_*` separadas. Proposito: invertir el descubrimiento — el backtest descarta en horas lo que el demo tardaria meses; la data viva pasa a CONFIRMAR en vez de descubrir. NO toca el ciclo vivo (ni importa `mt5_demo_trader`/`reconciler`), NO cuenta para `/readiness` ni para los 400 de la Fase D, y `ENABLE_REAL_TRADING=false` sigue HARDCODED.
