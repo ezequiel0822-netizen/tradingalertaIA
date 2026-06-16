@@ -1,13 +1,19 @@
 ---
 tags: [fases, roadmap, status, donde-estamos]
-version: v2.7.1
-updated: 2026-06-03
+version: v3.6.0
+updated: 2026-06-14
 ---
 
 # Fases del Proyecto
 
-> [!success] Donde estamos hoy
-> **Fase 5.5+ Bloque B + Sprint v2.6.6-v2.6.9 + v2.7.0 Fase 2b + v2.7.1 paper-only filter**. Bot mide la verdad neta de costos, frena losers via promotion gate, y filtra paper-only del cálculo de drawdown para evitar kill switches falsos. Toda strategy que ejecuta a MT5 tiene R negativo. Real-money bloqueado. **Siguiente: acumular data limpia hasta tener ≥1 strategy R+, despues Phase 6**.
+> [!success] Donde estamos hoy — v3.6.0 (2026-06-14)
+> Sobre la base v2.7.0 (medición honesta) se construyó la **serie v3**: capa LLM local
+> subtractiva (asesor / ensemble veto / resumen diario / ContinuousLearner), `/performance`
+> y `/readiness`, exit shadow, calendar gate + cap USD, y en **v3.6.0 el Backtest Replay
+> Harness** (offline, `app/backtest/`). El harness corrió las estrategias REALES sobre
+> décadas de D1 y confirmó: **ninguna pasa §11** (el +4.7R del `trend_following_d1` fue un
+> artefacto). **657 tests verdes.** Real-money sigue bloqueado. **Siguiente: dejar correr
+> el libro vivo (data Fase D) + el harness avanza con COT / instrumentos descorrelacionados.**
 
 ---
 
@@ -252,19 +258,20 @@ Bug fixes post-perdida de $12k:
 
 ```
 +----------------------------+
-| FASE: 5.5+ + Sprint + v2.7 |
+| FASE: v3.6.0 (backtest)    |
 +----------------------------+
-| TESTS: 397 verdes          |
-| BALANCE: $88,585           |
-| VERSION: v2.7.0            |
-| BRANCH: main 0cc27d6       |
-| BOT: OFF (cerrado)         |
+| TESTS: 657 verdes          |
+| BALANCE: ~$88,744          |
+| VERSION: v3.6.0           |
+| BRANCH: main 05f9731       |
+| BOT: listo (.\start_bot)   |
 +----------------------------+
 | PROXIMO MILESTONE:         |
-| ≥1 strategy con R+         |
+| data Fase D (70->400) +    |
+| edge real (COT/decorrel.)  |
 +----------------------------+
-| BLOQUEA Phase 6 hasta      |
-| tener edge probado.        |
+| El backtest confirmo: sin  |
+| edge en estas estrategias. |
 +----------------------------+
 ```
 
@@ -272,9 +279,9 @@ Bug fixes post-perdida de $12k:
 
 ## Resumen 3 lineas
 
-1. **Hoy estamos en:** v2.7.0 (Phase 5.5+ Bloque B + Sprint 27-28 + Realized-R honesto). Bot mide la verdad neta de costos.
-2. **Siguiente paso:** ACUMULAR data limpia + buscar edge (slice por sesion/regimen, calibrar cost model con fills reales).
-3. **Bloqueado:** Phase 6 Strategy Evolution requiere ≥1 strategy con R+ neto. Hoy 0/9 strategies son positivas.
+1. **Hoy estamos en:** v3.6.0 (serie v3 completa + Backtest Replay Harness offline). 657 tests verdes. Bot mide la verdad neta de costos en vivo y en backtest.
+2. **Siguiente paso:** dejar correr el libro vivo (data Fase D 70→400) + avanzar el harness con COT / instrumentos descorrelacionados (`MAPA_DE_EDGE_Y_RUTA.md`).
+3. **Bloqueado:** Phase 6 / Fase E requiere ≥1 strategy con R+ neto + 3 meses. El backtest v3.6.0 confirmó que no hay edge en estas estrategias sobre D1. Real-money HARDCODED OFF.
 
 ---
 

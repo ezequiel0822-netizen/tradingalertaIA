@@ -5,15 +5,22 @@
 > - `HANDOFF.md` — setup de la máquina + prompt de arranque.
 > - `Trading Alert AI v3.1 Plan Arquitectura MEJORADO.md` — el plan/arquitectura completo.
 > - `CHANGELOG.md` — historia detallada de cada versión.
-> - `CONTEXTO_MAESTRO_v3.5.0.md` — arquitectura/schema **vigentes** (el v2.10.0 queda histórico).
+> - `CONTEXTO_MAESTRO_v3.6.0.md` — arquitectura/schema **vigentes** (el v3.5.0 queda histórico).
 > - `GO_LIVE_RUNBOOK.md` — el camino completo a real-money (gates, broker, día-D).
 > - `RESUMEN_COMPLETO.md` — TODO el proyecto en un solo documento (para arrancar un chat nuevo).
+> - `ESPEC_BACKTEST_REPLAY_v1.md` + `MAPA_DE_EDGE_Y_RUTA.md` — el harness de backtest (cómo) y la ruta de edge (porqué).
 
 ---
 
 ## 1. Estado actual
 
-- **v3.5.0**, **572 tests verdes**. Todo mergeado a `main` y deployado.
+- **v3.6.0**, **657 tests verdes**. Todo mergeado a `main` y deployado.
+- **Backtest Replay Harness** (v3.6.0, offline): paquete `app/backtest/` que reproduce
+  la historia D1 de MT5 con las estrategias REALES y mide R neto con pesimismo, en tablas
+  `backtest_*` separadas. **No toca el ciclo vivo, no cuenta para `/readiness` ni Fase D.**
+  Opt-in (`ENABLE_BACKTEST_HARNESS=false`). Verdicto del primer run: **ninguna estrategia
+  pasa §11 sobre D1** — el +4.7R de `trend_following_d1` era un artefacto (1 trade sintético
+  de USDCHF = 80% del P&L). Detalle en `RESUMEN_COMPLETO.md` §2.5 y `MAPA_DE_EDGE_Y_RUTA.md`.
 - Corriendo en la Lenovo (`C:\Users\LENOVO\tradingalertaIA`). Arranque oficial:
   **`.\start_bot.ps1`** (pide contraseña, opt-in, hash en `.env`).
 - ⚠️ **Hardware**: la GPU NO banca un LLM local rápido (~50s/respuesta, corre en CPU).
@@ -37,6 +44,7 @@
 | **v3.3.1** | Caché + cooldown 429 para las listas de GeckoTerminal (`geckoterminal_collector.py`); saca el spam de "Too Many Requests" y acelera el ciclo |
 | **v3.4.0** | Exit shadow (`exit_shadow.py` + tabla `trade_r_samples` + `/exit_analysis`): mide si un trailing mejoraria las salidas (forex/oro NO tienen trailing efectivo); read-only, no toca salidas |
 | **v3.5.0** | Calendar gate (conecta `is_safe_window` que estaba huérfano) + cap de exposición neta USD (`app/risk/exposure.py` + `/exposicion`). Lecciones del 10-jun (CPI+BOC barrieron 7 posiciones que eran 1 apuesta). Downward-only, opt-in OFF |
+| **v3.6.0** | **Backtest Replay Harness** (`app/backtest/`: `historical_loader`, `context_builder`, `trade_simulator`, `replay_harness`, `report`) + `app/intelligence/regime_filter.py` + `app/strategies/trend_following_d1.py` (hipótesis Donchian congelada). Offline, opt-in OFF, tablas `backtest_*` separadas. Veredicto: sin edge en D1; el "+4.7R" de trend D1 fue un artefacto que el harness atrapó |
 
 (Detalle completo en `CHANGELOG.md`.)
 
@@ -91,10 +99,22 @@ sofisticación.
 - TickAnalyzer (micro-patrones en ticks), SentimentAnalyzer, AnomalyDetector,
   DynamicRiskAdjuster. Evaluar cuando C–E estén firmes y haya data.
 
-### Lo inmediato *(estado al 11-jun-2026)*
-- **Dejar correr** para juntar data (lo más importante; 70→400 es el cuello de botella).
-- **En 3-5 días**: `/exit_analysis` → si el trailing simulado da delta +R robusto, activar
-  el trailing real de forex CON evidencia (hoy forex/oro no tienen trailing efectivo).
+### Backtest Replay Harness — el motor de descubrimiento *(HECHO — v3.6.0)*
+- **Qué:** `app/backtest/` reproduce la historia D1 con las estrategias REALES y descarta
+  en horas lo que el demo tardaría meses. La data viva pasa a CONFIRMAR, no a descubrir.
+- **Conclusión:** ninguna estrategia (existentes + `trend_following_d1` Donchian) pasa los
+  criterios §11 sobre D1. El "+4.7R" de trend D1 fue un artefacto (1 trade sintético de
+  USDCHF pre-1999). **No se promovió nada.** El pipeline correcto quedó construido:
+  hipótesis → backtest con costos → walk-forward OOS → paper → demo → gates.
+- **Lo que sigue del harness (v3.7+, diferido):** collector de **COT** (CFTC, gratis: info
+  que el precio no contiene), **instrumentos descorrelacionados** (índices/commodities D1),
+  backfill macro VIX/DXY, granularidad H1 para salidas. Orden completo en `MAPA_DE_EDGE_Y_RUTA.md`.
+
+### Lo inmediato *(estado al 14-jun-2026)*
+- **Dejar correr** el libro vivo para juntar data con features (lo más importante; 70→400
+  es el cuello de botella de la Fase D — el backtest NO la reemplaza).
+- **`/exit_analysis`** cuando haya días de muestra → si el trailing simulado da delta +R
+  robusto, activar el trailing real de forex CON evidencia.
 - Gold ya NO está en `DEMO_ALLOWED_SYMBOLS` (paper-only). Calendar gate + cap USD ya activos.
 - El veto LLM (`ENABLE_LLM_ENSEMBLE`) queda OFF en esta máquina: agregaría llamadas de
   ~50s al gate (límite de hardware, ver §1).
@@ -106,11 +126,14 @@ sofisticación.
   a paper, JAMÁS fuerzan una orden). No tocar `mt5_demo_trader.py` ni `mt5_reconciler.py`.
 - **Todo opt-in OFF + soft-fail:** cada capa nueva default `false`; si está apagada o algo
   falla, el bot corre EXACTAMENTE igual.
-- **Mantener pytest verde (572).** Al tocar `Settings`: sincronizar
+- **Mantener pytest verde (657).** Al tocar `Settings`: sincronizar
   `tests/test_score._settings()` Y `tests/test_alert_rules._settings()`.
-- **Versionado (regla del user):** patch (v3.5.1) para fixes; minor (v3.6.0) SOLO para
+- **Versionado (regla del user):** patch (v3.6.1) para fixes; minor (v3.7.0) SOLO para
   features reales; nunca saltar números. Bump `app_version` + `CHANGELOG.md` +
   `.env.example` + docs al cerrar cada versión.
+- **Backtest harness:** vive en `app/backtest/` y escribe SOLO en tablas `backtest_*`;
+  NUNCA cuenta para `/readiness`, `/expectancy`, `/edge` ni los 400 de Fase D; el backtest
+  abre la puerta de PAPER, nunca la de MT5; prohibido ajustar una hipótesis hasta que pase.
 - **Cada módulo nuevo trae su test file.** No mergear sin todos los tests verdes.
 - Nunca leer/mostrar el `.env` real ni secrets.
 
@@ -120,27 +143,31 @@ Abrí Claude Code en `C:\Users\LENOVO\tradingalertaIA` y pegá esto como primer 
 
 ```
 Retomamos Trading Alert AI (bot de trading algorítmico LOCAL, Python 3.12, Windows).
-Estado: v3.5.0, main, 572 tests verdes, corriendo en esta máquina (Lenovo) vía
+Estado: v3.6.0, main, 657 tests verdes, corriendo en esta máquina (Lenovo) vía
 .\start_bot.ps1. Protecciones activas: calendar gate, cap USD, exit shadow registrando.
 
 Leé en este orden ANTES de tocar nada: RESUMEN_COMPLETO.md (todo el proyecto en uno),
-PROXIMOS_PASOS.md (qué sigue + reglas), CONTEXTO_MAESTRO_v3.5.0.md (arquitectura),
-CHANGELOG.md, y GO_LIVE_RUNBOOK.md (camino a real-money).
+PROXIMOS_PASOS.md (qué sigue + reglas), CONTEXTO_MAESTRO_v3.6.0.md (arquitectura),
+CHANGELOG.md, GO_LIVE_RUNBOOK.md (camino a real-money), y para el backtest
+ESPEC_BACKTEST_REPLAY_v1.md + MAPA_DE_EDGE_Y_RUTA.md.
 
 Reglas inamovibles: real-money BLOQUEADO (ENABLE_REAL_TRADING=false HARDCODED) hasta
 que /readiness esté verde — el user ya lo pidió 3+ veces, la respuesta es el runbook,
 no el flag; order_send solo en mt5_demo_trader.py; LLM/ML SUBTRACTIVOS (solo vetan,
-nunca fuerzan); todo opt-in OFF + soft-fail; mantener 572 tests verdes; al tocar
+nunca fuerzan); todo opt-in OFF + soft-fail; mantener 657 tests verdes; al tocar
 Settings sincronizar los _settings() de test_score y test_alert_rules; versionado:
-patch para fixes, minor para features, sin saltos.
+patch para fixes, minor para features, sin saltos. El backtest harness (app/backtest/)
+escribe SOLO en backtest_*, NO cuenta para /readiness ni Fase D, no toca el ciclo vivo.
 
 Límite de hardware: la GPU no banca LLM local rápido (~50s/gen) — nada de LLM en el
 hot path del ciclo; ContinuousLearner queda OFF en esta máquina.
 
-La verdad de fondo: el cuello de botella es DATA (70/400), no código. El único +R es
-régimen-short (no edge durable). Dejar correr; no empezar Fase D/E sin sus gates.
+La verdad de fondo: el cuello de botella es DATA (70/400), no código. No hay edge
+probado: el +4.7R del trend_following_d1 en el backtest fue un ARTEFACTO (1 trade
+sintético de USDCHF). Dejar correr el libro vivo (Fase D); el backtest descarta/descubre.
 
 Decime qué querés hacer: (A) revisar la data (/performance, /readiness, /exit_analysis,
 /exposicion); (B) si /exit_analysis ya da delta +R robusto, activar el trailing de forex
-con evidencia; (C) Fase D si la data llegó a 400; (D) otra cosa.
+con evidencia; (C) Fase D si la data llegó a 400; (D) avanzar el harness (COT / instrumentos
+descorrelacionados, MAPA §8); (E) otra cosa.
 ```

@@ -1,13 +1,20 @@
 ---
 tags: [arquitectura, estructura, modulos]
-version: v2.7.0
-updated: 2026-05-30
+version: v3.6.0
+updated: 2026-06-14
 ---
 
 # Arquitectura del Sistema
 
 > [!info] Vision general
-> Aplicacion Python local con dos engines (swing + scalping) que comparten infraestructura (DB, MT5 reader, learning engine, telegram, dashboard).
+> Aplicacion Python local con dos engines vivos (swing + scalping) que comparten infraestructura (DB, MT5 reader, learning engine, telegram, dashboard). Desde v3.6.0 hay además un **paquete offline `app/backtest/`** que NO corre en el ciclo vivo.
+
+> [!warning] El Backtest Replay Harness (v3.6.0) NO está en el diagrama de abajo
+> `app/backtest/` (`historical_loader`, `context_builder`, `trade_simulator`, `replay_harness`,
+> `report`) + `app/intelligence/regime_filter.py` reproducen la historia D1 con las
+> estrategias REALES, OFFLINE, vía CLI (`python -m app.backtest.replay_harness --config x.json`).
+> Escribe SOLO en tablas `backtest_*`; no importa `mt5_demo_trader`/`reconciler`; no toca el
+> ciclo de `jobs.run_once`. Ver `CONTEXTO_MAESTRO_v3.6.0.md` §7 y [[20 - Schema de Base de Datos]].
 
 ---
 

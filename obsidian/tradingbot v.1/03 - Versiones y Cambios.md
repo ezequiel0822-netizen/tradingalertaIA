@@ -1,7 +1,7 @@
 ---
 tags: [versiones, historial, evolucion]
-version: v2.9.1
-updated: 2026-06-04
+version: v3.6.0
+updated: 2026-06-14
 ---
 
 # Versiones y Cambios
@@ -44,6 +44,16 @@ updated: 2026-06-04
 | **v2.9.0** | **2026-06-03** | **Hybrid ML layer (XGBoost): `ml_predictor` modula el gate SOLO hacia abajo, soft-fail, DORMIDO por default** |
 | **v2.9.1** | **2026-06-04** | **Flag `ENABLE_STOCK_TELEGRAM`: analizar acciones sin alertarlas (avisos de trades intactos)** |
 | **v2.10.0** | **2026-06-04** | **Proveedor LLM local via Ollama (gratis, sin API key): `OllamaProcessor` + factory; solo enriquece texto, no decide trades** |
+| v2.11.0 | 2026-06-05 | Features `rsi/atr/macd` al entry + `TradingReasoner` (asesor LLM read-only, solo texto) |
+| v2.12.0 | 2026-06-05 | Comandos Telegram `/market` + `/porque_perdi` |
+| **v3.0.0** | **2026-06-06** | **Veto del ensemble LLM (Llama+Mistral) en el demo gate — downward-only** |
+| v3.1.0 | 2026-06-06 | Resumen diario por Telegram al cierre NY (read-only) |
+| **v3.2.0** | **2026-06-08** | **Fase C — ContinuousLearner: lección por trade → `trade_lessons`; agrupa y PROPONE** |
+| **v3.3.0** | **2026-06-09** | **`/performance` (baseline limpio post-bug) + `/readiness` (gates real-money)** |
+| v3.3.1 | 2026-06-09 | Caché + cooldown 429 para GeckoTerminal |
+| **v3.4.0** | **2026-06-10** | **Exit shadow: mide si un trailing mejoraría las salidas + `/exit_analysis`** |
+| **v3.5.0** | **2026-06-11** | **Calendar gate (conecta `is_safe_window` huérfano) + cap de exposición neta USD + `/exposicion`** |
+| **v3.6.0** | **2026-06-14** | **Backtest Replay Harness (`app/backtest/`) + `regime_filter` + `trend_following_d1`. Offline, tablas `backtest_*`. Veredicto: sin edge en D1 (el +4.7R del trend fue un artefacto)** |
 
 ---
 

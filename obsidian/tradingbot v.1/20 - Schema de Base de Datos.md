@@ -1,7 +1,7 @@
 ---
 tags: [database, schema, tablas, sqlite]
-version: v2.7.0
-updated: 2026-05-30
+version: v3.6.0
+updated: 2026-06-14
 ---
 
 # Schema de Base de Datos
@@ -37,6 +37,23 @@ updated: 2026-05-30
 | `walk_forward_results` | Walk-forward backtests | ~varies |
 | `mt5_historical_cache` | Cache OHLCV local | ~varies |
 | `security_checks` | GoPlus checks cripto | ~varies |
+
+---
+
+## Tablas nuevas v3 (post v2.7.0)
+
+| Tabla | Versión | Qué guarda |
+|---|---|---|
+| `trade_lessons` | v3.2.0 | Una lección razonada (LLM) por trade cerrado. PK `id`, `paper_trade_id` UNIQUE, `outcome`, `r_multiple`, `lesson`, `lesson_key`. Solo registro |
+| `trade_r_samples` | v3.4.0 | Camino de R no-realizado de cada trade abierto (una muestra/ciclo). Insumo de `/exit_analysis`; poda > 7 días |
+| **`backtest_runs`** | **v3.6.0** | Una fila por corrida del harness: `git_commit`, `mode`, `timeframe`, `symbols`, `data_ranges_json`, `config_json`, `cost_multiplier`, `n_configs_tested` |
+| **`backtest_trades`** | **v3.6.0** | Una fila por trade SIMULADO: `direction`, `entry/sl/tp`, `exit_reason`, `r_gross/cost_r/r_net`, `mfe_r/mae_r`, `session`, `regime_trend/regime_vol`, `year` |
+| **`backtest_walkforward`** | **v3.6.0** | Ventanas OOS del Modo B (train/test, avg_r_net, max_dd_r, profit_factor) |
+
+> [!warning] Tablas `backtest_*` separadas
+> **Cero FK hacia tablas vivas.** El harness es offline y NUNCA cuenta para `/readiness`,
+> `/expectancy`, `/edge` ni los 400 de la Fase D. Índices: `backtest_trades(run_id)` y
+> `backtest_trades(strategy, symbol)`.
 
 ---
 

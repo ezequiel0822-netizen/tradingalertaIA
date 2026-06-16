@@ -1,13 +1,16 @@
 ---
-tags: [estrategias, swing, scalping, stats]
-version: v2.7.0
-updated: 2026-05-30
+tags: [estrategias, swing, scalping, backtest, stats]
+version: v3.6.0
+updated: 2026-06-14
 ---
 
 # Estrategias
 
-> [!info] 7 strategies activas (5 swing + 2 scalping)
-> Cada una con su filosofia + stats reales post-quarantine. Toda strategy hoy tiene **R negativo neto** — el bot mide la verdad, no inventa edge.
+> [!info] 7 vivas (5 swing + 2 scalping) + 1 de backtest (`trend_following_d1`, v3.6.0)
+> Cada una con su filosofia + stats reales post-quarantine. Toda strategy hoy tiene **R negativo neto** — el bot mide la verdad, no inventa edge. Las tablas de stats de abajo son **históricas v2.7.0** (no se reescriben con números inventados).
+
+> [!warning] El backtest v3.6.0 lo confirmó
+> El Backtest Replay Harness corrió las estrategias REALES sobre décadas de D1: **ninguna pasa los criterios §11**. El `trend_following_d1` (Donchian, hipótesis congelada) mostró un avg +4.7R que era un **ARTEFACTO** — un solo trade sintético de USDCHF (pre-1999) cargaba el 80% del P&L; la mediana real es −1.03R. Nada se promovió. El edge no está en estas estrategias sobre D1.
 
 ---
 
@@ -155,6 +158,26 @@ R:R 1:1.33. Cooldown 60s post-signal.
 `_evaluate_signal_for_symbol` itera la lista. Primer hit no-None gana. Orden: breakout primero, MR fallback.
 
 `_compute_candle_lookback` calcula candles necesarias para AMBAS strategies (max de range_lookback+1 vs max(BB_period, RSI_period+1)). Fetch unico via `mt5_reader.get_rates`.
+
+---
+
+## Strategy de BACKTEST (v3.6.0, no corre en vivo)
+
+### 8. `trend_following_d1` (`trend_following_d1.py`) — solo harness
+
+**Filosofia:** Trend-following Donchian D1, la familia con MÁS evidencia académica
+multi-activo y multi-década. Hipótesis **CONGELADA antes de mirar la data** (anti data-dredging).
+
+**Reglas (Modo A, params congelados):**
+- Long: `regime_trend == up` y `close(N) > max(high de los 55 bars previos)`. Short espejo.
+- SL inicial 2.0×ATR14. **Sin TP fijo** (dejar correr al ganador).
+- Salida trailing Donchian: `close(M) < min(low de los 20 bars previos)` (close-confirmada,
+  ejecución al open siguiente). Time exit 120 barras. Confianza 70.
+
+**Estado:** `enabled_setting_key` no existe en Settings → el router la deja **OFF en vivo**.
+Solo la mide el harness. Integración viva (al ciclo D1) sería v3.7 si algún día pasara §11.
+
+**Veredicto del run real:** NO PASA (avg +4.7R artefactual; drawdown 57.5R; consistencia 58%).
 
 ---
 
