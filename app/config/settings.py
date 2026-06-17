@@ -295,6 +295,11 @@ class Settings:
     # concentracion ADICIONAL (downward-only). Opt-in OFF. Comando /exposicion.
     enable_usd_exposure_cap: bool
     max_net_usd_exposure: int
+    # v3.8.0 — Regime gate: baja a paper un trade que va CONTRA el regimen D1 del
+    # simbolo (long en down / short en up). Clasifica con regime_filter sobre el
+    # cache D1. Downward-only, opt-in OFF, soft-fail. Defensivo: no crea edge,
+    # deja de pelear la tendencia (los longs sangraban en regimen bajista).
+    enable_regime_gate: bool
     # Phase 4 v2.3.0 — MT5 validation + walk-forward + data quality + CSV
     mt5_broker_profile: str
     enable_walk_forward_backtest: bool
@@ -479,7 +484,7 @@ def load_settings() -> Settings:
         obsidian_vault_path = safe_obsidian
 
     return Settings(
-        app_version=os.getenv("APP_VERSION", "v3.7.0"),
+        app_version=os.getenv("APP_VERSION", "v3.8.0"),
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
         telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID"),
         dexscreener_base_url=os.getenv(
@@ -716,6 +721,7 @@ def load_settings() -> Settings:
         enable_calendar_gate=_get_bool("ENABLE_CALENDAR_GATE", False),
         enable_usd_exposure_cap=_get_bool("ENABLE_USD_EXPOSURE_CAP", False),
         max_net_usd_exposure=_get_int("MAX_NET_USD_EXPOSURE", 3),
+        enable_regime_gate=_get_bool("ENABLE_REGIME_GATE", False),
         # Phase 4 v2.3.0
         mt5_broker_profile=os.getenv("MT5_BROKER_PROFILE", "icmarkets"),
         enable_walk_forward_backtest=_get_bool("ENABLE_WALK_FORWARD_BACKTEST", True),

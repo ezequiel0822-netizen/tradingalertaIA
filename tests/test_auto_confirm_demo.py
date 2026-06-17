@@ -85,6 +85,9 @@ class _StubJob:
     # sin tocar el repo (guard temprano por los flags default False).
     _calendar_gate = TradingAlertJob._calendar_gate
     _usd_exposure_gate = TradingAlertJob._usd_exposure_gate
+    # v3.8.0: regime gate off por default -> retorna True (allow) sin tocar el repo.
+    _regime_gate = TradingAlertJob._regime_gate
+    _d1_candles_for_regime = TradingAlertJob._d1_candles_for_regime
 
 
 def test_enable_auto_confirm_demo_default_false(monkeypatch) -> None:

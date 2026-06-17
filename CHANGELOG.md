@@ -1,5 +1,17 @@
 # Changelog
 
+## Trading Alert AI v3.8.0
+
+**Regime gate vivo: dejar de pelear la tendencia.** Nace del diagnóstico del 16-jun: el slicing por dirección mostró que `forex_session_breakout`/forex pierde **−0.57R en longs** y gana **+1.29R en shorts** (oro: longs **−2.57R**). El bot tomaba ambos lados y los longs sangraban porque iban contra el régimen. No es volatilidad (VIX ~16, calmo) ni edge nuevo — es estructura.
+
+- **`_regime_gate`** (`jobs.py`) + flag **`ENABLE_REGIME_GATE=false`** (opt-in OFF): antes del `order_send` a demo, clasifica el régimen D1 del símbolo con `regime_filter` (sobre el cache `mt5_historical_cache`) y, si el trade va **contra** la tendencia (long en régimen `down` / short en `up`), lo deja **paper-only**. Aligned / `flat` / sin historia suficiente → permite. **Downward-only** (como el calendar gate y el cap USD): solo degrada a paper, JAMÁS fuerza una orden. Soft-fail. Solo forex/gold (lo único que ejecuta a demo).
+- Reusa `regime_filter` (v3.6.0, que vivía solo en el backtest) + `yahoo_to_mt5` para el símbolo (GC=F → XAUUSD). El cache D1 lo refresca el loader / walk-forward.
+- `tests/test_regime_gate.py` (+6, patrón `_StubJob`): long vs down → paper, short vs up → paper, aligned → permite, gate off → permite, historia insuficiente → permite, mapeo de oro. Settings sincronizados.
+
+Honestidad: es **defensivo, no edge**. Deja de tomar los longs perdedores contra la tendencia; no garantiza ganar (el régimen se identifica tarde). Por eso es opt-in y downward-only. Real-money sigue HARDCODED OFF.
+
+666 -> **672 verdes**. app_version -> v3.8.0. `.env.example`.
+
 ## Trading Alert AI v3.7.0
 
 **Refocus a la bolsa: corte del motor de memecoins.** El user montó un bot aparte para memecoins; este queda 100% mercados (acciones + forex + oro).

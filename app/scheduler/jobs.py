@@ -1263,6 +1263,58 @@ class TradingAlertJob:
             logger.exception("USD exposure gate fallo; soft-fail -> permitir")
             return True
 
+    def _regime_gate(self, paper_trade: dict) -> bool:
+        """v3.8.0: True = permitir order_send. Baja a paper si el trade va CONTRA
+        el regimen D1 del simbolo (long en regimen 'down' / short en 'up'). Aligned,
+        'flat' o sin historia D1 suficiente -> permitir. Downward-only, soft-fail.
+        Solo forex/gold (lo unico que ejecuta a demo). Defensivo: NO crea edge,
+        deja de pelear la tendencia (el slicing mostro longs -0.57R vs shorts +1.29R)."""
+        if not getattr(self.settings, "enable_regime_gate", False):
+            return True
+        if str(paper_trade.get("category") or "") not in ("forex", "gold"):
+            return True
+        try:
+            from app.brokers.mt5_symbol_map import yahoo_to_mt5
+            from app.intelligence.regime_filter import (
+                SMA_TREND_PERIOD,
+                TREND_SLOPE_LOOKBACK,
+                classify,
+            )
+
+            raw = str(paper_trade.get("symbol") or "")
+            mt5_sym = yahoo_to_mt5(
+                raw, getattr(self.settings, "mt5_broker_profile", "icmarkets")
+            ) or raw.upper().replace("=X", "")
+            candles = self._d1_candles_for_regime(mt5_sym)
+            if len(candles) < SMA_TREND_PERIOD + TREND_SLOPE_LOOKBACK:
+                return True  # sin historia D1 suficiente -> no gate (soft)
+            regime = classify(candles).regime_trend
+            direction = str(paper_trade.get("direction") or "long")
+            counter = (regime == "up" and direction == "short") or (
+                regime == "down" and direction == "long"
+            )
+            if counter:
+                logger.info(
+                    "Regime gate: paper-only symbol=%s dir=%s regime=%s",
+                    raw, direction, regime,
+                )
+                return False
+            return True
+        except Exception:
+            logger.exception("Regime gate fallo; soft-fail -> permitir")
+            return True
+
+    def _d1_candles_for_regime(self, mt5_symbol: str) -> list[dict]:
+        """Velas D1 del cache historico (mt5_historical_cache) para clasificar el
+        regimen. Vacio si no hay -> el gate hace soft-fail (permite). El cache se
+        refresca con el stock/historical loader o el walk-forward."""
+        try:
+            return self.repository.fetch_mt5_cache_window(
+                mt5_symbol, 1440, 0, 9_999_999_999
+            )
+        except Exception:
+            return []
+
     def _try_prepare_demo_order(self, paper_trade: dict) -> None:
         """Phase 5: create a pending MT5 demo order request.
 
@@ -1345,6 +1397,12 @@ class TradingAlertJob:
         # juntas). Downward-only + soft-fail.
         if not self._usd_exposure_gate(paper_trade):
             return  # concentraria la apuesta USD -> paper-only (sin order_send)
+
+        # v3.8.0: regime gate. Si el trade pelea la tendencia D1 (long en 'down' /
+        # short en 'up'), queda paper-only. Defensivo: el slicing mostro que los
+        # longs sangran contra el regimen. Downward-only + soft-fail.
+        if not self._regime_gate(paper_trade):
+            return  # contra-regimen -> paper-only (sin order_send a MT5)
 
         from app.brokers.mt5_demo_trader import MT5DemoTrader
 
