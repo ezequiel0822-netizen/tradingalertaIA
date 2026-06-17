@@ -39,6 +39,7 @@ def _session(payload=None, error=None):
         sess.get.side_effect = error
         return sess
     resp = MagicMock()
+    resp.status_code = 200
     resp.json.return_value = payload
     resp.raise_for_status.return_value = None
     sess.get.return_value = resp
@@ -89,6 +90,27 @@ def test_no_data_soft_fails() -> None:
 def test_request_error_soft_fails() -> None:
     sess = _session(error=requests.RequestException("boom"))
     assert fetch_yahoo_daily("ERR", sess, 10) == []
+
+
+def test_fetch_retries_on_429_then_succeeds(monkeypatch) -> None:
+    # Yahoo throttlea con 429; el loader hace backoff y reintenta (sin dormir de
+    # verdad en el test).
+    monkeypatch.setattr(
+        "app.backtest.stock_historical_loader.time.sleep", lambda *_: None)
+    r429 = MagicMock()
+    r429.status_code = 429
+    r200 = MagicMock()
+    r200.status_code = 200
+    r200.raise_for_status.return_value = None
+    r200.json.return_value = _yahoo_payload(
+        [0, _DAY], [10, 10], [11, 11], [9, 9], [10, 10], [10, 10], [100, 100])
+    sess = MagicMock()
+    sess.get.side_effect = [r429, r200]  # primer intento 429, segundo OK
+
+    candles = fetch_yahoo_daily("X", sess, 10)
+
+    assert len(candles) == 2
+    assert sess.get.call_count == 2  # reintento
 
 
 def test_load_symbol_persists_and_measures() -> None:

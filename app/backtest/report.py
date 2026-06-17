@@ -203,6 +203,20 @@ def _build_markdown(run, run_id, trades, by_strategy, settings) -> str:
     lines: list[str] = []
     lines.append(f"# Backtest Replay — run {run_id} (Modo {run.get('mode', '?')})")
     lines.append("")
+
+    # Banner de SURVIVORSHIP BIAS para runs de acciones (ESPEC_BACKTEST_STOCKS §2).
+    cfg = _safe_json(run.get("config_json"))
+    is_stock = str(cfg.get("category", "")) == "stock" or any(
+        str(t.get("category")) == "stock" for t in trades
+    )
+    if is_stock:
+        lines.append("> ⚠️ **SESGO DE SUPERVIVENCIA.** Este run usa el universo de acciones")
+        lines.append("> ACTUAL — los nombres que quebraron / fueron delisted desaparecieron de")
+        lines.append("> Yahoo. Backtestear sobre los SOBREVIVIENTES infla los resultados: nadie")
+        lines.append("> sabia en el pasado cuales iban a sobrevivir. **Este reporte solo sirve")
+        lines.append("> para DESCARTAR, nunca para confirmar.** 'Gana sobre sobrevivientes' NO es")
+        lines.append("> edge. NO habilita paper por si solo: requiere decision humana consciente.")
+        lines.append("")
     lines.append(f"- Timeframe: **{run.get('timeframe', '?')}**")
     lines.append(f"- Simbolos: {run.get('symbols', '?')}")
     lines.append(f"- Estrategias: {run.get('strategies', '?')}")

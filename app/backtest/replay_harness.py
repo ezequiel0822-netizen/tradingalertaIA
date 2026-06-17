@@ -60,6 +60,10 @@ class RunConfig:
     strategies: list[str] = field(default_factory=list)
     cost_multiplier: float | None = None
     notes: str = ""
+    # v3.9.0: si se setea (p.ej. "stock"), fuerza la categoria de TODOS los
+    # simbolos del run (cost model + el banner de survivorship del reporte). Si
+    # es None, se deriva por simbolo (forex/gold) como hasta ahora.
+    category: str | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> "RunConfig":
@@ -70,6 +74,7 @@ class RunConfig:
             strategies=[str(s).strip() for s in data.get("strategies", [])],
             cost_multiplier=data.get("cost_multiplier"),
             notes=str(data.get("notes", "")),
+            category=(str(data["category"]).strip() if data.get("category") else None),
         )
 
 
@@ -158,8 +163,9 @@ class ReplayHarness:
                 "first": candles[0].get("time"),
                 "last": candles[-1].get("time"),
             }
+            category = config.category or category_for(symbol)
             self._replay_symbol(
-                symbol, candles, selected, tf_minutes, lookback, all_trades
+                symbol, candles, selected, tf_minutes, lookback, all_trades, category
             )
 
         run_id = self.repository.insert_backtest_run(
@@ -176,6 +182,7 @@ class ReplayHarness:
                         "mode": config.mode,
                         "timeframe": config.timeframe,
                         "strategies": list(selected.keys()),
+                        "category": config.category or "auto (forex/gold por simbolo)",
                         "params": "defaults hardcoded por estrategia (v1)",
                         "min_confidence": self.settings.strategy_min_confidence,
                         "lookback": lookback,
@@ -195,9 +202,8 @@ class ReplayHarness:
         return run_id
 
     def _replay_symbol(
-        self, symbol, candles, selected, tf_minutes, lookback, all_trades
+        self, symbol, candles, selected, tf_minutes, lookback, all_trades, category
     ) -> None:
-        category = category_for(symbol)
         next_free = {name: WARMUP_BARS for name in selected}
         last_decision = len(candles) - 1  # necesitamos la barra N+1 para entrar
 

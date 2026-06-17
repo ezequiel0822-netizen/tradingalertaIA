@@ -32,20 +32,37 @@ _YAHOO_CHART = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
 _TRUNCATION_SUSPECT_BARS = 300
 
 
+# Backoff (segundos) ante 429 de Yahoo. Yahoo throttlea rafagas de requests.
+_RETRY_BACKOFF = (3, 6, 12)
+
+
 def fetch_yahoo_daily(symbol: str, session, timeout: int) -> list[dict]:
     """Trae D1 ajustado de Yahoo. Cada vela: time(epoch), open/high/low/close
-    AJUSTADOS, volume. Devuelve [] ante cualquier problema (soft-fail)."""
+    AJUSTADOS, volume. Devuelve [] ante cualquier problema (soft-fail). Reintenta
+    con backoff ante 429 (Too Many Requests)."""
     url = _YAHOO_CHART.format(symbol=symbol)
     # OJO: range=max DEGRADA la granularidad a mensual/semanal. Para D1 REAL hay
     # que pasar period1/period2 explicitos (epoch). period1=0 -> desde el IPO.
     params = {"period1": 0, "period2": int(time.time()), "interval": "1d",
               "events": "div,splits"}
-    try:
-        resp = session.get(url, params=params, timeout=timeout)
-        resp.raise_for_status()
-        payload = resp.json()
-    except (requests.RequestException, ValueError) as exc:
-        logger.warning("Yahoo daily failed for %s: %s", symbol, exc)
+    payload = None
+    for attempt in range(len(_RETRY_BACKOFF) + 1):
+        try:
+            resp = session.get(url, params=params, timeout=timeout)
+        except requests.RequestException as exc:
+            logger.warning("Yahoo daily failed for %s: %s", symbol, exc)
+            return []
+        if getattr(resp, "status_code", None) == 429 and attempt < len(_RETRY_BACKOFF):
+            time.sleep(_RETRY_BACKOFF[attempt])  # throttle de Yahoo -> backoff
+            continue
+        try:
+            resp.raise_for_status()
+            payload = resp.json()
+        except (requests.RequestException, ValueError) as exc:
+            logger.warning("Yahoo daily failed for %s: %s", symbol, exc)
+            return []
+        break
+    if payload is None:
         return []
 
     result = ((payload.get("chart") or {}).get("result") or [None])[0]
@@ -82,11 +99,14 @@ def fetch_yahoo_daily(symbol: str, session, timeout: int) -> list[dict]:
 class StockHistoricalLoader:
     """Carga y mide la historia D1 ajustada de acciones desde Yahoo."""
 
-    def __init__(self, settings: Settings, repository, session=None) -> None:
+    def __init__(self, settings: Settings, repository, session=None,
+                 request_delay_seconds: float = 2.0) -> None:
         self.settings = settings
         self.repository = repository
         self.session = session or requests.Session()
         self.session.headers.setdefault("User-Agent", "TradingAlertAI/3.8 backtest")
+        # Pacing entre simbolos para no comerse un 429 de Yahoo (rafagas throttlean).
+        self.request_delay_seconds = request_delay_seconds
 
     def load_symbol(self, symbol: str) -> SymbolDepth:
         symbol = (symbol or "").strip().upper()
@@ -109,7 +129,9 @@ class StockHistoricalLoader:
         summary = LoadSummary(mt5_connected=True)  # 'conectado' = Yahoo alcanzable
         symbols = getattr(self.settings, "stock_backtest_symbols", None) \
             or self.settings.stock_symbols
-        for raw in symbols:
+        for i, raw in enumerate(symbols):
+            if i > 0 and self.request_delay_seconds > 0:
+                time.sleep(self.request_delay_seconds)  # pacing anti-429
             try:
                 summary.depths.append(self.load_symbol(raw))
             except Exception:
