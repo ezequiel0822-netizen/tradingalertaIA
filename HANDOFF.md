@@ -9,20 +9,20 @@
 ## Prompt de arranque (copiá/pegá en Claude Code)
 
 ```
-Sos Claude Code retomando el proyecto Trading Alert AI en una máquina nueva
-(migración de hardware, NO se agregó código — solo cambió la compu).
+Sos Claude Code retomando el proyecto Trading Alert AI (sesión nueva / otra compu).
 
 PROYECTO: bot de trading algorítmico LOCAL en Python 3.12 (Windows, PowerShell + venv).
-Detecta oportunidades (memecoins / acciones US / forex / oro), decide con un strategy
-router (5 swing + 2 scalping), hace paper trades y manda órdenes a MT5 demo
-(MetaQuotes-Demo). Real-money BLOQUEADO por diseño (HARDCODED).
-Estado: v3.6.0, 657 tests verdes.
+REFOCUS v3.7.0: 100% LA BOLSA (acciones US + forex + oro). Las MEMECOINS se cortaron
+(ENABLE_MEMECOIN_ENGINE=false; el user tiene un bot aparte para memecoins) y el SCALPING
+se apagó. Decide con un strategy router (swing), hace paper trades y manda órdenes a MT5
+demo (MetaQuotes-Demo, solo forex/oro ejecutan; acciones son paper). Real-money BLOQUEADO
+por diseño (HARDCODED). Estado: v3.8.0, 676 tests verdes. Demo ~$88.6k (plano).
 
 ANTES DE TOCAR NADA leé (en el repo, en este orden): RESUMEN_COMPLETO.md (todo en uno),
-PROXIMOS_PASOS.md, CONTEXTO_MAESTRO_v3.6.0.md (arquitectura vigente), CHANGELOG.md
-(historia hasta v3.6.0), GO_LIVE_RUNBOOK.md (camino a real-money), y para el backtest
-ESPEC_BACKTEST_REPLAY_v1.md + MAPA_DE_EDGE_Y_RUTA.md.
-Si los copiaste de la otra compu: la carpeta de memoria de Claude.
+PROXIMOS_PASOS.md, CONTEXTO_MAESTRO_v3.8.0.md (arquitectura vigente), CHANGELOG.md
+(historia hasta v3.8.0), GO_LIVE_RUNBOOK.md (camino a real-money), y para el backtest
+ESPEC_BACKTEST_REPLAY_v1.md (forex) + ESPEC_BACKTEST_STOCKS_v1.md (acciones) +
+MAPA_DE_EDGE_Y_RUTA.md (la ruta de edge). Y la carpeta de memoria de Claude.
 
 REGLAS INAMOVIBLES (no romper nunca):
 - ENABLE_REAL_TRADING=false HARDCODED. Real-money prohibido sin autorización nueva y
@@ -31,7 +31,7 @@ REGLAS INAMOVIBLES (no romper nunca):
 - El LLM y el ML son SUBTRACTIVOS: solo pueden vetar / bajar-a-paper, JAMÁS forzar una orden.
 - Todo lo nuevo (Ollama, asesor, ensemble veto, resumen diario) es opt-in OFF + soft-fail:
   si está apagado, el bot corre idéntico a antes.
-- Nunca leer/mostrar el .env real ni secrets. Mantener pytest verde (657). Al tocar
+- Nunca leer/mostrar el .env real ni secrets. Mantener pytest verde (676). Al tocar
   Settings, sincronizar tests/test_score._settings() Y tests/test_alert_rules._settings().
 - Versionado: patch para fixes, minor SOLO para features reales, sin saltar números.
 - Real-money: el user ya lo pidió 3+ veces; la respuesta es GO_LIVE_RUNBOOK.md +
@@ -40,6 +40,11 @@ REGLAS INAMOVIBLES (no romper nunca):
   el ciclo vivo ni mt5_demo_trader, NO cuenta para /readiness ni los 400 de Fase D. El
   backtest abre la puerta de PAPER, nunca la de MT5; prohibido ajustar una hipótesis hasta
   que pase (si no pasa, se documenta).
+- NO inventar "edge artificial" (optimizar parámetros hasta que el backtest brille = curve-
+  fitting = se funde en real). El edge se DESCUBRE (data + research, validado fuera de
+  muestra), no se inyecta. El user lo pidió; la respuesta es esta.
+- Los gates vivos (calendar, cap USD, regime) son DOWNWARD-ONLY: solo bajan a paper, jamás
+  fuerzan una orden. Opt-in OFF + soft-fail.
 
 QUÉ SE CONSTRUYÓ (serie v3, todo pusheado):
 - v2.11.0: rsi/atr/macd persistidos al entry (desbloquea features ML reales) +
@@ -65,30 +70,48 @@ QUÉ SE CONSTRUYÓ (serie v3, todo pusheado):
   backtest_* separadas. Veredicto del primer run: ninguna estrategia pasa §11 en D1; el
   +4.7R del trend D1 fue un ARTEFACTO (1 trade sintetico de USDCHF = 80% del P&L). NADA
   se promovio. El harness existe para atrapar justo ese falso positivo.
+- v3.7.0 (REFOCUS A LA BOLSA): flag ENABLE_MEMECOIN_ENGINE (default true; en false el ciclo
+  NI COLECTA memecoins -> libera presupuesto para la bolsa). El user montó un bot aparte
+  para memecoins y apagó el scalping. + ESPEC_BACKTEST_STOCKS_v1.md.
+- v3.8.0 (REGIME GATE VIVO): jobs._regime_gate + ENABLE_REGIME_GATE=false (opt-in). Antes
+  del order_send a demo, clasifica el regimen D1 del simbolo (regime_filter sobre el cache)
+  y si el trade pelea la tendencia (long en down / short en up) lo deja paper-only.
+  Downward-only, soft-fail. Defensivo (NO edge): cablea al vivo el regime_filter que vivia
+  solo en el backtest. Nace del diagnostico: longs -0.57R vs shorts +1.29R = regimen.
+- Serie backtest de ACCIONES: S1 (app/backtest/stock_historical_loader.py: Yahoo D1
+  ajustado por splits/dividendos + anti-429) + S2 (replay_harness con category='stock' +
+  banner de SURVIVORSHIP BIAS en el report). CODIGO HECHO + testeado; el run real con
+  veredicto quedó PENDIENTE (Yahoo throttleo la IP en las pruebas; se completa cuando se
+  libere). El backtest de acciones SOLO sirve para DESCARTAR (survivorship bias).
 - GO_LIVE_RUNBOOK.md: el camino completo a real-money (gates, broker, codigo del dia-D,
   checklist). Real-money sigue HARDCODED bloqueado hasta que /readiness este verde.
+- preflight.py (raiz del repo, NO commiteado): chequea config + secretos + MT5 + el refocus
+  (memecoins off, scalping off, stock alerts on, v3.x mergeado) sin arrancar nada.
 
 VERDAD DE FONDO: el cuello de botella es DATA (70/400 trades con features), no código.
-No hay edge PROBADO: el único +R vivo (forex_session_breakout +0.38R) lo carga el lado
-SHORT de un régimen — no durable. Y el backtest v3.6.0 lo confirmó sobre décadas de D1:
-ninguna estrategia pasa §11; el +4.7R del trend_following_d1 fue un ARTEFACTO (1 trade
-sintético de USDCHF). El −11% del demo fue el bug de mayo; limpio queda ~plano. El LLM/ML
-filtran, explican y protegen capital — NO crean edge. Lo más valioso: DEJAR CORRER el
-libro vivo. Hardware: la GPU no banca LLM local rápido (~50s/gen) — nada de LLM en el hot
-path; ContinuousLearner OFF en la Lenovo (código sano, límite de hardware).
+No hay edge PROBADO, CONFIRMADO POR DOS VÍAS: (1) el backtest sobre décadas de D1 (ninguna
+estrategia pasa §11; el +4.7R del trend_following_d1 fue un ARTEFACTO de 1 trade sintético
+de USDCHF), y (2) el diagnóstico vivo del 16-jun (slicing por dirección: forex_session_
+breakout pierde -0.57R en LONGS y gana +1.29R en SHORTS; oro longs -2.57R). Los longs
+sangran porque pelean el régimen; el +R de shorts NO es edge durable, es coyuntura (gira
+y sangra). NO es volatilidad (VIX ~16, calmo). El −11% del demo fue el bug de mayo; limpio
+queda ~plano (~$88.6k). El LLM/ML filtran, explican, protegen — NO crean edge. Lo más
+valioso: DEJAR CORRER el libro vivo. Hardware: la GPU no banca LLM local rápido (~50s/gen)
+— nada de LLM en el hot path; ContinuousLearner OFF en la Lenovo (límite de hardware).
 
-PRÓXIMOS PASOS: 1) dejar correr el libro vivo (data 70→400 para Fase D — el backtest NO
-la reemplaza); 2) /exit_analysis cuando haya días de muestra → activar trailing forex SOLO
-con delta +R robusto; 3) Fase D (LightGBM/RF) SOLO con ≥400 trades + features; 4) Fase E
-(StrategyMutator) SOLO con edge + 3 meses; 5) avanzar el harness (COT / instrumentos
-descorrelacionados, MAPA §8); 6) real-money: GO_LIVE_RUNBOOK.md cuando /readiness esté verde.
+PRÓXIMOS PASOS: 1) dejar correr el libro vivo limpio (data 70→400 para Fase D); 2) probar
+el regime gate en vivo (ENABLE_REGIME_GATE=true) — deja de tomar longs contra la tendencia;
+3) completar el veredicto del backtest de ACCIONES (S2 hecho; falta el run real cuando
+Yahoo no throttlee) y cerrar S3 (trend_following_d1 sobre acciones + v3.9.0); 4) COT
+collector (información nueva = el lever de mejor chance real, MAPA §3.4); 5) Fase D (≥400
+trades) / Fase E (edge + 3 meses); 6) real-money: GO_LIVE_RUNBOOK.md cuando /readiness verde.
 
-PRIMERA TAREA EN ESTA COMPU:
-1. ollama pull llama3.2:3b (o llama3.1 si la GPU es mejor que la Lenovo).
+PRIMERA TAREA AL RETOMAR:
+1. python preflight.py (chequea todo: config, secretos, MT5, refocus). Debe decir LISTO.
 2. correr: .\start_bot.ps1 (pide contraseña si STARTUP_PASSWORD_SHA256 está en .env).
-3. verificar en Telegram: /health (debe decir v3.6.0) + /readiness + /exposicion.
+3. verificar en Telegram: /health (debe decir v3.8.0) + /readiness + /exposicion.
    /market tarda ~50s en hardware chico — es normal, no es un bug.
-4. si OK, dejar correr.
+4. si OK, dejar correr. (Ollama opcional: ollama pull llama3.2:3b / llama3.1.)
 ```
 
 ---

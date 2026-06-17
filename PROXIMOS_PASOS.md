@@ -5,7 +5,7 @@
 > - `HANDOFF.md` — setup de la máquina + prompt de arranque.
 > - `Trading Alert AI v3.1 Plan Arquitectura MEJORADO.md` — el plan/arquitectura completo.
 > - `CHANGELOG.md` — historia detallada de cada versión.
-> - `CONTEXTO_MAESTRO_v3.6.0.md` — arquitectura/schema **vigentes** (el v3.5.0 queda histórico).
+> - `CONTEXTO_MAESTRO_v3.8.0.md` — arquitectura/schema **vigentes** (el v3.6.0 queda histórico).
 > - `GO_LIVE_RUNBOOK.md` — el camino completo a real-money (gates, broker, día-D).
 > - `RESUMEN_COMPLETO.md` — TODO el proyecto en un solo documento (para arrancar un chat nuevo).
 > - `ESPEC_BACKTEST_REPLAY_v1.md` + `MAPA_DE_EDGE_Y_RUTA.md` — el harness de backtest (cómo) y la ruta de edge (porqué).
@@ -14,7 +14,11 @@
 
 ## 1. Estado actual
 
-- **v3.6.0**, **657 tests verdes**. Todo mergeado a `main` y deployado.
+- **v3.8.0**, **676 tests verdes** (main; +1 commit de S2-acciones pendiente de merge).
+- **REFOCUS v3.7.0: 100% LA BOLSA** — memecoins CORTADAS (`ENABLE_MEMECOIN_ENGINE=false`; bot
+  aparte), scalping APAGADO, stock alerts ON. **v3.8.0: regime gate vivo** (`ENABLE_REGIME_GATE`,
+  opt-in): los longs contra-tendencia van a paper. Diagnóstico: longs −0.57R / shorts +1.29R
+  = régimen, no edge. No es volatilidad (VIX ~16). Demo plano ~$88.6k.
 - **Backtest Replay Harness** (v3.6.0, offline): paquete `app/backtest/` que reproduce
   la historia D1 de MT5 con las estrategias REALES y mide R neto con pesimismo, en tablas
   `backtest_*` separadas. **No toca el ciclo vivo, no cuenta para `/readiness` ni Fase D.**
@@ -45,6 +49,9 @@
 | **v3.4.0** | Exit shadow (`exit_shadow.py` + tabla `trade_r_samples` + `/exit_analysis`): mide si un trailing mejoraria las salidas (forex/oro NO tienen trailing efectivo); read-only, no toca salidas |
 | **v3.5.0** | Calendar gate (conecta `is_safe_window` que estaba huérfano) + cap de exposición neta USD (`app/risk/exposure.py` + `/exposicion`). Lecciones del 10-jun (CPI+BOC barrieron 7 posiciones que eran 1 apuesta). Downward-only, opt-in OFF |
 | **v3.6.0** | **Backtest Replay Harness** (`app/backtest/`: `historical_loader`, `context_builder`, `trade_simulator`, `replay_harness`, `report`) + `app/intelligence/regime_filter.py` + `app/strategies/trend_following_d1.py` (hipótesis Donchian congelada). Offline, opt-in OFF, tablas `backtest_*` separadas. Veredicto: sin edge en D1; el "+4.7R" de trend D1 fue un artefacto que el harness atrapó |
+| **v3.7.0** | **Refocus a la bolsa**: `ENABLE_MEMECOIN_ENGINE` (corta colección de memecoins) + ESPEC del backtest de acciones. El user montó bot aparte para memecoins; scalping off, stock alerts on |
+| **v3.8.0** | **Regime gate vivo** (`jobs._regime_gate` + `ENABLE_REGIME_GATE`): los longs contra-tendencia D1 van a paper. Downward-only, opt-in. Cablea al vivo el `regime_filter`. Nace del diagnóstico (longs −0.57R/shorts +1.29R) |
+| **backtest acciones** | S1 (`stock_historical_loader`, Yahoo D1 ajustado) + S2 (harness `category=stock` + banner survivorship). Código hecho; run real PENDIENTE (Yahoo throttle). → v3.9.0 con S3 |
 
 (Detalle completo en `CHANGELOG.md`.)
 
@@ -143,21 +150,23 @@ Abrí Claude Code en `C:\Users\LENOVO\tradingalertaIA` y pegá esto como primer 
 
 ```
 Retomamos Trading Alert AI (bot de trading algorítmico LOCAL, Python 3.12, Windows).
-Estado: v3.6.0, main, 657 tests verdes, corriendo en esta máquina (Lenovo) vía
-.\start_bot.ps1. Protecciones activas: calendar gate, cap USD, exit shadow registrando.
+Estado: v3.8.0, main, 676 tests verdes, corriendo en la Lenovo vía .\start_bot.ps1.
+REFOCUS: 100% LA BOLSA (acciones+forex+oro); memecoins CORTADAS (bot aparte), scalping
+APAGADO. Protecciones: calendar gate, cap USD, exit shadow; regime gate disponible (opt-in).
 
 Leé en este orden ANTES de tocar nada: RESUMEN_COMPLETO.md (todo el proyecto en uno),
-PROXIMOS_PASOS.md (qué sigue + reglas), CONTEXTO_MAESTRO_v3.6.0.md (arquitectura),
+PROXIMOS_PASOS.md (qué sigue + reglas), CONTEXTO_MAESTRO_v3.8.0.md (arquitectura),
 CHANGELOG.md, GO_LIVE_RUNBOOK.md (camino a real-money), y para el backtest
-ESPEC_BACKTEST_REPLAY_v1.md + MAPA_DE_EDGE_Y_RUTA.md.
+ESPEC_BACKTEST_REPLAY_v1.md (forex) + ESPEC_BACKTEST_STOCKS_v1.md (acciones) + MAPA_DE_EDGE_Y_RUTA.md.
 
 Reglas inamovibles: real-money BLOQUEADO (ENABLE_REAL_TRADING=false HARDCODED) hasta
 que /readiness esté verde — el user ya lo pidió 3+ veces, la respuesta es el runbook,
-no el flag; order_send solo en mt5_demo_trader.py; LLM/ML SUBTRACTIVOS (solo vetan,
-nunca fuerzan); todo opt-in OFF + soft-fail; mantener 657 tests verdes; al tocar
-Settings sincronizar los _settings() de test_score y test_alert_rules; versionado:
-patch para fixes, minor para features, sin saltos. El backtest harness (app/backtest/)
+no el flag; order_send solo en mt5_demo_trader.py; LLM/ML SUBTRACTIVOS; los gates vivos
+(calendar/cap USD/regime) son DOWNWARD-ONLY (solo bajan a paper); todo opt-in OFF +
+soft-fail; mantener 676 tests verdes; al tocar Settings sincronizar los _settings() de
+test_score y test_alert_rules; versionado patch/minor sin saltos. El backtest (app/backtest/)
 escribe SOLO en backtest_*, NO cuenta para /readiness ni Fase D, no toca el ciclo vivo.
+NO inventar edge artificial (curve-fitting): el edge se descubre, no se inyecta.
 
 Límite de hardware: la GPU no banca LLM local rápido (~50s/gen) — nada de LLM en el
 hot path del ciclo; ContinuousLearner queda OFF en esta máquina.

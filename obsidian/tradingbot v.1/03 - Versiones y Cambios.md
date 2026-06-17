@@ -1,7 +1,7 @@
 ---
 tags: [versiones, historial, evolucion]
-version: v3.6.0
-updated: 2026-06-14
+version: v3.8.0
+updated: 2026-06-17
 ---
 
 # Versiones y Cambios
@@ -54,6 +54,9 @@ updated: 2026-06-14
 | **v3.4.0** | **2026-06-10** | **Exit shadow: mide si un trailing mejoraría las salidas + `/exit_analysis`** |
 | **v3.5.0** | **2026-06-11** | **Calendar gate (conecta `is_safe_window` huérfano) + cap de exposición neta USD + `/exposicion`** |
 | **v3.6.0** | **2026-06-14** | **Backtest Replay Harness (`app/backtest/`) + `regime_filter` + `trend_following_d1`. Offline, tablas `backtest_*`. Veredicto: sin edge en D1 (el +4.7R del trend fue un artefacto)** |
+| **v3.7.0** | **2026-06-17** | **Refocus a la bolsa: `ENABLE_MEMECOIN_ENGINE` corta la colección de memecoins (bot aparte). Scalping off, stock alerts on. + ESPEC backtest acciones** |
+| **v3.8.0** | **2026-06-17** | **Regime gate vivo (`ENABLE_REGIME_GATE`, opt-in, downward-only): longs contra-tendencia D1 → paper. Nace del diagnóstico (longs −0.57R/shorts +1.29R = régimen)** |
+| backtest acciones | 2026-06-17 | S1 (`stock_historical_loader`, Yahoo D1 ajustado) + S2 (harness `category=stock` + banner survivorship). Run real pendiente (Yahoo throttle) → v3.9.0 |
 
 ---
 

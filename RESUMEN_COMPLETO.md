@@ -51,18 +51,19 @@ En una frase: **observa los mercados, apuesta en simulado, ejecuta a demo solo l
 pasa todos los filtros, gestiona y mide cada posición con honestidad brutal, y aprende
 de los resultados — sin tocar jamás dinero real.**
 
-## 2. Estado EXACTO al 11-jun-2026
+## 2. Estado EXACTO al 17-jun-2026
 
 | Qué | Estado |
 |---|---|
-| Versión | **v3.5.0**, todo mergeado a `main` y deployado |
-| Tests | **572 verdes** |
-| Bot | Corriendo en la Lenovo vía **`.\start_bot.ps1`** (con contraseña, opt-in) |
-| Balance demo | ~$88,8xx (cuenta MetaQuotes-Demo) |
-| Protecciones activas (`.env` del user) | calendar gate ✓, cap USD \|3\| ✓, cooldown 60 min ✓, exit shadow ✓ (~6.000 muestras) |
+| Versión | **v3.8.0** (main; +1 commit de S2-acciones pendiente de merge) |
+| Tests | **676 verdes** |
+| Foco | **100% LA BOLSA** (acciones US + forex + oro). Memecoins CORTADAS (bot aparte), scalping APAGADO |
+| Bot | Corriendo en la Lenovo vía **`.\start_bot.ps1`**. Preflight: `python preflight.py` |
+| Balance demo | ~$88,6xx (plano — el dinero real casi no se movió) |
+| Protecciones activas | calendar gate ✓, cap USD \|3\| ✓, cooldown 60 min ✓, exit shadow ✓; **regime gate** disponible (opt-in `ENABLE_REGIME_GATE`) |
 | Data hacia Fase D | **~70/400** trades limpios con features técnicos |
 | Real-money | BLOQUEADO; `/readiness` = NO LISTO |
-| Seguridad | Auditoría 2026-06-11 **limpia** (ver §7) |
+| Verdad de fondo | **No hay edge probado** — confirmado por backtest (D1) Y diagnóstico vivo (longs sangran/shorts ganan = régimen) |
 
 ## 2.5 Serie v3.6.0 — Backtest Replay Harness — EN CURSO (actualizado 2026-06-14)
 
@@ -80,7 +81,7 @@ de los resultados — sin tocar jamás dinero real.**
 | **S2** | `context_builder` + `regime_filter` + canario anti-look-ahead + tests | **HECHA y en `main`** (commit `c6efe6b`; +21 tests) |
 | **S3** | `trade_simulator` (long/short/gaps/costos/slippage, B1–B13) + tests | **HECHA y en `main`** (commit `307f5d3`; +21 tests, números dorados a mano) |
 | **S4** | `replay_harness` + `report` + primer run Modo A real + tests | **HECHA y en `main`** (commit `c03c26e`; +9 tests) |
-| **S5** | `trend_following_d1` + veredicto §11 + bump **v3.6.0** + CHANGELOG/README/.env | **HECHA en branch** (lista para merge; +13 tests) |
+| **S5** | `trend_following_d1` + veredicto §11 + bump **v3.6.0** + CHANGELOG/README/.env | **HECHA y en `main`** (commit `05f9731`; +13 tests) |
 
 **Primer run Modo A real (S4, 14-jun)** — 4 estrategias existentes × 8 símbolos D1, **6.798 trades** simulados sobre décadas de historia en ~3 min. **Veredicto: las 3 que dispararon NO PASAN** (§11) — `mean_reversion` −0.123R (PF 0.60, n=1026), `momentum` −0.004R (~plano, n=5757), `breakout` +0.043R pero n=15. `forex_session_breakout` no disparó (en D1 `macro=None`, B11). Exactamente para lo que existe el harness: **descartó en minutos lo que el demo tardaría meses**, y confirmó que el edge no está en estas estrategias sobre D1. El reporte vive en `exports/backtest_1/` (gitignored).
 
@@ -103,7 +104,46 @@ Es justo lo que el harness existe para hacer: atrapar el falso positivo seductor
 de creerle. Conclusión de la serie: **el edge no está en estas estrategias sobre D1.** El
 camino sigue (COT, instrumentos descorrelacionados) en `MAPA_DE_EDGE_Y_RUTA.md`.
 
-**Tests:** 572 (v3.5.0) → 593 (S1) → 614 (S2) → 635 (S3) → 644 (S4) → **657 (S5)**, todos verdes por conteo.
+## 2.6 Post-v3.6.0 — refocus a la bolsa + regime gate + backtest acciones (17-jun)
+
+**v3.7.0 — Refocus a LA BOLSA.** El user montó un bot APARTE para memecoins; este queda
+100% mercados. Flag **`ENABLE_MEMECOIN_ENGINE`** (default true; en `false` el ciclo NI
+COLECTA memecoins — los collectors DEX/Gecko corrían SIEMPRE, los flags `_TELEGRAM`/`_HUNTER`
+solo silenciaban alertas). En el `.env` del user: memecoins off, **scalping off**, **stock
+alerts on** (`ENABLE_STOCK_TELEGRAM=true`; antes las acciones eran mudas). Honestidad:
+libera presupuesto del ciclo para la bolsa (eficiencia), **NO sube el win rate** (eso es edge).
+
+**Diagnóstico del 16-jun (por qué pierde).** El slicing por dirección (`strategy_performance_
+sliced`) lo gritó: `forex_session_breakout`/forex pierde **−0.57R en longs** y gana **+1.29R
+en shorts**; oro longs **−2.57R**. **Los longs sangran porque pelean el régimen.** No es
+volatilidad (VIX ~16, calmo, BAJÓ desde ~19). El balance demo está PLANO (~$88.6k); las
+cifras rojas grandes que el user veía eran **memecoins en PAPEL** (no tocan dinero). El +R
+de shorts NO es edge durable — es coyuntura (gira y sangra, como 9-jun ganó / 10-jun perdió).
+
+**v3.8.0 — Regime gate vivo.** `jobs._regime_gate` + **`ENABLE_REGIME_GATE=false`** (opt-in):
+antes del `order_send` a demo, clasifica el régimen D1 del símbolo (con `regime_filter` sobre
+el cache) y si el trade va CONTRA la tendencia (long en `down` / short en `up`) lo deja
+**paper-only**. **Downward-only** (como calendar gate y cap USD), soft-fail, solo forex/gold.
+Cablea al vivo el `regime_filter` que vivía solo en el backtest. **Defensivo, NO edge**: deja
+de pelear la tendencia; no garantiza ganar (el régimen se identifica tarde).
+
+**Serie backtest de ACCIONES (`ESPEC_BACKTEST_STOCKS_v1.md`, → v3.9.0).**
+- **S1** (HECHA): `app/backtest/stock_historical_loader.py` — Yahoo D1 ajustado por splits/
+  dividendos (un split NO fabrica gap falso), `period1/period2` (no `range=max` que da
+  mensual), anti-429. Validado: AAPL 11.469 barras (1980→2026), NVDA, SPY.
+- **S2** (CÓDIGO HECHO): `replay_harness` con `RunConfig.category='stock'` + banner de
+  **SURVIVORSHIP BIAS** en el report (las quebradas desaparecen de Yahoo → solo sirve para
+  DESCARTAR, nunca confirmar). El run real con veredicto quedó PENDIENTE: Yahoo throttleó la
+  IP (429) tras las pruebas; se completa cuando se libere o desde otra IP.
+- **S3** (pendiente): `trend_following_d1` sobre acciones + veredicto + cierre v3.9.0.
+
+**Lo que sigue (orden honesto):** dejar correr el libro vivo limpio (Fase D); probar el
+regime gate en vivo; completar el veredicto de acciones (S2 run + S3); **COT collector**
+(info nueva = mejor chance real, `MAPA §3.4`). Lo aprendido vale más que lo que el bot
+probablemente genere; el edge se DESCUBRE (data+research), no se inyecta ("edge artificial"
+= curve-fitting = se funde en real).
+
+**Tests:** 572 (v3.5.0) → 657 (v3.6.0, harness S1-S5) → 660 (v3.7.0, refocus) → 672 (v3.8.0, regime gate) → **676 (backtest acciones S1-S2)**, todos verdes por conteo.
 
 ## 3. La verdad de fondo (la filosofía del proyecto)
 
@@ -208,25 +248,31 @@ contraseña de Windows + BitLocker.
 
 ```
 Retomamos Trading Alert AI (bot de trading algorítmico LOCAL, Python 3.12, Windows).
-Estado: v3.5.0, main, 572 tests verdes, corriendo en esta máquina (Lenovo) vía
-.\start_bot.ps1. Protecciones activas: calendar gate, cap USD, exit shadow registrando.
+Estado: v3.8.0, main, 676 tests verdes, corriendo en la Lenovo vía .\start_bot.ps1.
+REFOCUS: 100% LA BOLSA (acciones+forex+oro); memecoins CORTADAS (bot aparte) y scalping
+APAGADO. Protecciones: calendar gate, cap USD, exit shadow; regime gate disponible (opt-in).
 
 Leé en este orden ANTES de tocar nada: RESUMEN_COMPLETO.md (todo el proyecto en uno),
-PROXIMOS_PASOS.md (qué sigue + reglas), CONTEXTO_MAESTRO_v3.5.0.md (arquitectura),
-CHANGELOG.md, y GO_LIVE_RUNBOOK.md (camino a real-money).
+PROXIMOS_PASOS.md (qué sigue + reglas), CONTEXTO_MAESTRO_v3.8.0.md (arquitectura),
+CHANGELOG.md, GO_LIVE_RUNBOOK.md, y para el backtest ESPEC_BACKTEST_REPLAY_v1.md (forex) +
+ESPEC_BACKTEST_STOCKS_v1.md (acciones) + MAPA_DE_EDGE_Y_RUTA.md.
 
 Reglas inamovibles: real-money BLOQUEADO (ENABLE_REAL_TRADING=false HARDCODED) hasta
 que /readiness esté verde; order_send solo en mt5_demo_trader.py; LLM/ML SUBTRACTIVOS;
-todo opt-in OFF + soft-fail; mantener 572 tests verdes; sincronizar los _settings() de
-test_score y test_alert_rules al tocar Settings; versionado patch/minor sin saltos.
-Hardware: GPU chica, nada de LLM en el hot path (~50s/gen).
+los gates vivos (calendar/cap USD/regime) son DOWNWARD-ONLY (solo bajan a paper); todo
+opt-in OFF + soft-fail; mantener 676 tests verdes; sincronizar los _settings() de
+test_score y test_alert_rules al tocar Settings; versionado patch/minor sin saltos; el
+backtest escribe SOLO en backtest_*, no cuenta para /readiness ni Fase D. NO inventar edge
+artificial (curve-fitting). Hardware: GPU chica, nada de LLM en el hot path (~50s/gen).
 
-La verdad de fondo: el cuello de botella es DATA (70/400), no código. El único +R es
-régimen-short, no edge durable. Dejar correr; Fase D/E solo con sus gates.
+La verdad de fondo: el cuello de botella es DATA (70/400), no código. No hay edge probado
+— confirmado por backtest (D1) Y diagnóstico vivo (longs −0.57R / shorts +1.29R = régimen,
+no edge durable). El edge se DESCUBRE (data+research), no se inyecta. Dejar correr.
 
-Decime qué querés hacer: (A) revisar la data (/performance, /readiness, /exit_analysis,
-/exposicion); (B) si /exit_analysis da delta +R robusto, activar el trailing de forex
-con evidencia; (C) Fase D si llegamos a 400; (D) otra cosa.
+Decime qué querés hacer: (A) probar el regime gate en vivo (ENABLE_REGIME_GATE=true);
+(B) completar el veredicto del backtest de ACCIONES (S2 run cuando Yahoo no throttlee + S3);
+(C) COT collector (info nueva, MAPA §3.4); (D) revisar la data (/performance, /readiness,
+/exit_analysis, /exposicion); (E) Fase D si llegamos a 400; (F) otra cosa.
 ```
 
 ---

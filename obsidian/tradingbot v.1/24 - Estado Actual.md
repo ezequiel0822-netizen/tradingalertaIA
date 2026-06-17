@@ -1,14 +1,22 @@
-# Estado Actual — v3.6.0 (2026-06-14)
+# Estado Actual — v3.8.0 (2026-06-17)
 
 > Reemplaza a [[14 - Estado Actual v2.7.0]] como nota de estado vigente.
-> Detalle por versión en `CHANGELOG.md`; arquitectura en `CONTEXTO_MAESTRO_v3.6.0.md`.
+> Detalle por versión en `CHANGELOG.md`; arquitectura en `CONTEXTO_MAESTRO_v3.8.0.md`.
 
 ## Dónde estamos
 
-- **v3.6.0**, **657 tests verdes**, corriendo en la Lenovo contra MT5 demo.
-- **Backtest Replay Harness** (v3.6.0, offline, `app/backtest/`): reproduce la historia D1
-  con las estrategias REALES y mide R neto con pesimismo, en tablas `backtest_*` separadas.
-  No toca el ciclo vivo, no cuenta para `/readiness` ni la Fase D. Opt-in OFF.
+- **v3.8.0**, **676 tests verdes**, corriendo en la Lenovo contra MT5 demo.
+- **REFOCUS v3.7.0: 100% LA BOLSA** (acciones US + forex + oro). Memecoins CORTADAS
+  (`ENABLE_MEMECOIN_ENGINE=false`; el user montó un bot aparte), scalping APAGADO, stock
+  alerts ON. **v3.8.0: regime gate vivo** (`ENABLE_REGIME_GATE`, opt-in, downward-only):
+  los longs contra-tendencia D1 van a paper.
+- **Diagnóstico (16-jun):** los longs sangran (−0.57R) y los shorts ganan (+1.29R) = es
+  RÉGIMEN, no edge. No es volatilidad (VIX ~16, calmo). Balance demo plano ~$88.6k; las
+  pérdidas grandes que se veían eran memecoins en PAPEL (no tocan dinero).
+- **Backtest Replay Harness** (offline, `app/backtest/`): reproduce la historia D1 con las
+  estrategias REALES y mide R neto con pesimismo, en tablas `backtest_*` separadas. No toca
+  el ciclo vivo, no cuenta para `/readiness` ni la Fase D. Opt-in OFF. Ya cubre acciones
+  (Yahoo) además de forex/oro (MT5).
 - Real-money **BLOQUEADO** (HARDCODED). El comando `/readiness` muestra los gates
   honestos para algún día desbloquearlo. Veredicto hoy: **NO LISTO** (falta edge + data).
 - Balance demo ~$88.6k. **El −11% fue sobre todo el bug de mayo** (~746 artifacts,
@@ -27,6 +35,9 @@
 | v3.4.0 | **Exit shadow**: mide si un trailing mejoraría las salidas (forex/oro NO tienen trailing efectivo — usan params de memecoin con activación +50% inalcanzable). `/exit_analysis` |
 | v3.5.0 | **Calendar gate** (conecta `is_safe_window` que estaba huérfano: el 10-jun abrió USDCAD 18 min antes del BOC) + **cap de exposición USD** (7 posiciones = 1 apuesta). `/exposicion`. Downward-only, opt-in OFF |
 | v3.6.0 | **Backtest Replay Harness** (`app/backtest/`) + `regime_filter` + `trend_following_d1` (Donchian D1, hipótesis congelada). Reproduce décadas de D1 con las estrategias REALES, offline, tablas `backtest_*`. Veredicto: sin edge en D1 |
+| v3.7.0 | **Refocus a la bolsa**: `ENABLE_MEMECOIN_ENGINE` corta la colección de memecoins (bot aparte) + ESPEC del backtest de acciones. Scalping off, stock alerts on |
+| v3.8.0 | **Regime gate vivo** (`ENABLE_REGIME_GATE`, opt-in, downward-only): longs contra-tendencia D1 → paper. Cablea el `regime_filter` al gate. Nace del diagnóstico (longs −0.57R/shorts +1.29R) |
+| backtest acciones | S1 (`stock_historical_loader`, Yahoo D1 ajustado) + S2 (harness `category=stock` + banner survivorship). Código hecho; run real pendiente (Yahoo throttle) → v3.9.0 |
 
 ## Hallazgos clave (honestos)
 
@@ -68,15 +79,24 @@
   **No se promovió nada.** El edge no está en estas estrategias sobre D1.
 - `APP_VERSION=v3.6.0`. Preflight nuevo (`preflight.py`) para verificar el arranque sin tocar nada.
 
+## Cierre de sesión 2026-06-17 (v3.7.0 refocus + v3.8.0 regime gate + backtest acciones)
+
+- **v3.7.0 refocus a la bolsa:** `ENABLE_MEMECOIN_ENGINE` (corta colección de memecoins; el
+  user montó un bot aparte). En el `.env`: memecoins off, scalping off, stock alerts on.
+- **Diagnóstico (por qué pierde):** slicing por dirección → longs −0.57R / shorts +1.29R =
+  régimen, no edge. No es volatilidad (VIX ~16). Balance demo PLANO; lo rojo grande era
+  memecoins en papel.
+- **v3.8.0 regime gate:** los longs contra-tendencia D1 van a paper (opt-in, downward-only).
+- **Backtest de acciones:** S1 (loader Yahoo D1 ajustado, validado: AAPL 11.469 barras) + S2
+  (harness `category=stock` + banner survivorship). Código hecho + testeado; run real con
+  veredicto PENDIENTE (Yahoo throttleó la IP). **676 tests verdes.** `APP_VERSION=v3.8.0`.
+
 ## Qué sigue
 
-1. Dejar correr el libro vivo (data ~70→400 es el cuello de botella real de la Fase D —
-   el backtest NO la reemplaza).
-2. `/exit_analysis` → si el delta es positivo y robusto, cambiar el trailing de forex
-   **con evidencia**.
-3. **Harness (v3.7+):** collector de COT (CFTC, gratis), instrumentos descorrelacionados
-   (índices/commodities D1), backfill macro VIX/DXY, granularidad H1. Orden en
-   `MAPA_DE_EDGE_Y_RUTA.md`.
-4. Fase D (ensemble ML) recién con ≥400; Fase E con edge + 3 meses.
-5. Real-money: `GO_LIVE_RUNBOOK.md` cuando `/readiness` esté verde en gates 1-2,
-   con decisión deliberada y explícita.
+1. Dejar correr el libro vivo limpio (data ~70→400 para la Fase D — el backtest NO la reemplaza).
+2. **Probar el regime gate en vivo** (`ENABLE_REGIME_GATE=true`) — deja de tomar longs contra-tendencia.
+3. **Completar el veredicto del backtest de acciones** (S2 run cuando Yahoo no throttlee) + S3
+   (trend_following_d1 sobre acciones + v3.9.0).
+4. **COT collector** (info nueva = mejor chance real, `MAPA §3.4`).
+5. Fase D (ensemble ML) recién con ≥400; Fase E con edge + 3 meses.
+6. Real-money: `GO_LIVE_RUNBOOK.md` cuando `/readiness` esté verde, con decisión deliberada.
