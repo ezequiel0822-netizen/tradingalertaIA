@@ -14,7 +14,8 @@
 
 ## 1. Estado actual
 
-- **v3.8.0**, **676 tests verdes** (main; +1 commit de S2-acciones pendiente de merge).
+- **v3.9.0**, **692 tests verdes** (main). v3.9.0 = **COT collector** (CFTC semanal, opt-in
+  OFF): captura posicionamiento institucional para research, primer input fuera del OHLCV.
 - **REFOCUS v3.7.0: 100% LA BOLSA** — memecoins CORTADAS (`ENABLE_MEMECOIN_ENGINE=false`; bot
   aparte), scalping APAGADO, stock alerts ON. **v3.8.0: regime gate vivo** (`ENABLE_REGIME_GATE`,
   opt-in): los longs contra-tendencia van a paper. Diagnóstico: longs −0.57R / shorts +1.29R
@@ -70,9 +71,12 @@ Limpio de artifacts, los trades ejecutados suman ~−2% desde el inicio; desde e
 ganador — plano, con muestra chica.** El comando `/performance` lo mide honesto.
 
 Lo más valioso AHORA sigue siendo **dejar correr el bot para juntar muestra limpia** con
-los features técnicos (v2.11.0): hoy hay **~70/400** trades con features reales (gate Fase
-D). Sin data, las fases de abajo no rinden. El edge sale de data + research, no de
-sofisticación.
+los features técnicos (v2.11.0): al **2026-06-17 hay 386/400** trades limpios cerrados con
+features reales (`count_closed_trades_with_features`: 195 stock + 159 forex + 32 gold) — el
+cuello pasó de ~70/400 (cifra vieja) a **14 trades de desbloquear la Fase D**. El bot está
+activo, así que esos 14 caen en días. Sin data, las fases de abajo no rinden, pero la Fase D
+ya está al alcance — cuando toque 400, recién ahí extender `ml_predictor` (NO antes). El edge
+sale de data + research, no de sofisticación.
 
 ## 4. Lo que FALTA (roadmap, en orden de valor)
 

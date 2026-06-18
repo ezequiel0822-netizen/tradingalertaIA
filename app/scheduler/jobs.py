@@ -26,6 +26,7 @@ from app.analyzers.volume_spike_detector import detect_volume_spike
 from app.assistant.telegram_assistant import TelegramAssistantPoller
 from app.alerts.trade_reporter import format_trade_opened
 from app.brokers.mt5_reader import MT5Reader
+from app.collectors.cot_collector import COTCollector
 from app.collectors.dexscreener_collector import DexScreenerCollector
 from app.collectors.economic_calendar_collector import EconomicCalendarCollector
 from app.collectors.forex_collector import ForexCollector
@@ -113,6 +114,8 @@ class TradingAlertJob:
         # Phase 3 v2.2.0: macro context + economic calendar collectors
         self.macro_collector = MacroCollector(settings)
         self.calendar_collector = EconomicCalendarCollector(settings)
+        # v3.9.0: COT collector (CFTC semanal, info que el precio no digirio; opt-in OFF)
+        self.cot_collector = COTCollector(settings)
         # Phase 4 v2.3.0: data quality check counter (no es por tiempo, es por ciclo)
         self._cycle_counter = 0
         # v2.6.7: MT5 reconciler. Instancia única reusable; lazy del trader.
@@ -190,6 +193,27 @@ class TradingAlertJob:
                     )
         except Exception:
             logger.exception("Macro collector failed")
+
+        # v3.9.0: COT refresh (CFTC semanal; gateado por interval, soft-fail, solo captura)
+        try:
+            if self.cot_collector.should_run(self.repository):
+                cot_snapshots = self.cot_collector.collect()
+                if cot_snapshots:
+                    inserted = 0
+                    for snap in cot_snapshots:
+                        if self.repository.insert_cot_snapshot(snap):
+                            inserted += 1
+                    self.repository.set_state(
+                        "cot_last_capture_iso", cot_snapshots[0]["captured_at"]
+                    )
+                    logger.info(
+                        "COT snapshots: %d mercados, %d nuevos (report %s)",
+                        len(cot_snapshots),
+                        inserted,
+                        cot_snapshots[0].get("report_date"),
+                    )
+        except Exception:
+            logger.exception("COT collector failed")
 
         # Phase 3 v2.2.0: economic calendar refresh (gateado por interval)
         try:

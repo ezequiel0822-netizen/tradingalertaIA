@@ -220,6 +220,9 @@ class Settings:
     # Phase 3 + 3.5 v2.2.0 — forex price-action + LLM integration
     enable_macro_collector: bool
     macro_collector_interval_minutes: int
+    # v3.9.0 — COT collector (CFTC semanal, info que el precio no digirio). Opt-in OFF.
+    enable_cot_collector: bool
+    cot_collector_interval_minutes: int
     enable_economic_calendar: bool
     calendar_buffer_minutes: int
     calendar_refresh_hours: int
@@ -484,7 +487,7 @@ def load_settings() -> Settings:
         obsidian_vault_path = safe_obsidian
 
     return Settings(
-        app_version=os.getenv("APP_VERSION", "v3.8.0"),
+        app_version=os.getenv("APP_VERSION", "v3.9.0"),
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
         telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID"),
         dexscreener_base_url=os.getenv(
@@ -683,6 +686,11 @@ def load_settings() -> Settings:
         enable_macro_collector=_get_bool("ENABLE_MACRO_COLLECTOR", True),
         macro_collector_interval_minutes=_get_int(
             "MACRO_COLLECTOR_INTERVAL_MINUTES", 60
+        ),
+        # v3.9.0 — COT collector: OFF por defecto (opt-in), semanal -> chequeo 2x/dia.
+        enable_cot_collector=_get_bool("ENABLE_COT_COLLECTOR", False),
+        cot_collector_interval_minutes=_get_int(
+            "COT_COLLECTOR_INTERVAL_MINUTES", 720
         ),
         enable_economic_calendar=_get_bool("ENABLE_ECONOMIC_CALENDAR", True),
         calendar_buffer_minutes=_get_int("CALENDAR_BUFFER_MINUTES", 30),

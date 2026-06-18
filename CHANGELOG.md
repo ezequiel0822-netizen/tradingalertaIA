@@ -1,5 +1,19 @@
 # Changelog
 
+## Trading Alert AI v3.9.0
+
+**COT collector: el primer input informacional fuera del OHLCV.** La ventaja retail es ESTRUCTURAL e INFORMACIONAL, nunca cognitiva (MAPA_DE_EDGE_Y_RUTA §2): toda la comprensión posible sobre data pública (velas) ya está en el precio. El Commitments of Traders de la CFTC (semanal, gratis) es el candidato #1 de "información que el precio todavía no digirió" (MAPA §3.4, ESPEC_BACKTEST_REPLAY_v1 §17.2): el posicionamiento real de los large speculators y los commercials.
+
+- **`app/collectors/cot_collector.py`** + flag **`ENABLE_COT_COLLECTOR=false`** (opt-in OFF). Baja el Legacy Futures-Only de la Socrata Open Data API de la CFTC (`publicreporting.cftc.gov`) para los 9 mercados que el bot opera, mapeados por `cftc_contract_market_code` (identificador ESTABLE, no por nombre de mercado frágil): EUR, GBP, JPY, AUD, CAD, CHF, NZD, US Dollar Index y Gold. Calcula la posición neta no-comercial y comercial y persiste por reporte.
+- **Tabla `cot_snapshots`** (UNIQUE `report_date, market_code`) + `repository.insert_cot_snapshot` (idempotente, `INSERT OR IGNORE`) + `fetch_latest_cot_snapshot`. Cableado en `jobs.run_once` tras el bloque de macro: gateado por `cot_last_capture_iso` (la data es semanal → chequeo 2×/día, `COT_COLLECTOR_INTERVAL_MINUTES=720`), soft-fail por mercado (uno que falla la HTTP no tumba a los demás).
+- `tests/test_cot_collector.py` (+16): nets puros, parseo defensivo (sin fecha → None; conteos ausentes → None; tolera strings/floats), collect mockeado (9 mercados), soft-fail por mercado, payload vacío, `should_run` (gating por intervalo) e idempotencia del repository. Settings sincronizados en `test_score`/`test_alert_rules`.
+
+Honestidad (NO inventar edge): el collector **SOLO captura para research** — no genera señal ni gate. La maquinaria de edge (slicing por posicionamiento, COT index sobre la historia acumulada) se construye DESPUÉS, sobre data ya juntada; el edge se descubre, no se inyecta. Como todo lo nuevo: opt-in OFF + soft-fail → con el flag apagado el bot corre EXACTAMENTE igual. Real-money sigue HARDCODED OFF.
+
+672 -> **692 verdes**. app_version -> v3.9.0. `.env.example`.
+
+> El veredicto del backtest de ACCIONES (S2/S3, también slotado para esta serie) queda PENDIENTE: Yahoo throttlea (429 confirmado incluso en 1 request, probablemente porque el bot vivo ya consume la cuota de la IP). Quedan listos `stock_backtest_run.json` (22 símbolos, 4 estrategias, `category=stock`) y el comando — correr cuando Yahoo afloje, idealmente con el bot vivo pausado. Recordatorio §2: el backtest de acciones solo sirve para DESCARTAR (survivorship bias), nunca habilita paper solo.
+
 ## Trading Alert AI v3.8.0
 
 **Regime gate vivo: dejar de pelear la tendencia.** Nace del diagnóstico del 16-jun: el slicing por dirección mostró que `forex_session_breakout`/forex pierde **−0.57R en longs** y gana **+1.29R en shorts** (oro: longs **−2.57R**). El bot tomaba ambos lados y los longs sangraban porque iban contra el régimen. No es volatilidad (VIX ~16, calmo) ni edge nuevo — es estructura.

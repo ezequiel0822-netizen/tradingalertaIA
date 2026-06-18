@@ -1514,6 +1514,51 @@ class Repository:
             ).fetchone()
         return dict(row) if row else None
 
+    # v3.9.0 — COT (Commitments of Traders, CFTC semanal). Solo captura para research.
+    def insert_cot_snapshot(self, snapshot: dict[str, Any]) -> bool:
+        """Idempotente por (report_date, market_code). True si inserto una fila nueva."""
+        with get_connection(self.db_path) as connection:
+            try:
+                cursor = connection.execute(
+                    """
+                    INSERT OR IGNORE INTO cot_snapshots (
+                        report_date, market_code, market_label,
+                        noncomm_long, noncomm_short, comm_long, comm_short,
+                        open_interest, net_noncomm, net_comm, captured_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        snapshot["report_date"],
+                        snapshot["market_code"],
+                        snapshot.get("market_label"),
+                        snapshot.get("noncomm_long"),
+                        snapshot.get("noncomm_short"),
+                        snapshot.get("comm_long"),
+                        snapshot.get("comm_short"),
+                        snapshot.get("open_interest"),
+                        snapshot.get("net_noncomm"),
+                        snapshot.get("net_comm"),
+                        snapshot["captured_at"],
+                    ),
+                )
+                return cursor.rowcount > 0
+            except Exception:
+                return False
+
+    def fetch_latest_cot_snapshot(self, market_code: str) -> dict[str, Any] | None:
+        with get_connection(self.db_path) as connection:
+            row = connection.execute(
+                """
+                SELECT * FROM cot_snapshots
+                WHERE market_code = ?
+                ORDER BY report_date DESC
+                LIMIT 1
+                """,
+                (market_code,),
+            ).fetchone()
+        return dict(row) if row else None
+
     # Phase 3 v2.2.0 - economic events
     def upsert_economic_event(self, event: dict[str, Any]) -> bool:
         with get_connection(self.db_path) as connection:

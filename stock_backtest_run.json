@@ -1,0 +1,12 @@
+{
+  "mode": "A",
+  "timeframe": "D1",
+  "category": "stock",
+  "symbols": [
+    "AAPL", "MSFT", "NVDA", "TSLA", "AMD", "META", "AMZN", "GOOGL",
+    "SPY", "QQQ", "COIN", "MSTR", "PLTR", "SMCI", "NFLX", "GLD",
+    "XOM", "CVX", "BAC", "SLV", "USO", "TNA"
+  ],
+  "strategies": ["breakout", "mean_reversion", "momentum", "trend_following_d1"],
+  "notes": "S2/S3 acciones US D1 (ESPEC_BACKTEST_STOCKS_v1 §6). forex_session_breakout queda FUERA (es intradia-forex). category=stock fuerza el cost model de acciones + el banner de survivorship. VEREDICTO SOLO PARA DESCARTAR: universo de SOBREVIVIENTES (survivorship bias) -> ganar aca NO es luz verde y NO habilita paper por si solo (ESPEC §2.2/§7). Correr cuando Yahoo no throttlee (idealmente con el bot vivo pausado para no competir por la cuota Yahoo de la IP)."
+}

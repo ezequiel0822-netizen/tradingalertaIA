@@ -129,6 +129,8 @@ def _settings() -> Settings:
         enable_trade_action_reports=True,
         enable_macro_collector=False,
         macro_collector_interval_minutes=60,
+        enable_cot_collector=False,
+        cot_collector_interval_minutes=720,
         enable_economic_calendar=False,
         calendar_buffer_minutes=30,
         calendar_refresh_hours=12,

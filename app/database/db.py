@@ -290,6 +290,25 @@ def _init_db_unsafe(db_path: Path) -> None:
             CREATE INDEX IF NOT EXISTS idx_macro_captured
                 ON macro_snapshots(captured_at);
 
+            CREATE TABLE IF NOT EXISTS cot_snapshots (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                report_date TEXT NOT NULL,
+                market_code TEXT NOT NULL,
+                market_label TEXT,
+                noncomm_long INTEGER,
+                noncomm_short INTEGER,
+                comm_long INTEGER,
+                comm_short INTEGER,
+                open_interest INTEGER,
+                net_noncomm INTEGER,
+                net_comm INTEGER,
+                captured_at TEXT NOT NULL,
+                UNIQUE(report_date, market_code)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_cot_report
+                ON cot_snapshots(report_date);
+
             CREATE TABLE IF NOT EXISTS daily_pnl_log (
                 date TEXT PRIMARY KEY,
                 realized_pnl_pct REAL DEFAULT 0,
