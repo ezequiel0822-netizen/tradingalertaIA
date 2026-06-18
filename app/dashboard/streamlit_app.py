@@ -1,3 +1,11 @@
+# Bootstrap de path: `streamlit run` pone en sys.path la carpeta de ESTE script
+# (app/dashboard), NO la raiz del proyecto -> sin esto, "import app..." falla con
+# ModuleNotFoundError. Insertamos la raiz (parents[2]) antes de cualquier import de app.
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
 import json
 import sqlite3
 from datetime import datetime, timedelta, timezone

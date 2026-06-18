@@ -1,5 +1,11 @@
 # Changelog
 
+## Trading Alert AI v3.9.1
+
+**Fix: el dashboard Streamlit vuelve a arrancar.** `streamlit run app/dashboard/streamlit_app.py` tiraba `ModuleNotFoundError: No module named 'app'`: Streamlit pone en `sys.path` la carpeta del script (`app/dashboard`), NO la raíz del proyecto, así que `import app...` no resolvía. Bootstrap de path al tope de `streamlit_app.py` (inserta `Path(__file__).resolve().parents[2]` = la raíz) antes de cualquier import de `app` → el comando del README funciona desde cualquier cwd. Solo toca el dashboard (offline, read-only sobre la DB); cero impacto en el ciclo vivo, los tests no lo importan.
+
+692 verdes (sin cambios; el dashboard no tiene cobertura de tests y `app_version` se usa dinámico). app_version -> v3.9.1.
+
 ## Trading Alert AI v3.9.0
 
 **COT collector: el primer input informacional fuera del OHLCV.** La ventaja retail es ESTRUCTURAL e INFORMACIONAL, nunca cognitiva (MAPA_DE_EDGE_Y_RUTA §2): toda la comprensión posible sobre data pública (velas) ya está en el precio. El Commitments of Traders de la CFTC (semanal, gratis) es el candidato #1 de "información que el precio todavía no digirió" (MAPA §3.4, ESPEC_BACKTEST_REPLAY_v1 §17.2): el posicionamiento real de los large speculators y los commercials.
