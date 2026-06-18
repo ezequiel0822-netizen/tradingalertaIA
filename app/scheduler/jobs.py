@@ -197,20 +197,27 @@ class TradingAlertJob:
         # v3.9.0: COT refresh (CFTC semanal; gateado por interval, soft-fail, solo captura)
         try:
             if self.cot_collector.should_run(self.repository):
-                cot_snapshots = self.cot_collector.collect()
+                from app.utils.time_utils import utc_now_iso
+
+                cot_snapshots = self.cot_collector.collect() or []
+                inserted = 0
+                for snap in cot_snapshots:
+                    if self.repository.insert_cot_snapshot(snap):
+                        inserted += 1
+                # Marca el intervalo SIEMPRE que se intento, aunque collect falle/vacio:
+                # la data es semanal -> no reintentar cada ciclo ni martillar la API de CFTC.
+                self.repository.set_state("cot_last_capture_iso", utc_now_iso())
                 if cot_snapshots:
-                    inserted = 0
-                    for snap in cot_snapshots:
-                        if self.repository.insert_cot_snapshot(snap):
-                            inserted += 1
-                    self.repository.set_state(
-                        "cot_last_capture_iso", cot_snapshots[0]["captured_at"]
-                    )
                     logger.info(
                         "COT snapshots: %d mercados, %d nuevos (report %s)",
                         len(cot_snapshots),
                         inserted,
                         cot_snapshots[0].get("report_date"),
+                    )
+                else:
+                    logger.warning(
+                        "COT collector: sin data este intento (soft-fail); "
+                        "reintenta tras el intervalo"
                     )
         except Exception:
             logger.exception("COT collector failed")

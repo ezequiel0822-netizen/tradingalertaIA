@@ -10,7 +10,7 @@
 
 Honestidad (NO inventar edge): el collector **SOLO captura para research** — no genera señal ni gate. La maquinaria de edge (slicing por posicionamiento, COT index sobre la historia acumulada) se construye DESPUÉS, sobre data ya juntada; el edge se descubre, no se inyecta. Como todo lo nuevo: opt-in OFF + soft-fail → con el flag apagado el bot corre EXACTAMENTE igual. Real-money sigue HARDCODED OFF.
 
-672 -> **692 verdes**. app_version -> v3.9.0. `.env.example`.
+676 -> **692 verdes**. app_version -> v3.9.0. `.env.example`.
 
 > El veredicto del backtest de ACCIONES (S2/S3, también slotado para esta serie) queda PENDIENTE: Yahoo throttlea (429 confirmado incluso en 1 request, probablemente porque el bot vivo ya consume la cuota de la IP). Quedan listos `stock_backtest_run.json` (22 símbolos, 4 estrategias, `category=stock`) y el comando — correr cuando Yahoo afloje, idealmente con el bot vivo pausado. Recordatorio §2: el backtest de acciones solo sirve para DESCARTAR (survivorship bias), nunca habilita paper solo.
 
