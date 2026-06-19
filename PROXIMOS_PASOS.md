@@ -14,8 +14,10 @@
 
 ## 1. Estado actual
 
-- **v3.9.0**, **692 tests verdes** (main). v3.9.0 = **COT collector** (CFTC semanal, opt-in
-  OFF): captura posicionamiento institucional para research, primer input fuera del OHLCV.
+- **v3.9.1**, **692 tests verdes** (main, pusheado). v3.9.0 = **COT collector** (CFTC semanal,
+  opt-in OFF, **YA VIVO**): captura posicionamiento institucional para research, primer input
+  fuera del OHLCV. v3.9.1 = fix del dashboard Streamlit. ⚠️ **Fase D: gate de data CRUZADO
+  (403/400) pero el ML resultó CALLEJÓN SIN SALIDA** sobre los features actuales — ver §3.
 - **REFOCUS v3.7.0: 100% LA BOLSA** — memecoins CORTADAS (`ENABLE_MEMECOIN_ENGINE=false`; bot
   aparte), scalping APAGADO, stock alerts ON. **v3.8.0: regime gate vivo** (`ENABLE_REGIME_GATE`,
   opt-in): los longs contra-tendencia van a paper. Diagnóstico: longs −0.57R / shorts +1.29R
@@ -52,7 +54,9 @@
 | **v3.6.0** | **Backtest Replay Harness** (`app/backtest/`: `historical_loader`, `context_builder`, `trade_simulator`, `replay_harness`, `report`) + `app/intelligence/regime_filter.py` + `app/strategies/trend_following_d1.py` (hipótesis Donchian congelada). Offline, opt-in OFF, tablas `backtest_*` separadas. Veredicto: sin edge en D1; el "+4.7R" de trend D1 fue un artefacto que el harness atrapó |
 | **v3.7.0** | **Refocus a la bolsa**: `ENABLE_MEMECOIN_ENGINE` (corta colección de memecoins) + ESPEC del backtest de acciones. El user montó bot aparte para memecoins; scalping off, stock alerts on |
 | **v3.8.0** | **Regime gate vivo** (`jobs._regime_gate` + `ENABLE_REGIME_GATE`): los longs contra-tendencia D1 van a paper. Downward-only, opt-in. Cablea al vivo el `regime_filter`. Nace del diagnóstico (longs −0.57R/shorts +1.29R) |
-| **backtest acciones** | S1 (`stock_historical_loader`, Yahoo D1 ajustado) + S2 (harness `category=stock` + banner survivorship). Código hecho; run real PENDIENTE (Yahoo throttle). → v3.9.0 con S3 |
+| **backtest acciones** | S1 (`stock_historical_loader`, Yahoo D1 ajustado) + S2 (harness `category=stock` + banner survivorship). Código hecho; run real PENDIENTE (Yahoo 429). `stock_backtest_run.json` + comando listos. S3 pendiente |
+| **v3.9.0** | **COT collector** (`app/collectors/cot_collector.py` + tabla `cot_snapshots` + `ENABLE_COT_COLLECTOR`): CFTC semanal, 9 mercados FX+oro por `cftc_contract_market_code`, SOLO captura para research. Opt-in OFF, soft-fail. **YA VIVO** en la Lenovo |
+| **v3.9.1** | Fix dashboard Streamlit (bootstrap `sys.path`, tiraba `ModuleNotFoundError 'app'`) + chore `.gitignore .env.bak*` (backups del `.env` con secrets) |
 
 (Detalle completo en `CHANGELOG.md`.)
 
@@ -66,17 +70,18 @@ capital — NO crean edge.**
 
 **Sobre el −11% (corregido en v3.3.0):** ese drawdown fue sobre todo el **bug de mayo**
 (feedback-loop / instant-kill / huérfanas, ~746 artifacts 22–28 may, fixes v2.6.7–v2.7.1).
-Limpio de artifacts, los trades ejecutados suman ~−2% desde el inicio; desde el baseline
-`2026-06-03` la cuenta está **+0.17% (plana)** sobre 16 trades. O sea: **ni −11% ni
-ganador — plano, con muestra chica.** El comando `/performance` lo mide honesto.
+Limpio de artifacts, la cuenta queda **~plana** (≈−0.004% sobre 105 trades ejecutados desde el
+baseline `2026-06-03`, al 18-jun). O sea: **ni −11% ni ganador — plano.** `/performance` lo mide honesto.
 
-Lo más valioso AHORA sigue siendo **dejar correr el bot para juntar muestra limpia** con
-los features técnicos (v2.11.0): al **2026-06-17 hay 386/400** trades limpios cerrados con
-features reales (`count_closed_trades_with_features`: 195 stock + 159 forex + 32 gold) — el
-cuello pasó de ~70/400 (cifra vieja) a **14 trades de desbloquear la Fase D**. El bot está
-activo, así que esos 14 caen en días. Sin data, las fases de abajo no rinden, pero la Fase D
-ya está al alcance — cuando toque 400, recién ahí extender `ml_predictor` (NO antes). El edge
-sale de data + research, no de sofisticación.
+Lo más valioso AHORA sigue siendo **dejar correr el bot** + que el COT acumule. El gate de
+features de Fase D se **CRUZÓ: 403/400** al 18-jun (`count_closed_trades_with_features`) — pero
+cruzarlo **NO destrabó edge**. Se probó el `ml_predictor` (XGBoost) sobre la data viva y el
+veredicto es **callejón sin salida**: set completo AUC 0.533; subset feature-complete (n=346)
+AUC 0.627 y k-fold 0.69, PERO **CV temporal (TimeSeriesSplit, sin look-ahead) = 0.475, peor que
+azar** — el k-fold/split simple eran peeking in-sample. Es la **4ª vía independiente** que
+confirma que NO hay edge. → **NO construir Fase D / más modelos sobre los features actuales**
+(`ENABLE_ML_PREDICTOR` queda en false). El edge se descubre con INFORMACIÓN nueva (COT), no con
+sofisticación.
 
 ## 4. Lo que FALTA (roadmap, en orden de valor)
 
@@ -90,14 +95,15 @@ sale de data + research, no de sofisticación.
   `repository` helpers + `reasoner.analyze_win` + `jobs._maybe_run_continuous_learner`.
 - **Flags:** `ENABLE_CONTINUOUS_LEARNER=false` + `STORE_TRADE_LESSONS=true` (requiere ambos).
 
-### Fase D — AdvancedPredictor *(REQUIERE DATA — no antes)*
-- **Qué:** sumar LightGBM + RandomForest al XGBoost existente, con `CalibratedClassifierCV`
-  (que 70% signifique 70%). Umbral conservador (>0.72).
-- **Archivos:** **EXTENDER** `app/learning/ml_predictor.py` (NO reemplazar — tiene 22 tests).
-  Dep nueva `lightgbm` (pineada).
-- **GATE DURO:** ≥400 trades limpios CON features técnicos reales (los de v2.11.0). Bajo eso
-  sigue DORMIDO (idéntico a hoy). Hoy hay ~189 viejos sin features + los nuevos acumulándose.
-- **Riesgo:** medio (dep nueva). Mantener soft-fail/modo degradado en TODOS los caminos.
+### Fase D — AdvancedPredictor *(PROBADA 18-jun = CALLEJÓN SIN SALIDA en features actuales)*
+- **Estado:** el gate de datos se cumplió (403/400) y se probó el `ml_predictor` XGBoost sobre la
+  data viva. **CV temporal AUC 0.475 OOS (peor que azar)** — el k-fold 0.69 / split simple 0.627
+  eran peeking in-sample. NO hay señal forward. **NO construir el ensemble (LightGBM + RandomForest)
+  ni prender `ENABLE_ML_PREDICTOR`** — más modelos no extraen señal inexistente (anti-lista MAPA §5).
+- **Cuándo re-evaluar:** SOLO cuando cambien los INPUTS (ej. features de COT, con semanas de
+  historia) → agregar a `build_ml_dataset` y re-correr el test mirando **TimeSeriesSplit** (no
+  k-fold). Si sube de ~0.55 OOS, ahí recién hay algo.
+- **Archivos (si algún día aplica):** EXTENDER `app/learning/ml_predictor.py` (22 tests), NO reemplazar.
 
 ### Fase E — StrategyMutator *(REQUIERE EDGE + 3 MESES DATA)*
 - **Qué:** 1x/día toma la peor estrategia, el LLM propone UN cambio de parámetro, se crea
@@ -117,13 +123,13 @@ sale de data + research, no de sofisticación.
   criterios §11 sobre D1. El "+4.7R" de trend D1 fue un artefacto (1 trade sintético de
   USDCHF pre-1999). **No se promovió nada.** El pipeline correcto quedó construido:
   hipótesis → backtest con costos → walk-forward OOS → paper → demo → gates.
-- **Lo que sigue del harness (v3.7+, diferido):** collector de **COT** (CFTC, gratis: info
-  que el precio no contiene), **instrumentos descorrelacionados** (índices/commodities D1),
-  backfill macro VIX/DXY, granularidad H1 para salidas. Orden completo en `MAPA_DE_EDGE_Y_RUTA.md`.
+- **Lo que sigue del harness:** collector de **COT** ✅ HECHO + VIVO (v3.9.0). Diferidos:
+  **instrumentos descorrelacionados** (índices/commodities D1), backfill macro VIX/DXY,
+  granularidad H1 para salidas. Orden completo en `MAPA_DE_EDGE_Y_RUTA.md`.
 
-### Lo inmediato *(estado al 14-jun-2026)*
-- **Dejar correr** el libro vivo para juntar data con features (lo más importante; 70→400
-  es el cuello de botella de la Fase D — el backtest NO la reemplaza).
+### Lo inmediato *(estado al 18-jun-2026)*
+- **Dejar correr** el libro vivo + que el COT acumule (lo más importante). El gate de Fase D ya
+  se cruzó (403/400) pero la data no mostró edge (ver §3); el próximo lever es info nueva (COT).
 - **`/exit_analysis`** cuando haya días de muestra → si el trailing simulado da delta +R
   robusto, activar el trailing real de forex CON evidencia.
 - Gold ya NO está en `DEMO_ALLOWED_SYMBOLS` (paper-only). Calendar gate + cap USD ya activos.
@@ -137,7 +143,7 @@ sale de data + research, no de sofisticación.
   a paper, JAMÁS fuerzan una orden). No tocar `mt5_demo_trader.py` ni `mt5_reconciler.py`.
 - **Todo opt-in OFF + soft-fail:** cada capa nueva default `false`; si está apagada o algo
   falla, el bot corre EXACTAMENTE igual.
-- **Mantener pytest verde (657).** Al tocar `Settings`: sincronizar
+- **Mantener pytest verde (692).** Al tocar `Settings`: sincronizar
   `tests/test_score._settings()` Y `tests/test_alert_rules._settings()`.
 - **Versionado (regla del user):** patch (v3.6.1) para fixes; minor (v3.7.0) SOLO para
   features reales; nunca saltar números. Bump `app_version` + `CHANGELOG.md` +
@@ -154,9 +160,9 @@ Abrí Claude Code en `C:\Users\LENOVO\tradingalertaIA` y pegá esto como primer 
 
 ```
 Retomamos Trading Alert AI (bot de trading algorítmico LOCAL, Python 3.12, Windows).
-Estado: v3.8.0, main, 676 tests verdes, corriendo en la Lenovo vía .\start_bot.ps1.
+Estado: v3.9.1, main, 692 tests verdes, corriendo en la Lenovo vía .\start_bot.ps1.
 REFOCUS: 100% LA BOLSA (acciones+forex+oro); memecoins CORTADAS (bot aparte), scalping
-APAGADO. Protecciones: calendar gate, cap USD, exit shadow; regime gate disponible (opt-in).
+APAGADO. Protecciones: calendar gate, cap USD, exit shadow; regime gate + COT collector VIVOS.
 
 Leé en este orden ANTES de tocar nada: RESUMEN_COMPLETO.md (todo el proyecto en uno),
 PROXIMOS_PASOS.md (qué sigue + reglas), CONTEXTO_MAESTRO_v3.8.0.md (arquitectura),
@@ -167,7 +173,7 @@ Reglas inamovibles: real-money BLOQUEADO (ENABLE_REAL_TRADING=false HARDCODED) h
 que /readiness esté verde — el user ya lo pidió 3+ veces, la respuesta es el runbook,
 no el flag; order_send solo en mt5_demo_trader.py; LLM/ML SUBTRACTIVOS; los gates vivos
 (calendar/cap USD/regime) son DOWNWARD-ONLY (solo bajan a paper); todo opt-in OFF +
-soft-fail; mantener 676 tests verdes; al tocar Settings sincronizar los _settings() de
+soft-fail; mantener 692 tests verdes; al tocar Settings sincronizar los _settings() de
 test_score y test_alert_rules; versionado patch/minor sin saltos. El backtest (app/backtest/)
 escribe SOLO en backtest_*, NO cuenta para /readiness ni Fase D, no toca el ciclo vivo.
 NO inventar edge artificial (curve-fitting): el edge se descubre, no se inyecta.
@@ -175,12 +181,16 @@ NO inventar edge artificial (curve-fitting): el edge se descubre, no se inyecta.
 Límite de hardware: la GPU no banca LLM local rápido (~50s/gen) — nada de LLM en el
 hot path del ciclo; ContinuousLearner queda OFF en esta máquina.
 
-La verdad de fondo: el cuello de botella es DATA (70/400), no código. No hay edge
-probado: el +4.7R del trend_following_d1 en el backtest fue un ARTEFACTO (1 trade
-sintético de USDCHF). Dejar correr el libro vivo (Fase D); el backtest descarta/descubre.
+La verdad de fondo: NO hay edge probado, confirmado 4 vías (backtest D1 artefacto USDCHF;
+diagnóstico vivo = régimen; ML AUC 0.533; CV temporal 0.475 OOS, peor que azar). El gate de
+data de Fase D se CRUZÓ (403/400) pero el ML es callejón sin salida sobre los features actuales
+— NO prender ENABLE_ML_PREDICTOR. Dejar correr el libro vivo + que el COT acumule; el edge sale
+de INFORMACIÓN nueva, no de más modelos.
 
-Decime qué querés hacer: (A) revisar la data (/performance, /readiness, /exit_analysis,
-/exposicion); (B) si /exit_analysis ya da delta +R robusto, activar el trailing de forex
-con evidencia; (C) Fase D si la data llegó a 400; (D) avanzar el harness (COT / instrumentos
-descorrelacionados, MAPA §8); (E) otra cosa.
+Decime qué querés hacer: (A) revisar la data (/performance, /readiness, /exposicion, /ml_status);
+(B) cuando el COT tenga semanas: agregar features de COT a build_ml_dataset y re-correr el test
+temporal del ML (TimeSeriesSplit); (C) completar el backtest de ACCIONES cuando Yahoo no
+throttlee (stock_backtest_run.json listo); (D) instrumentos descorrelacionados / backfill macro
+(MAPA §8); (E) otra cosa. NOTA: NO Fase D / más modelos sobre los features actuales — ya se
+probó (AUC 0.475 OOS) = sin señal.
 ```

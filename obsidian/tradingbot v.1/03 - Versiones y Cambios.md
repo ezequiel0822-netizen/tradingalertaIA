@@ -1,7 +1,7 @@
 ---
 tags: [versiones, historial, evolucion]
-version: v3.8.0
-updated: 2026-06-17
+version: v3.9.1
+updated: 2026-06-18
 ---
 
 # Versiones y Cambios
@@ -56,7 +56,9 @@ updated: 2026-06-17
 | **v3.6.0** | **2026-06-14** | **Backtest Replay Harness (`app/backtest/`) + `regime_filter` + `trend_following_d1`. Offline, tablas `backtest_*`. Veredicto: sin edge en D1 (el +4.7R del trend fue un artefacto)** |
 | **v3.7.0** | **2026-06-17** | **Refocus a la bolsa: `ENABLE_MEMECOIN_ENGINE` corta la colección de memecoins (bot aparte). Scalping off, stock alerts on. + ESPEC backtest acciones** |
 | **v3.8.0** | **2026-06-17** | **Regime gate vivo (`ENABLE_REGIME_GATE`, opt-in, downward-only): longs contra-tendencia D1 → paper. Nace del diagnóstico (longs −0.57R/shorts +1.29R = régimen)** |
-| backtest acciones | 2026-06-17 | S1 (`stock_historical_loader`, Yahoo D1 ajustado) + S2 (harness `category=stock` + banner survivorship). Run real pendiente (Yahoo throttle) → v3.9.0 |
+| backtest acciones | 2026-06-17 | S1 (`stock_historical_loader`, Yahoo D1 ajustado) + S2 (harness `category=stock` + banner survivorship). Run real pendiente (Yahoo 429; `stock_backtest_run.json` listo) + S3 |
+| **v3.9.0** | **2026-06-18** | **COT collector (`app/collectors/cot_collector.py` + tabla `cot_snapshots` + `ENABLE_COT_COLLECTOR`): CFTC semanal, 9 mercados FX+oro, SOLO captura para research. Opt-in OFF. VIVO** |
+| v3.9.1 | 2026-06-18 | Fix dashboard Streamlit (bootstrap `sys.path`, `ModuleNotFoundError 'app'`) + chore `.gitignore .env.bak*`. **Veredicto Fase D: gate de datos cruzado (403/400) pero ML sin señal forward (CV temporal 0.475 OOS) → NO construir** |
 
 ---
 

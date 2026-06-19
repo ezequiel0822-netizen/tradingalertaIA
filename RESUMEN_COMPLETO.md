@@ -55,15 +55,15 @@ de los resultados — sin tocar jamás dinero real.**
 
 | Qué | Estado |
 |---|---|
-| Versión | **v3.8.0** (main; +1 commit de S2-acciones pendiente de merge) |
-| Tests | **676 verdes** |
+| Versión | **v3.9.1** (main, pusheado) |
+| Tests | **692 verdes** |
 | Foco | **100% LA BOLSA** (acciones US + forex + oro). Memecoins CORTADAS (bot aparte), scalping APAGADO |
 | Bot | Corriendo en la Lenovo vía **`.\start_bot.ps1`**. Preflight: `python preflight.py` |
 | Balance demo | ~$88,6xx (plano — el dinero real casi no se movió) |
-| Protecciones activas | calendar gate ✓, cap USD \|3\| ✓, cooldown 60 min ✓, exit shadow ✓; **regime gate** disponible (opt-in `ENABLE_REGIME_GATE`) |
-| Data hacia Fase D | **~70/400** trades limpios con features técnicos |
+| Protecciones activas | calendar gate ✓, cap USD \|3\| ✓, cooldown 60 min ✓, exit shadow ✓; **regime gate** + **COT collector** VIVOS (`ENABLE_REGIME_GATE` / `ENABLE_COT_COLLECTOR=true`) |
+| Data hacia Fase D | **CRUZADO: 403/400** trades con features — pero el ML resultó SIN señal (CV temporal AUC 0.475 OOS), ver §3 |
 | Real-money | BLOQUEADO; `/readiness` = NO LISTO |
-| Verdad de fondo | **No hay edge probado** — confirmado por backtest (D1) Y diagnóstico vivo (longs sangran/shorts ganan = régimen) |
+| Verdad de fondo | **No hay edge probado** — confirmado 4 vías: backtest D1, diagnóstico vivo (régimen), ML AUC 0.533, ML CV temporal 0.475 OOS |
 
 ## 2.5 Serie v3.6.0 — Backtest Replay Harness — EN CURSO (actualizado 2026-06-14)
 
@@ -127,7 +127,7 @@ el cache) y si el trade va CONTRA la tendencia (long en `down` / short en `up`) 
 Cablea al vivo el `regime_filter` que vivía solo en el backtest. **Defensivo, NO edge**: deja
 de pelear la tendencia; no garantiza ganar (el régimen se identifica tarde).
 
-**Serie backtest de ACCIONES (`ESPEC_BACKTEST_STOCKS_v1.md`, → v3.9.0).**
+**Serie backtest de ACCIONES (`ESPEC_BACKTEST_STOCKS_v1.md`).**
 - **S1** (HECHA): `app/backtest/stock_historical_loader.py` — Yahoo D1 ajustado por splits/
   dividendos (un split NO fabrica gap falso), `period1/period2` (no `range=max` que da
   mensual), anti-429. Validado: AAPL 11.469 barras (1980→2026), NVDA, SPY.
@@ -135,15 +135,23 @@ de pelear la tendencia; no garantiza ganar (el régimen se identifica tarde).
   **SURVIVORSHIP BIAS** en el report (las quebradas desaparecen de Yahoo → solo sirve para
   DESCARTAR, nunca confirmar). El run real con veredicto quedó PENDIENTE: Yahoo throttleó la
   IP (429) tras las pruebas; se completa cuando se libere o desde otra IP.
-- **S3** (pendiente): `trend_following_d1` sobre acciones + veredicto + cierre v3.9.0.
+- **S3** (pendiente): `trend_following_d1` sobre acciones + veredicto (sin versión asignada aún).
 
-**Lo que sigue (orden honesto):** dejar correr el libro vivo limpio (Fase D); probar el
-regime gate en vivo; completar el veredicto de acciones (S2 run + S3); **COT collector**
-(info nueva = mejor chance real, `MAPA §3.4`). Lo aprendido vale más que lo que el bot
-probablemente genere; el edge se DESCUBRE (data+research), no se inyecta ("edge artificial"
-= curve-fitting = se funde en real).
+**v3.9.0 — COT collector.** `app/collectors/cot_collector.py` + tabla `cot_snapshots` +
+**`ENABLE_COT_COLLECTOR=false`** (opt-in). Baja Commitments of Traders de la CFTC (Socrata, 9
+mercados FX+oro por `cftc_contract_market_code`) → SOLO captura para research (no señal ni gate).
+Primer input fuera del OHLCV (`MAPA §3.4`). **YA VIVO** en la Lenovo (valida 9 mercados contra CFTC).
 
-**Tests:** 572 (v3.5.0) → 657 (v3.6.0, harness S1-S5) → 660 (v3.7.0, refocus) → 672 (v3.8.0, regime gate) → **676 (backtest acciones S1-S2)**, todos verdes por conteo.
+**v3.9.1 — Fix dashboard.** Bootstrap de `sys.path` en `app/dashboard/streamlit_app.py`
+(`streamlit run` tiraba `ModuleNotFoundError 'app'`). + chore `.gitignore .env.bak*`.
+
+**Lo que sigue (orden honesto):** dejar correr el libro vivo + que el COT acumule (lo más
+valioso); completar el veredicto de acciones cuando Yahoo no throttlee (config listo); cuando el
+COT tenga historia, re-correr el test temporal del ML con features de COT. **NO Fase D / más
+modelos sobre los features actuales** — ya se probó (AUC 0.475 OOS) = sin señal. Lo aprendido vale
+más que lo que el bot probablemente genere; el edge se DESCUBRE (info nueva), no se inyecta.
+
+**Tests:** 657 (v3.6.0) → 660 (v3.7.0) → 672 (v3.8.0) → 676 (backtest acciones S1-S2) → **692 (v3.9.0 COT)**, todos verdes por conteo.
 
 ## 3. La verdad de fondo (la filosofía del proyecto)
 
@@ -153,10 +161,13 @@ probablemente genere; el edge se DESCUBRE (data+research), no se inyecta ("edge 
    el 9-jun ganó +$312 y el 10-jun el mismo libro perdió.
 2. **El −11% histórico del demo fue un BUG, no estrategia**: el feedback-loop/instant-kill
    de mayo (~746 artifacts, corregidos en v2.6.7–v2.7.1). Limpio de artifacts: ~−2% desde
-   el inicio; desde el baseline 2026-06-03, ~plano (+0.17%). `/performance` lo mide.
+   el inicio; desde el baseline 2026-06-03, **~plano** (≈−0.004% sobre 105 trades ejecutados al 18-jun). `/performance` lo mide.
 3. **El LLM/ML no crean edge** — filtran, explican y protegen. La "potencia" tipo
    IA-grande no compra rentabilidad: un bot simple CON edge le gana siempre a un bot
-   genio SIN edge. El edge sale de data + research, validado fuera de muestra.
+   genio SIN edge. El edge sale de data + research, validado fuera de muestra. **Probado
+   18-jun:** con el gate de datos cumplido (403/400), el ML sobre los features actuales dio
+   **AUC temporal 0.475 OOS (peor que azar)** — el k-fold 0.69 era peeking in-sample. Sin señal
+   forward; `ENABLE_ML_PREDICTOR` queda OFF.
 4. **Todo se mide antes de creerse** (anti-autoengaño): gates que solo degradan a paper,
    shadow modes que simulan antes de activar, exclusión de artifacts a query-time.
 
@@ -243,14 +254,17 @@ contraseña de Windows + BitLocker.
 - El user mergea con `git merge claude/<branch>` + `git push origin main` (no usa PRs web).
 - Los "techos optimistas" (mfe/mae) mienten: simular sobre el camino real, con activación
   y exclusiones, o el análisis recomienda cambios equivocados.
+- **Para ML de trading, el k-fold con shuffle MIENTE** (espía entre épocas): usar SIEMPRE
+  TimeSeriesSplit (train pasado → test futuro). El 18-jun el k-fold daba 0.69 y el temporal 0.475 OOS.
+- Los backups del `.env` (`.env.bak*`) tienen secrets → cubiertos en `.gitignore` (v3.9.1).
 
 ## 11. Prompt para arrancar un chat nuevo (copiá/pegá)
 
 ```
 Retomamos Trading Alert AI (bot de trading algorítmico LOCAL, Python 3.12, Windows).
-Estado: v3.8.0, main, 676 tests verdes, corriendo en la Lenovo vía .\start_bot.ps1.
+Estado: v3.9.1, main, 692 tests verdes, corriendo en la Lenovo vía .\start_bot.ps1.
 REFOCUS: 100% LA BOLSA (acciones+forex+oro); memecoins CORTADAS (bot aparte) y scalping
-APAGADO. Protecciones: calendar gate, cap USD, exit shadow; regime gate disponible (opt-in).
+APAGADO. Protecciones: calendar gate, cap USD, exit shadow; regime gate + COT collector VIVOS.
 
 Leé en este orden ANTES de tocar nada: RESUMEN_COMPLETO.md (todo el proyecto en uno),
 PROXIMOS_PASOS.md (qué sigue + reglas), CONTEXTO_MAESTRO_v3.8.0.md (arquitectura),
@@ -260,19 +274,23 @@ ESPEC_BACKTEST_STOCKS_v1.md (acciones) + MAPA_DE_EDGE_Y_RUTA.md.
 Reglas inamovibles: real-money BLOQUEADO (ENABLE_REAL_TRADING=false HARDCODED) hasta
 que /readiness esté verde; order_send solo en mt5_demo_trader.py; LLM/ML SUBTRACTIVOS;
 los gates vivos (calendar/cap USD/regime) son DOWNWARD-ONLY (solo bajan a paper); todo
-opt-in OFF + soft-fail; mantener 676 tests verdes; sincronizar los _settings() de
+opt-in OFF + soft-fail; mantener 692 tests verdes; sincronizar los _settings() de
 test_score y test_alert_rules al tocar Settings; versionado patch/minor sin saltos; el
 backtest escribe SOLO en backtest_*, no cuenta para /readiness ni Fase D. NO inventar edge
 artificial (curve-fitting). Hardware: GPU chica, nada de LLM en el hot path (~50s/gen).
 
-La verdad de fondo: el cuello de botella es DATA (70/400), no código. No hay edge probado
-— confirmado por backtest (D1) Y diagnóstico vivo (longs −0.57R / shorts +1.29R = régimen,
-no edge durable). El edge se DESCUBRE (data+research), no se inyecta. Dejar correr.
+La verdad de fondo: NO hay edge probado, confirmado 4 vías (backtest D1 artefacto USDCHF;
+diagnóstico vivo longs −0.57R/shorts +1.29R = régimen; ML AUC 0.533; CV temporal 0.475 OOS,
+peor que azar). El gate de data de Fase D se CRUZÓ (403/400) pero el ML es callejón sin salida
+sobre los features actuales — NO prender ENABLE_ML_PREDICTOR. El edge se DESCUBRE con info nueva
+(COT), no se inyecta. Dejar correr el libro + que el COT acumule.
 
-Decime qué querés hacer: (A) probar el regime gate en vivo (ENABLE_REGIME_GATE=true);
-(B) completar el veredicto del backtest de ACCIONES (S2 run cuando Yahoo no throttlee + S3);
-(C) COT collector (info nueva, MAPA §3.4); (D) revisar la data (/performance, /readiness,
-/exit_analysis, /exposicion); (E) Fase D si llegamos a 400; (F) otra cosa.
+Decime qué querés hacer: (A) revisar la data (/performance, /readiness, /exposicion, /ml_status);
+(B) completar el veredicto del backtest de ACCIONES cuando Yahoo no throttlee (stock_backtest_run.json
+listo + S3); (C) cuando el COT tenga semanas: features de COT a build_ml_dataset + re-correr el test
+temporal del ML (TimeSeriesSplit); (D) instrumentos descorrelacionados / backfill macro (MAPA §8);
+(E) otra cosa. NOTA: regime gate y COT ya VIVOS; NO Fase D / más modelos sobre features actuales
+(ya probado = sin señal, AUC 0.475 OOS).
 ```
 
 ---

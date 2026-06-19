@@ -1,4 +1,4 @@
-# CONTEXTO MAESTRO — Trading Alert AI v3.8.0
+# CONTEXTO MAESTRO — Trading Alert AI v3.8.0 (+ addendum v3.9.0–v3.9.1 al final)
 
 > Referencia de arquitectura/schema **vigente** (reemplaza a `CONTEXTO_MAESTRO_v3.6.0.md`,
 > que queda como base histórica). Local, Python 3.12, Windows + PowerShell + venv.
@@ -118,29 +118,35 @@ en horas lo que el demo tardaría meses.
   `report.md`/`trades.csv`/`equity_r.csv` en `exports/backtest_<id>/`.
 - Flag: `ENABLE_BACKTEST_HARNESS=false`. Params de estrategia en el `config_json` del run.
 
-## 8. La verdad de fondo (CONFIRMADA POR DOS VÍAS)
+## 8. La verdad de fondo (CONFIRMADA POR CUATRO VÍAS)
 
-**El cuello de botella es DATA, no código. No hay edge PROBADO:**
+**El gate de DATA se cruzó (403/400) pero NO hay edge PROBADO:**
 1. **Backtest (décadas de D1):** ninguna estrategia pasa §11. El `trend_following_d1` mostró
    +4.7R que **era un ARTEFACTO** (1 trade de +3724R sobre USDCHF sintético pre-1999 = 80%
    del P&L; mediana real −1.03R). La concentración + el drawdown lo atraparon. NADA se promovió.
 2. **Diagnóstico vivo (16-jun, `strategy_performance_sliced`):** `forex_session_breakout`/forex
-   pierde **−0.57R en LONGS** y gana **+1.29R en SHORTS** (oro longs −2.57R). **Los longs
-   sangran porque pelean el régimen.** El +R de shorts NO es edge durable — es coyuntura. NO
-   es volatilidad (VIX ~16, calmo). El balance demo está PLANO (~$88.6k); las cifras rojas
-   grandes eran memecoins en PAPEL (no tocan dinero).
+   pierde **−0.57R en LONGS** y gana **+1.29R en SHORTS** (oro longs −2.57R) = **régimen**, no
+   edge. NO es volatilidad (VIX ~16). El demo está PLANO (~$88.6k); las cifras rojas grandes
+   eran memecoins en PAPEL.
+3. **ML sobre el set completo (18-jun):** AUC 0.533 = ruido.
+4. **ML con CV temporal (18-jun):** `TimeSeriesSplit` AUC **0.475 (peor que azar)** OOS, aunque
+   el k-fold con shuffle daba 0.69 y un split simple 0.627 — la brecha es la firma de cero señal
+   forward + overfitting in-sample. → **NO construir Fase D / más modelos sobre los features
+   actuales; `ENABLE_ML_PREDICTOR` queda OFF.**
 
 El LLM/ML **filtran, explican, protegen — NO crean edge.** El regime gate (v3.8.0) es
-DEFENSIVO (deja de pelear la tendencia), no edge. El edge se DESCUBRE (data + research):
-próximo lever real = **COT** (`MAPA §3.4`).
+DEFENSIVO. El edge se DESCUBRE con INFORMACIÓN nueva: el **COT** (v3.9.0) ya está VIVO juntando
+data; cuando tenga historia se re-evalúa el ML con features de COT (mirando TimeSeriesSplit).
 
 ## 9. Estado + gates de roadmap
 
-- **Hoy:** v3.8.0, **676 tests**, demo ~$88.6k (plano). Features-coverage **~70/400** (Fase D).
-- **Backtest de acciones (→ v3.9.0):** S1 (loader) + S2 (harness+banner) HECHOS; falta el run
-  real con veredicto (Yahoo throttleó la IP en pruebas) + S3 (trend D1 sobre acciones).
-- **COT collector (v3.x):** info nueva = mejor chance real (`MAPA §3.4`).
-- **Fase D** (LightGBM+RF): GATE DURO ≥400 trades limpios con features. Dormido.
+- **Hoy:** v3.9.1, **692 tests**, demo ~$88.6k (plano). Features-coverage **CRUZADO 403/400** —
+  gate de Fase D cumplido, pero el ML resultó sin señal (ver §8).
+- **Backtest de acciones:** S1 + S2 HECHOS; falta el run real (Yahoo 429; `stock_backtest_run.json`
+  listo) + S3.
+- **COT collector (v3.9.0): HECHO + VIVO.** Info nueva, primer input fuera del OHLCV (`MAPA §3.4`).
+- **Fase D** (LightGBM+RF): gate de datos cumplido pero **PROBADO = callejón sin salida** (AUC
+  0.475 OOS). NO construir sobre features actuales; el `ml_predictor` XGBoost existente sigue dormido.
 - **Fase E** (StrategyMutator): GATE DURO ≥1 estrategia R+ neto + 3 meses. No se cumple.
 - **Real-money:** edge probado fuera de régimen + sizing reconstruido + audit + decisión
   deliberada. `GO_LIVE_RUNBOOK.md` cuando `/readiness` esté verde.
@@ -149,7 +155,8 @@ próximo lever real = **COT** (`MAPA §3.4`).
 
 `ENABLE_MEMECOIN_ENGINE=false` (corta colección de memecoins) · `ENABLE_MEMECOIN_TELEGRAM=false`
 · `ENABLE_SCALPING_ENGINE=false` · `ENABLE_STOCK_TELEGRAM=true` (acciones alertan) ·
-`ENABLE_REGIME_GATE=false` (opt-in: prender para que los longs contra-tendencia vayan a paper).
+`ENABLE_REGIME_GATE=true` (longs contra-tendencia → paper) · `ENABLE_COT_COLLECTOR=true` (COT
+semanal, captura para research) · `ENABLE_ML_PREDICTOR=false` (probado = sin señal; dejar OFF).
 Comandos Telegram: `/health`, `/expectancy`, `/edge`, `/performance`, `/readiness`,
 `/exit_analysis`, `/exposicion`, `/ml_status`, `/market`, `/porque_perdi`, `/gate_preview`.
 
@@ -158,5 +165,29 @@ Comandos Telegram: `/health`, `/expectancy`, `/edge`, `/performance`, `/readines
 - Bot: `cd <ruta>\tradingalertaIA` + **`.\start_bot.ps1`**. Chequeo previo: **`python preflight.py`**.
 - Harness forex: `$env:ENABLE_BACKTEST_HARNESS='true'` + `python -m app.backtest.replay_harness --config <run.json> --report`.
 - Loader de acciones: `$env:ENABLE_BACKTEST_HARNESS='true'` + `python -m app.backtest.stock_historical_loader`.
-- Tests: `.\.venv\Scripts\python.exe -m pytest -q` (debe dar **676 verdes**). OJO: con `| tail`
+- Tests: `.\.venv\Scripts\python.exe -m pytest -q` (debe dar **692 verdes**). OJO: con `| tail`
   el exit code es del pipe — verificar el CONTEO, no el exit.
+- Dashboard: `.\.venv\Scripts\streamlit run app/dashboard/streamlit_app.py --server.port 27333`
+  → `localhost:27333` (abrir on-demand, cerrar al terminar — no dejarlo 24/7).
+
+## 12. Addendum v3.9.0–v3.9.1
+
+**v3.9.0 — COT collector** (`app/collectors/cot_collector.py`). Pull semanal del Commitments of
+Traders de la CFTC vía la Socrata Open Data API (`publicreporting.cftc.gov/resource/6dca-aqww.json`,
+Legacy Futures-Only). 9 mercados (EUR/GBP/JPY/AUD/CAD/CHF/NZD/US Dollar Index/Gold) mapeados por
+`cftc_contract_market_code` (identificador estable). Calcula posición neta no-comercial y comercial.
+- **Tabla `cot_snapshots`** (UNIQUE `report_date, market_code`) + `repository.insert_cot_snapshot`
+  (idempotente, INSERT OR IGNORE) + `fetch_latest_cot_snapshot`.
+- **Wiring:** `jobs.run_once` tras el bloque de macro, gateado por `cot_last_capture_iso` (2×/día,
+  `COT_COLLECTOR_INTERVAL_MINUTES=720`); el cooldown se marca en CADA intento (no martillar CFTC).
+  Soft-fail por mercado. Flag `ENABLE_COT_COLLECTOR` (default false).
+- **SOLO captura para research** — no genera señal ni gate. La maquinaria de edge (slicing por
+  posicionamiento, COT index) se construye DESPUÉS, sobre data acumulada. Validado: 9/9 mercados vs CFTC.
+
+**v3.9.1 — Fix dashboard.** Bootstrap de `sys.path` al tope de `app/dashboard/streamlit_app.py`
+(`streamlit run` ponía solo la carpeta del script en el path → `ModuleNotFoundError 'app'`).
++ chore: `.gitignore` cubre `.env.bak*` (los backups del `.env` tienen secrets).
+
+**Fase D — veredicto (18-jun):** gate de datos cumplido (403/400) pero el ML sobre los features
+actuales NO tiene señal forward (CV temporal AUC 0.475 OOS; ver §8). NO construir el ensemble
+LightGBM/RF; re-evaluar solo cuando cambien los INPUTS (features de COT, mirando TimeSeriesSplit).

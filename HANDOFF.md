@@ -16,11 +16,11 @@ REFOCUS v3.7.0: 100% LA BOLSA (acciones US + forex + oro). Las MEMECOINS se cort
 (ENABLE_MEMECOIN_ENGINE=false; el user tiene un bot aparte para memecoins) y el SCALPING
 se apagó. Decide con un strategy router (swing), hace paper trades y manda órdenes a MT5
 demo (MetaQuotes-Demo, solo forex/oro ejecutan; acciones son paper). Real-money BLOQUEADO
-por diseño (HARDCODED). Estado: v3.8.0, 676 tests verdes. Demo ~$88.6k (plano).
+por diseño (HARDCODED). Estado: v3.9.1, 692 tests verdes. Demo ~$88.6k (plano).
 
 ANTES DE TOCAR NADA leé (en el repo, en este orden): RESUMEN_COMPLETO.md (todo en uno),
-PROXIMOS_PASOS.md, CONTEXTO_MAESTRO_v3.8.0.md (arquitectura vigente), CHANGELOG.md
-(historia hasta v3.8.0), GO_LIVE_RUNBOOK.md (camino a real-money), y para el backtest
+PROXIMOS_PASOS.md, CONTEXTO_MAESTRO_v3.8.0.md (arquitectura vigente + addendum v3.9.0 al final),
+CHANGELOG.md (historia hasta v3.9.1), GO_LIVE_RUNBOOK.md (camino a real-money), y para el backtest
 ESPEC_BACKTEST_REPLAY_v1.md (forex) + ESPEC_BACKTEST_STOCKS_v1.md (acciones) +
 MAPA_DE_EDGE_Y_RUTA.md (la ruta de edge). Y la carpeta de memoria de Claude.
 
@@ -31,7 +31,7 @@ REGLAS INAMOVIBLES (no romper nunca):
 - El LLM y el ML son SUBTRACTIVOS: solo pueden vetar / bajar-a-paper, JAMÁS forzar una orden.
 - Todo lo nuevo (Ollama, asesor, ensemble veto, resumen diario) es opt-in OFF + soft-fail:
   si está apagado, el bot corre idéntico a antes.
-- Nunca leer/mostrar el .env real ni secrets. Mantener pytest verde (676). Al tocar
+- Nunca leer/mostrar el .env real ni secrets. Mantener pytest verde (692). Al tocar
   Settings, sincronizar tests/test_score._settings() Y tests/test_alert_rules._settings().
 - Versionado: patch para fixes, minor SOLO para features reales, sin saltar números.
 - Real-money: el user ya lo pidió 3+ veces; la respuesta es GO_LIVE_RUNBOOK.md +
@@ -81,35 +81,47 @@ QUÉ SE CONSTRUYÓ (serie v3, todo pusheado):
 - Serie backtest de ACCIONES: S1 (app/backtest/stock_historical_loader.py: Yahoo D1
   ajustado por splits/dividendos + anti-429) + S2 (replay_harness con category='stock' +
   banner de SURVIVORSHIP BIAS en el report). CODIGO HECHO + testeado; el run real con
-  veredicto quedó PENDIENTE (Yahoo throttleo la IP en las pruebas; se completa cuando se
-  libere). El backtest de acciones SOLO sirve para DESCARTAR (survivorship bias).
+  veredicto quedó PENDIENTE (Yahoo throttleo la IP — 429 confirmado incluso en 1 request;
+  se completa cuando se libere). Queda listo stock_backtest_run.json (22 simbolos, 4 estrategias,
+  category=stock) + el comando. El backtest de acciones SOLO sirve para DESCARTAR (survivorship).
+- v3.9.0 (COT COLLECTOR): app/collectors/cot_collector.py + ENABLE_COT_COLLECTOR=false (opt-in).
+  Baja Commitments of Traders de la CFTC (Socrata, 9 mercados FX+oro por cftc_contract_market_code)
+  -> tabla cot_snapshots. SOLO captura para research (no señal ni gate). Primer input fuera del
+  OHLCV (MAPA §3.4). YA VIVO en la Lenovo (ENABLE_COT_COLLECTOR=true; valida 9 mercados contra CFTC).
+- v3.9.1 (FIX): bootstrap de sys.path en app/dashboard/streamlit_app.py (streamlit run tiraba
+  ModuleNotFoundError 'app'). + chore: .gitignore cubre .env.bak* (backups del .env con secrets).
 - GO_LIVE_RUNBOOK.md: el camino completo a real-money (gates, broker, codigo del dia-D,
   checklist). Real-money sigue HARDCODED bloqueado hasta que /readiness este verde.
 - preflight.py (raiz del repo, NO commiteado): chequea config + secretos + MT5 + el refocus
   (memecoins off, scalping off, stock alerts on, v3.x mergeado) sin arrancar nada.
 
-VERDAD DE FONDO: el cuello de botella es DATA (70/400 trades con features), no código.
-No hay edge PROBADO, CONFIRMADO POR DOS VÍAS: (1) el backtest sobre décadas de D1 (ninguna
-estrategia pasa §11; el +4.7R del trend_following_d1 fue un ARTEFACTO de 1 trade sintético
-de USDCHF), y (2) el diagnóstico vivo del 16-jun (slicing por dirección: forex_session_
-breakout pierde -0.57R en LONGS y gana +1.29R en SHORTS; oro longs -2.57R). Los longs
-sangran porque pelean el régimen; el +R de shorts NO es edge durable, es coyuntura (gira
-y sangra). NO es volatilidad (VIX ~16, calmo). El −11% del demo fue el bug de mayo; limpio
-queda ~plano (~$88.6k). El LLM/ML filtran, explican, protegen — NO crean edge. Lo más
-valioso: DEJAR CORRER el libro vivo. Hardware: la GPU no banca LLM local rápido (~50s/gen)
-— nada de LLM en el hot path; ContinuousLearner OFF en la Lenovo (límite de hardware).
+VERDAD DE FONDO: el cuello de DATA se CRUZÓ (403/400 trades con features al 18-jun), pero NO
+destrabó edge. No hay edge PROBADO, CONFIRMADO POR CUATRO VÍAS: (1) el backtest sobre décadas
+de D1 (ninguna estrategia pasa §11; el +4.7R del trend_following_d1 fue un ARTEFACTO de 1 trade
+sintético de USDCHF); (2) el diagnóstico vivo del 16-jun (slicing por dirección: forex_session_
+breakout pierde -0.57R en LONGS y gana +1.29R en SHORTS; oro longs -2.57R = régimen, no edge);
+(3) AUC del ML sobre el set completo = 0.533 (ruido); (4) CV temporal del ML el 18-jun =
+TimeSeriesSplit AUC 0.475 (PEOR que azar) OOS, aunque el k-fold con shuffle daba 0.69 y un split
+simple 0.627 — la brecha es la firma de cero señal forward + overfitting in-sample. NO es
+volatilidad (VIX ~16, calmo). El −11% del demo fue el bug de mayo; limpio queda ~plano (~$88.6k).
+El LLM/ML filtran, explican, protegen — NO crean edge (NO prender ENABLE_ML_PREDICTOR: el filtro
+sobre esta data es ruido). Lo más valioso: DEJAR CORRER el libro vivo y que el COT acumule.
+Hardware: la GPU no banca LLM local rápido (~50s/gen) — nada de LLM en el hot path;
+ContinuousLearner OFF en la Lenovo (límite de hardware).
 
-PRÓXIMOS PASOS: 1) dejar correr el libro vivo limpio (data 70→400 para Fase D); 2) probar
-el regime gate en vivo (ENABLE_REGIME_GATE=true) — deja de tomar longs contra la tendencia;
-3) completar el veredicto del backtest de ACCIONES (S2 hecho; falta el run real cuando
-Yahoo no throttlee) y cerrar S3 (trend_following_d1 sobre acciones + v3.9.0); 4) COT
-collector (información nueva = el lever de mejor chance real, MAPA §3.4); 5) Fase D (≥400
-trades) / Fase E (edge + 3 meses); 6) real-money: GO_LIVE_RUNBOOK.md cuando /readiness verde.
+PRÓXIMOS PASOS: 1) DEJAR CORRER el libro vivo + que el COT acumule semanas (lo de mayor valor
+ahora); 2) regime gate y COT ya están VIVOS (ENABLE_REGIME_GATE / ENABLE_COT_COLLECTOR=true en
+la Lenovo); 3) completar el veredicto del backtest de ACCIONES cuando Yahoo deje de throttlear
+(stock_backtest_run.json + comando listos) y cerrar S3; 4) cuando el COT tenga historia: agregar
+features de COT a build_ml_dataset y RE-CORRER el test temporal del ML (TimeSeriesSplit) — si
+sube de ~0.55 hay señal, si no, seguir esperando inputs nuevos. NO construir Fase D / más modelos
+sobre los features actuales: ya se probó = callejón sin salida (AUC 0.475 OOS); 5) Fase E (edge +
+3 meses) sigue lejos; 6) real-money: GO_LIVE_RUNBOOK.md cuando /readiness verde (sigue BLOQUEADO).
 
 PRIMERA TAREA AL RETOMAR:
 1. python preflight.py (chequea todo: config, secretos, MT5, refocus). Debe decir LISTO.
 2. correr: .\start_bot.ps1 (pide contraseña si STARTUP_PASSWORD_SHA256 está en .env).
-3. verificar en Telegram: /health (debe decir v3.8.0) + /readiness + /exposicion.
+3. verificar en Telegram: /health (debe decir v3.9.1) + /readiness + /exposicion.
    /market tarda ~50s en hardware chico — es normal, no es un bug.
 4. si OK, dejar correr. (Ollama opcional: ollama pull llama3.2:3b / llama3.1.)
 ```
