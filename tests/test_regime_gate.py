@@ -70,3 +70,28 @@ def test_gold_symbol_maps_and_gates() -> None:
     job = _StubJob(replace(_settings(), enable_regime_gate=True), _FALLING)
     # GC=F -> XAUUSD via yahoo_to_mt5; long contra regimen down -> paper
     assert job._regime_gate(_trade("long", category="gold", symbol="GC=F")) is False
+
+
+def test_d1_cache_freshness_guard_drops_stale() -> None:
+    """M1: el guard descarta el cache D1 viejo (>10 dias) -> [] (gate soft-allow),
+    en vez de clasificar el regimen sobre data caduca. Cache fresco se mantiene."""
+    import time
+
+    class _Repo:
+        def __init__(self, last_time: float) -> None:
+            self._last = last_time
+
+        def fetch_mt5_cache_window(self, sym, tf, a, b):
+            return [{"time": self._last, "close": 1.0, "high": 1.0, "low": 1.0}]
+
+    class _J:
+        _d1_candles_for_regime = TradingAlertJob._d1_candles_for_regime
+
+        def __init__(self, repo) -> None:
+            self.repository = repo
+
+    now = time.time()
+    fresh = _J(_Repo(now - 2 * 86400))     # 2 dias -> se mantiene
+    stale = _J(_Repo(now - 30 * 86400))    # 30 dias -> se descarta
+    assert fresh._d1_candles_for_regime("EURUSD") != []
+    assert stale._d1_candles_for_regime("EURUSD") == []

@@ -1,5 +1,6 @@
 """Tests para ForexSessionBreakoutStrategy + analyze_multitf."""
 
+from datetime import datetime, timezone
 from types import SimpleNamespace
 
 from app.analyzers.technical_patterns import analyze_multitf
@@ -16,17 +17,30 @@ def _forex_snap(price: float = 1.0900) -> TokenSnapshot:
     )
 
 
+def _today_asian_start() -> float:
+    """Epoch (s) de las 00:00 UTC de HOY — inicio de la sesion asiatica."""
+    return (
+        datetime.now(timezone.utc)
+        .replace(hour=0, minute=0, second=0, microsecond=0)
+        .timestamp()
+    )
+
+
 def _candles(asian_high: float = 1.0850, asian_low: float = 1.0820, count: int = 60):
-    """Genera 60 candles, primeras 32 con asian range, resto con escalada."""
+    """Genera candles con TIMESTAMP real: primeras 32 en la sesion asiatica de HOY
+    (00:00-08:00 UTC, cada 15m) con el asian range; el resto despues (London/NY)."""
+    start = _today_asian_start()
     candles = []
     for i in range(min(32, count)):
         mid = (asian_high + asian_low) / 2
         candles.append({
+            "timestamp": start + i * 900,  # 15m dentro de 00:00-08:00 UTC
             "open": mid, "high": asian_high, "low": asian_low,
             "close": mid, "volume": 1000,
         })
     for i in range(count - len(candles)):
         candles.append({
+            "timestamp": start + 13 * 3600 + i * 900,  # despues del rango asiatico
             "open": asian_high * (1 + 0.0001 * i),
             "high": asian_high * (1 + 0.001 * i),
             "low": asian_low,
@@ -95,6 +109,25 @@ def test_forex_breakout_skip_non_forex_category() -> None:
     )
     signal = ForexSessionBreakoutStrategy().evaluate(ctx, settings)
     assert signal is None
+
+
+def test_forex_breakout_ignores_stale_5day_old_candles() -> None:
+    """Regresion bug A1: si las velas son de hace ~5 dias (sin sesion asiatica de HOY),
+    NO debe operar. Antes tomaba las primeras 32 POSICIONALES sin mirar la fecha y
+    disparaba breakouts contra un 'rango asiatico' de hace 5 dias."""
+    settings = _settings()
+    snap = _forex_snap(price=1.0880)
+    start = _today_asian_start() - 5 * 86400  # hace 5 dias
+    candles = [
+        {"timestamp": start + i * 900, "open": 1.0835, "high": 1.0850,
+         "low": 1.0820, "close": 1.0835, "volume": 1000}
+        for i in range(60)
+    ]
+    ctx = StrategyContext(
+        snapshot=snap, candles=candles, pattern=SimpleNamespace(atr_pct=0.5),
+        pro=None, macro={"active_sessions": ["london", "ny"], "is_high_liquidity": True},
+    )
+    assert ForexSessionBreakoutStrategy().evaluate(ctx, settings) is None
 
 
 def _ohlcv(close_series: list[float]) -> list[dict[str, float]]:

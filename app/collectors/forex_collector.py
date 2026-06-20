@@ -78,8 +78,9 @@ class ForexCollector:
 
         current_price = float(meta.get("regularMarketPrice") or closes[-1])
         previous_15m = closes[-2] if len(closes) >= 2 else None
-        previous_1h = closes[-5] if len(closes) >= 5 else None
-        previous_24h = closes[-27] if len(closes) >= 27 else closes[0]
+        previous_1h = closes[-5] if len(closes) >= 5 else None  # 4 velas de 15m = 1h
+        # M2 fix: 24h = 96 velas de 15m (antes usaba -27 = ~6.5h, mal etiquetado)
+        previous_24h = closes[-97] if len(closes) >= 97 else closes[0]
 
         category, chain, event_type = _classify(symbol)
 

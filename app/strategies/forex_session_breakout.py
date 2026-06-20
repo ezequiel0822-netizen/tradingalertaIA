@@ -6,6 +6,8 @@ high/low (00:00-08:00 UTC) y abre long si rompe el high, short si rompe el low.
 Solo aplica a category forex y gold.
 """
 
+from datetime import datetime, timezone
+
 from app.config.settings import Settings
 from app.strategies.base import StrategyContext, StrategySignal
 
@@ -29,15 +31,31 @@ class ForexSessionBreakoutStrategy:
         if len(candles) < 30:
             return None
 
-        # Calcular Asian range (primeras ~32 velas si interval=15m → 8h)
-        # Si los candles son del dia, asumimos que las primeras son sesion asiatica.
-        asian_slice = candles[: min(32, len(candles) // 2)]
-        asian_high = max((c.get("high") or c.get("close") or 0) for c in asian_slice)
-        asian_low = min(
-            (c.get("low") or c.get("close") or 1e9)
-            for c in asian_slice if c.get("low") is not None
+        # Asian range REAL: velas de la sesion 00:00-08:00 UTC de HOY, filtradas por
+        # TIMESTAMP. El feed de forex trae range=5d/interval=15m (mas viejas primero), asi
+        # que tomar las primeras N posicionales daba el rango de hace ~5 dias (bug A1). Si
+        # no hay sesion asiatica de hoy en la data -> no operar (soft, devuelve None).
+        day_start = (
+            datetime.now(timezone.utc)
+            .replace(hour=0, minute=0, second=0, microsecond=0)
+            .timestamp()
         )
-        if asian_high <= 0 or asian_low >= 1e9:
+        asian_end = day_start + 8 * 3600
+        asian_slice = [
+            c
+            for c in candles
+            if c.get("timestamp") is not None
+            and day_start <= float(c["timestamp"]) < asian_end
+        ]
+        if len(asian_slice) < 4:
+            return None
+        highs = [c.get("high") for c in asian_slice if c.get("high") is not None]
+        lows = [c.get("low") for c in asian_slice if c.get("low") is not None]
+        if not highs or not lows:
+            return None
+        asian_high = max(highs)
+        asian_low = min(lows)
+        if asian_high <= 0 or asian_low <= 0:
             return None
 
         entry = ctx.snapshot.price

@@ -1,5 +1,17 @@
 # Changelog
 
+## Trading Alert AI v3.9.2
+
+**Fixes de la auditoría multi-agente (18-jun).** Tras cruzar el gate de datos (403/400), una auditoría de código encontró bugs reales en la generación de señales:
+
+- **A1 (ALTO) — `forex_session_breakout`: el "Asian range" se calculaba sobre velas de hace ~5 días.** El feed trae `range=5d/interval=15m` (más viejas primero) y la estrategia tomaba las primeras 32 POSICIONALES asumiéndolas "de hoy" (el propio comentario lo admitía). La estrategia MÁS operada (n=200) venía disparando breakouts contra niveles de hace ~5 días → su hipótesis nunca se testeó de verdad. Fix: filtrar las velas por TIMESTAMP a la sesión 00:00–08:00 UTC de HOY; sin sesión asiática de hoy en la data → no opera (soft). `tests/test_forex_session_breakout.py` (+1 regresión del bug de 5 días; helper con timestamps reales).
+- **M2 — `forex_collector` "cambio 24h" mal calculado:** usaba `closes[-27]` (~6.5h); corregido a `closes[-97]` (96 velas de 15m = 24h). Sesgaba scoring/estimaciones de forex (no la decisión de trade).
+- **M1 — regime gate: guard de frescura del cache D1.** El cache D1 (`mt5_historical_cache`) lo refrescan solo los loaders de backtest, NO el loop vivo. Si la última vela es > 10 días vieja, ahora se trata como sin historia (gate soft-allow) + warning, en vez de clasificar el régimen sobre data caduca. `tests/test_regime_gate.py` (+1).
+
+Honestidad: ninguno invierte un gate ni habilita real-money; el camino crítico ejecución→MT5 sigue conservador (la auditoría lo confirmó). **A1 NO crea edge** — hace que la medición de la estrategia sea honesta (recién ahora testea su hipótesis real). El veredicto de fondo no cambia: sin edge (4 vías).
+
+692 -> **694 verdes**. app_version -> v3.9.2.
+
 ## Trading Alert AI v3.9.1
 
 **Fix: el dashboard Streamlit vuelve a arrancar.** `streamlit run app/dashboard/streamlit_app.py` tiraba `ModuleNotFoundError: No module named 'app'`: Streamlit pone en `sys.path` la carpeta del script (`app/dashboard`), NO la raíz del proyecto, así que `import app...` no resolvía. Bootstrap de path al tope de `streamlit_app.py` (inserta `Path(__file__).resolve().parents[2]` = la raíz) antes de cualquier import de `app` → el comando del README funciona desde cualquier cwd. Solo toca el dashboard (offline, read-only sobre la DB); cero impacto en el ciclo vivo, los tests no lo importan.

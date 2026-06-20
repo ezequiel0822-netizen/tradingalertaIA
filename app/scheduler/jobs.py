@@ -1340,11 +1340,30 @@ class TradingAlertJob:
         regimen. Vacio si no hay -> el gate hace soft-fail (permite). El cache se
         refresca con el stock/historical loader o el walk-forward."""
         try:
-            return self.repository.fetch_mt5_cache_window(
+            candles = self.repository.fetch_mt5_cache_window(
                 mt5_symbol, 1440, 0, 9_999_999_999
             )
         except Exception:
             return []
+        # M1 fix: guard de frescura. El cache D1 NO lo refresca el loop vivo (solo los
+        # loaders de backtest/walk-forward). Si la ultima vela es > 10 dias vieja,
+        # clasificar el regimen sobre ella esta mal -> tratar como sin historia (el gate
+        # hace soft-allow) y avisar, en vez de gatear con data caduca.
+        max_age_days = 10
+        if candles:
+            try:
+                last_t = float(candles[-1].get("time") or 0)
+                age_days = (utc_now().timestamp() - last_t) / 86400.0
+                if age_days > max_age_days:
+                    logger.warning(
+                        "Regime gate: cache D1 de %s stale (%.0f dias) -> soft-allow; "
+                        "refresca el cache (loader/walk-forward)",
+                        mt5_symbol, age_days,
+                    )
+                    return []
+            except Exception:
+                pass
+        return candles
 
     def _try_prepare_demo_order(self, paper_trade: dict) -> None:
         """Phase 5: create a pending MT5 demo order request.
