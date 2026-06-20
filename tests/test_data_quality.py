@@ -10,6 +10,7 @@ from app.database.models import EstimateResult, TokenSnapshot
 from app.database.repository import Repository
 from app.intelligence.data_quality import (
     collector_failure_check,
+    gap_check,
     run_full_check,
     staleness_check,
 )
@@ -74,3 +75,25 @@ def test_run_full_check_persists_log() -> None:
     assert "stale_symbols" in summary
     log_rows = repo.fetch_data_quality_log(limit=5)
     assert len(log_rows) >= 1
+
+
+def test_gap_check_detects_gap_and_passes_real_chain() -> None:
+    """v3.9.3: gap_check recibe el chain REAL (antes usaba '*' que nunca matchea
+    porque fetch_snapshots_in_window filtra chain exacto) y detecta el gap."""
+    now = datetime.now(timezone.utc)
+    captured: dict = {"chain": None}
+
+    class _Repo:
+        def fetch_snapshots_in_window(self, chain, token_address, start_iso, end_iso):
+            captured["chain"] = chain
+            t0 = now - timedelta(hours=2)
+            return [
+                {"captured_at": t0.isoformat()},
+                {"captured_at": (t0 + timedelta(minutes=15)).isoformat()},
+                {"captured_at": (t0 + timedelta(minutes=105)).isoformat()},  # gap 90min
+            ]
+
+    gaps = gap_check(_Repo(), "EURUSD", chain="forex")
+    assert captured["chain"] == "forex"  # pasa el chain real, no "*"
+    assert len(gaps) == 1
+    assert gaps[0]["gap_minutes"] == 90

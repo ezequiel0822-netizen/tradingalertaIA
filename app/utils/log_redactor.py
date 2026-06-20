@@ -46,3 +46,20 @@ class LogRedactor(logging.Filter):
             record.msg = msg
             record.args = ()
         return True
+
+
+def install_log_redactor(settings) -> None:
+    """Instala el LogRedactor en el root logger y sus handlers, con los secrets de
+    settings. Compartido por main.py y el dashboard (cualquier entrypoint que loguee).
+    v3.9.3."""
+    secrets = [
+        str(getattr(settings, "telegram_bot_token", "") or ""),
+        str(getattr(settings, "telegram_chat_id", "") or ""),
+        str(getattr(settings, "mt5_password", "") or ""),
+        str(getattr(settings, "mt5_server", "") or ""),
+    ]
+    redactor = LogRedactor(secret_values=secrets)
+    root = logging.getLogger()
+    root.addFilter(redactor)
+    for handler in root.handlers:
+        handler.addFilter(redactor)

@@ -21,6 +21,9 @@ logger = logging.getLogger(__name__)
 
 
 FOREX_FACTORY_URL = "https://nfs.faireconomy.media/ff_calendar_thisweek.xml"
+# v3.9.3: lookahead. Sin la proxima semana, el calendar_gate queda CIEGO apenas el feed
+# de esta semana no rota (caso 18-jun: 0 eventos futuros -> gate no-op).
+FOREX_FACTORY_NEXTWEEK_URL = "https://nfs.faireconomy.media/ff_calendar_nextweek.xml"
 RELEVANT_COUNTRIES = {"USD", "EUR", "GBP", "JPY", "CHF", "AUD", "CAD", "NZD"}
 
 
@@ -96,20 +99,38 @@ class EconomicCalendarCollector:
         self.session.headers.update({"User-Agent": "TradingAlertAI/2.4"})
 
     def collect(self) -> list[dict[str, Any]]:
+        """Junta eventos high-impact de ESTA semana Y la PROXIMA (lookahead). Cada feed
+        es soft-fail independiente; dedup por (event_time, country, title) por el solape
+        en los bordes de semana. El upsert ya es idempotente, esto evita mandar dobles."""
         if not self.settings.enable_economic_calendar:
             return []
+        events: list[dict[str, Any]] = []
+        for url in (FOREX_FACTORY_URL, FOREX_FACTORY_NEXTWEEK_URL):
+            events.extend(self._fetch_feed(url))
+        seen: set[tuple[str, str, str]] = set()
+        deduped: list[dict[str, Any]] = []
+        for e in events:
+            key = (e["event_time"], e["country"], e["title"])
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(e)
+        return deduped
+
+    def _fetch_feed(self, url: str) -> list[dict[str, Any]]:
+        """Baja + parsea + filtra (high-impact + monedas relevantes) un feed. Soft-fail -> []."""
         try:
             response = self.session.get(
-                FOREX_FACTORY_URL,
-                timeout=self.settings.request_timeout_seconds,
+                url, timeout=self.settings.request_timeout_seconds
             )
             response.raise_for_status()
         except requests.RequestException as exc:
-            logger.warning("ForexFactory fetch failed: %s", exc.__class__.__name__)
+            logger.warning(
+                "ForexFactory fetch failed (%s): %s",
+                url.rsplit("/", 1)[-1], exc.__class__.__name__,
+            )
             return []
-
         events = parse_forexfactory_xml(response.text)
-        # Filtrar solo high-impact + monedas relevantes
         filtered = [
             e for e in events
             if e.get("impact") == "high" and e.get("country") in RELEVANT_COUNTRIES

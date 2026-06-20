@@ -19,6 +19,7 @@ def gap_check(
     symbol: str,
     expected_interval_min: int = 15,
     lookback_hours: int = 24,
+    chain: str = "*",
 ) -> list[dict]:
     """Detecta gaps en price_snapshots para un simbolo en las ultimas N horas.
 
@@ -29,7 +30,7 @@ def gap_check(
     start = end - timedelta(hours=lookback_hours)
     try:
         snapshots = repository.fetch_snapshots_in_window(
-            chain="*", token_address=symbol,
+            chain=chain, token_address=symbol,
             start_iso=start.isoformat(), end_iso=end.isoformat(),
         )
     except Exception:
@@ -121,9 +122,14 @@ def run_full_check(repository: Any, settings: Settings) -> dict:
         addr = tok.get("token_address")
         if not addr:
             continue
-        # gap_check necesita un wildcard de chain; lo hacemos basico
-        # (la query interna sigue funcionando porque solo filtra por symbol/chain)
-        pass
+        # v3.9.3: antes este loop terminaba en `pass` -> gap_check NUNCA corria.
+        # fetch_snapshots_in_window matchea el chain EXACTO, asi que pasamos el real.
+        try:
+            gaps_total.extend(
+                gap_check(repository, addr, chain=tok.get("chain") or "*")
+            )
+        except Exception:
+            continue
 
     summary = {
         "gaps_detected": len(gaps_total),

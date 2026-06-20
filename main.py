@@ -3,7 +3,7 @@ import logging
 
 from app.config.settings import load_settings
 from app.scheduler.jobs import TradingAlertJob
-from app.utils.log_redactor import LogRedactor
+from app.utils.log_redactor import install_log_redactor
 from app.utils.logging_config import setup_logging
 
 
@@ -11,18 +11,9 @@ logger = logging.getLogger(__name__)
 
 
 def _install_log_redactor(settings) -> None:
-    """Agrega un filter al root logger para enmascarar tokens y secretos conocidos."""
-    secrets = [
-        settings.telegram_bot_token or "",
-        settings.telegram_chat_id or "",
-        settings.mt5_password or "",
-        settings.mt5_server or "",
-    ]
-    redactor = LogRedactor(secret_values=secrets)
-    root = logging.getLogger()
-    root.addFilter(redactor)
-    for handler in root.handlers:
-        handler.addFilter(redactor)
+    """Agrega un filter al root logger para enmascarar tokens y secretos conocidos.
+    Delega en la funcion compartida (la reusa tambien el dashboard, v3.9.3)."""
+    install_log_redactor(settings)
 
 
 def main() -> int:

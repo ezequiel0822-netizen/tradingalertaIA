@@ -487,7 +487,7 @@ def load_settings() -> Settings:
         obsidian_vault_path = safe_obsidian
 
     return Settings(
-        app_version=os.getenv("APP_VERSION", "v3.9.2"),
+        app_version=os.getenv("APP_VERSION", "v3.9.3"),
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
         telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID"),
         dexscreener_base_url=os.getenv(
@@ -783,7 +783,10 @@ def load_settings() -> Settings:
         demo_trade_request_ttl_minutes=_get_int(
             "DEMO_TRADE_REQUEST_TTL_MINUTES", 15
         ),
-        enable_real_trading=_get_bool("ENABLE_REAL_TRADING", False),
+        # HARDCODED a proposito (v3.9.3): NO se lee del env. No existe ningun path de
+        # ejecucion real; la barrera real es _is_demo_account() en mt5_demo_trader, que
+        # rechaza toda cuenta no-demo. Flipear un env var no debe poder habilitar nada.
+        enable_real_trading=False,
         # Phase 5.5 v2.5.4 — auto-confirm demo orders. Default OFF (opt-in).
         # Cuando true, demo orders se mandan a MT5 sin pasar por /confirm_demo_trade.
         # Real-money trading sigue bloqueado (ENABLE_REAL_TRADING=false hardcoded).

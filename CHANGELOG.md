@@ -1,5 +1,19 @@
 # Changelog
 
+## Trading Alert AI v3.9.3
+
+**Más fixes de la auditoría multi-agente** (los 3 agentes que faltaban — edge / fuentes web / seguridad — completaron):
+
+- **Fix 1 (ALTO) — el calendar gate dejó de estar ciego.** El feed `ff_calendar_thisweek.xml` no rota hasta fin de semana → `economic_events` quedaba con 0 eventos futuros y el calendar_gate era un **no-op** (justo el caso USDCAD/BOC que la feature vino a tapar). `economic_calendar_collector` ahora junta esta semana + `ff_calendar_nextweek.xml` (lookahead), con dedup. `tests/test_economic_calendar.py` (+2).
+- **Fix 2 — `data_quality.gap_check` revivido.** El loop en `run_full_check` terminaba en `pass` (gap_check nunca corría) y `gap_check` usaba `chain="*"` que nunca matchea (`fetch_snapshots_in_window` filtra chain exacto). Ahora se cablea con el chain real. `tests/test_data_quality.py` (+1).
+- **Fix 3 (seguridad) — real-money hardcodeado de verdad.** `enable_real_trading` se leía del env (`_get_bool(..., False)`); la doc decía "HARDCODED" (inexacto). Ahora es `False` hardcoded en `settings.py` (no se lee del env). La barrera real sigue siendo `_is_demo_account()` (defensa en profundidad). `.env.example` aclara que la var se ignora.
+- **Fix 4 (seguridad/higiene) — dashboard endurecido.** El Streamlit abría la DB viva en modo escritura; ahora `file:...?mode=ro` (solo lectura). + instala el LogRedactor (extraído a `log_redactor.install_log_redactor`, compartido con `main.py`).
+- **Fix 5 — `scripts/cot_backfill.py`.** Baja la historia del COT (sin `$limit=1`) a `cot_snapshots` para calcular COT index/percentiles a futuro (el collector vivo solo guarda el último reporte). Manual, idempotente, soft-fail.
+
+Veredicto de la auditoría: **edge = NO HAY** (confirmación #5: el walk-forward temporal invierte el único +R; es el rally del USD de mayo-jun, no edge). Seguridad = postura sólida, sin hallazgos ALTOS (`order_send` solo en `mt5_demo_trader`, secrets ok, SQL parametrizado, defensa en profundidad real-money). Ningún cambio toca el camino crítico ejecución→MT5.
+
+694 -> **697 verdes**. app_version -> v3.9.3.
+
 ## Trading Alert AI v3.9.2
 
 **Fixes de la auditoría multi-agente (18-jun).** Tras cruzar el gate de datos (403/400), una auditoría de código encontró bugs reales en la generación de señales:

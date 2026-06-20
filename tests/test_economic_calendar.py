@@ -73,3 +73,54 @@ def test_collect_filters_high_impact_only() -> None:
 def test_collect_disabled() -> None:
     c = EconomicCalendarCollector(_settings())
     assert c.collect() == []
+
+
+_NEXTWEEK_XML = """<?xml version='1.0' encoding='UTF-8'?>
+<weeklyevents>
+  <event>
+    <title>FOMC Statement</title>
+    <country>USD</country>
+    <date>05-27-2026</date>
+    <time>2:00pm</time>
+    <impact>High</impact>
+  </event>
+</weeklyevents>"""
+
+
+def _enabled():
+    base = _settings()
+    return type(base)(**{**base.__dict__, "enable_economic_calendar": True})
+
+
+def test_collect_merges_thisweek_and_nextweek() -> None:
+    """v3.9.3: el collector junta esta semana + la proxima (lookahead) para que el
+    calendar_gate no quede ciego cuando el feed thisweek no rota."""
+    c = EconomicCalendarCollector(_enabled())
+
+    def fake_get(url, **kwargs):
+        resp = MagicMock()
+        resp.raise_for_status = MagicMock()
+        resp.text = _NEXTWEEK_XML if "nextweek" in url else _SAMPLE_XML
+        return resp
+
+    with patch.object(c.session, "get", side_effect=fake_get):
+        events = c.collect()
+    titles = {e["title"] for e in events}
+    assert "Non-Farm Payrolls" in titles  # thisweek
+    assert "FOMC Statement" in titles      # nextweek (lookahead)
+
+
+def test_collect_dedups_week_overlap() -> None:
+    """Si ambos feeds traen el mismo evento (solape de bordes), aparece una sola vez."""
+    c = EconomicCalendarCollector(_enabled())
+
+    def fake_get(url, **kwargs):
+        resp = MagicMock()
+        resp.raise_for_status = MagicMock()
+        resp.text = _SAMPLE_XML
+        return resp
+
+    with patch.object(c.session, "get", side_effect=fake_get):
+        events = c.collect()
+    nfp = [e for e in events if e["title"] == "Non-Farm Payrolls"]
+    assert len(nfp) == 1

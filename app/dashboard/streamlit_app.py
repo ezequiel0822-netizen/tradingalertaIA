@@ -17,16 +17,24 @@ from app.config.settings import load_settings
 from app.database.repository import Repository
 from app.learning.backtester import backtest_strategy, rank_top_strategies
 from app.learning.horizon_evaluator import HORIZONS
+from app.utils.log_redactor import install_log_redactor
 
 
 settings = load_settings()
+install_log_redactor(settings)  # v3.9.3: enmascara secrets tambien en el dashboard
 st.set_page_config(page_title=f"Trading Alert AI {settings.app_version}", layout="wide")
+
+
+def _ro_uri() -> str:
+    """URI sqlite SOLO-LECTURA de la DB viva. El dashboard nunca escribe; esto evita
+    que un bug/commit accidental toque la DB de produccion. v3.9.3."""
+    return f"file:{settings.sqlite_path.as_posix()}?mode=ro"
 
 
 def _load_table(table_name: str) -> pd.DataFrame:
     if not settings.sqlite_path.exists():
         return pd.DataFrame()
-    with sqlite3.connect(settings.sqlite_path) as connection:
+    with sqlite3.connect(_ro_uri(), uri=True) as connection:
         return pd.read_sql_query(
             f"SELECT * FROM {table_name} ORDER BY id DESC",
             connection,
@@ -460,7 +468,7 @@ try:
 
     daily_log = pd.read_sql_query(
         "SELECT * FROM daily_pnl_log ORDER BY date DESC LIMIT 14",
-        sqlite3.connect(settings.sqlite_path),
+        sqlite3.connect(_ro_uri(), uri=True),
     ) if settings.sqlite_path.exists() else pd.DataFrame()
     if not daily_log.empty:
         st.caption("Historial P&L diario (ultimos 14d)")
