@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import sqlite3
 import sys
 import time
 from pathlib import Path
@@ -60,6 +61,20 @@ def fetch_history(session: requests.Session, cftc_code: str, weeks: int, timeout
     return payload if isinstance(payload, list) else []
 
 
+def _insert_with_retry(repo: Repository, snap: dict, tries: int = 6) -> bool:
+    """insert_cot_snapshot reabre conexion por fila; con el bot vivo escribiendo, el
+    commit puede chocar 'database is locked'. Reintenta con backoff en vez de crashear."""
+    for i in range(tries):
+        try:
+            return bool(repo.insert_cot_snapshot(snap))
+        except sqlite3.OperationalError as exc:
+            if "locked" in str(exc).lower() and i < tries - 1:
+                time.sleep(0.5 * (i + 1))
+                continue
+            raise
+    return False
+
+
 def main() -> int:
     logging.basicConfig(level=logging.WARNING)
     parser = argparse.ArgumentParser(description="COT backfill historico (CFTC)")
@@ -81,10 +96,16 @@ def main() -> int:
             session, cftc_code, args.weeks, settings.request_timeout_seconds
         )
         new = 0
-        for row in rows:
-            snap = parse_cot_row(row, code, label)
-            if snap and repo.insert_cot_snapshot(snap):
-                new += 1
+        try:
+            for row in rows:
+                snap = parse_cot_row(row, code, label)
+                if snap and _insert_with_retry(repo, snap):
+                    new += 1
+        except sqlite3.OperationalError:
+            # DB tomada por el bot vivo aun tras reintentos: salteo este mercado y sigo.
+            # Es idempotente -> re-correr el script lo completa (o pausa el bot antes).
+            print(f"  {code:<5} {label:<20} DB locked -> salteado (re-corre luego)")
+            continue
         total_new += new
         print(f"  {code:<5} {label:<20} {len(rows):>4} reportes, {new:>4} nuevos")
         time.sleep(1.0)  # pacing cortes con la API publica de CFTC
