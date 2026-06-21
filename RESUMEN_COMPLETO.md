@@ -55,8 +55,8 @@ de los resultados — sin tocar jamás dinero real.**
 
 | Qué | Estado |
 |---|---|
-| Versión | **v3.9.1** (main, pusheado) |
-| Tests | **692 verdes** |
+| Versión | **v3.9.3** (main, pusheado) |
+| Tests | **697 verdes** |
 | Foco | **100% LA BOLSA** (acciones US + forex + oro). Memecoins CORTADAS (bot aparte), scalping APAGADO |
 | Bot | Corriendo en la Lenovo vía **`.\start_bot.ps1`**. Preflight: `python preflight.py` |
 | Balance demo | ~$88,6xx (plano — el dinero real casi no se movió) |
@@ -144,6 +144,14 @@ Primer input fuera del OHLCV (`MAPA §3.4`). **YA VIVO** en la Lenovo (valida 9 
 
 **v3.9.1 — Fix dashboard.** Bootstrap de `sys.path` en `app/dashboard/streamlit_app.py`
 (`streamlit run` tiraba `ModuleNotFoundError 'app'`). + chore `.gitignore .env.bak*`.
+
+**v3.9.1-v3.9.3 — fixes de la auditoría multi-agente.** v3.9.2: **bug A1** — `forex_session_breakout`
+calculaba el Asian range sobre velas de hace ~5 días (32 primeras posicionales de un feed de 5d) →
+ahora por timestamp a 00:00-08:00 UTC de hoy (la estrategia más operada disparaba contra niveles
+basura); + cambio 24h + guard de frescura del cache D1. v3.9.3: calendar gate dejó de estar CIEGO
+(`ff_calendar_nextweek.xml`) + gap_check revivido + **real-money hardcoded de verdad** (la barrera
+real es `_is_demo_account`) + dashboard `mode=ro`/LogRedactor + `scripts/cot_backfill.py`. **COT
+backfill HECHO: 5 años (2340 filas, 9 mercados).** Scalping confirmado OFF (`bot_state` pisa al `.env`).
 
 **Lo que sigue (orden honesto):** dejar correr el libro vivo + que el COT acumule (lo más
 valioso); completar el veredicto de acciones cuando Yahoo no throttlee (config listo); cuando el
@@ -262,7 +270,7 @@ contraseña de Windows + BitLocker.
 
 ```
 Retomamos Trading Alert AI (bot de trading algorítmico LOCAL, Python 3.12, Windows).
-Estado: v3.9.1, main, 692 tests verdes, corriendo en la Lenovo vía .\start_bot.ps1.
+Estado: v3.9.3, main, 697 tests verdes, corriendo en la Lenovo vía .\start_bot.ps1.
 REFOCUS: 100% LA BOLSA (acciones+forex+oro); memecoins CORTADAS (bot aparte) y scalping
 APAGADO. Protecciones: calendar gate, cap USD, exit shadow; regime gate + COT collector VIVOS.
 
@@ -274,7 +282,7 @@ ESPEC_BACKTEST_STOCKS_v1.md (acciones) + MAPA_DE_EDGE_Y_RUTA.md.
 Reglas inamovibles: real-money BLOQUEADO (ENABLE_REAL_TRADING=false HARDCODED) hasta
 que /readiness esté verde; order_send solo en mt5_demo_trader.py; LLM/ML SUBTRACTIVOS;
 los gates vivos (calendar/cap USD/regime) son DOWNWARD-ONLY (solo bajan a paper); todo
-opt-in OFF + soft-fail; mantener 692 tests verdes; sincronizar los _settings() de
+opt-in OFF + soft-fail; mantener 697 tests verdes; sincronizar los _settings() de
 test_score y test_alert_rules al tocar Settings; versionado patch/minor sin saltos; el
 backtest escribe SOLO en backtest_*, no cuenta para /readiness ni Fase D. NO inventar edge
 artificial (curve-fitting). Hardware: GPU chica, nada de LLM en el hot path (~50s/gen).

@@ -16,11 +16,11 @@ REFOCUS v3.7.0: 100% LA BOLSA (acciones US + forex + oro). Las MEMECOINS se cort
 (ENABLE_MEMECOIN_ENGINE=false; el user tiene un bot aparte para memecoins) y el SCALPING
 se apagó. Decide con un strategy router (swing), hace paper trades y manda órdenes a MT5
 demo (MetaQuotes-Demo, solo forex/oro ejecutan; acciones son paper). Real-money BLOQUEADO
-por diseño (HARDCODED). Estado: v3.9.1, 692 tests verdes. Demo ~$88.6k (plano).
+por diseño (HARDCODED de verdad desde v3.9.3). Estado: v3.9.3, 697 tests verdes. Demo ~$88.6k (plano).
 
 ANTES DE TOCAR NADA leé (en el repo, en este orden): RESUMEN_COMPLETO.md (todo en uno),
 PROXIMOS_PASOS.md, CONTEXTO_MAESTRO_v3.8.0.md (arquitectura vigente + addendum v3.9.0 al final),
-CHANGELOG.md (historia hasta v3.9.1), GO_LIVE_RUNBOOK.md (camino a real-money), y para el backtest
+CHANGELOG.md (historia hasta v3.9.3), GO_LIVE_RUNBOOK.md (camino a real-money), y para el backtest
 ESPEC_BACKTEST_REPLAY_v1.md (forex) + ESPEC_BACKTEST_STOCKS_v1.md (acciones) +
 MAPA_DE_EDGE_Y_RUTA.md (la ruta de edge). Y la carpeta de memoria de Claude.
 
@@ -90,6 +90,18 @@ QUÉ SE CONSTRUYÓ (serie v3, todo pusheado):
   OHLCV (MAPA §3.4). YA VIVO en la Lenovo (ENABLE_COT_COLLECTOR=true; valida 9 mercados contra CFTC).
 - v3.9.1 (FIX): bootstrap de sys.path en app/dashboard/streamlit_app.py (streamlit run tiraba
   ModuleNotFoundError 'app'). + chore: .gitignore cubre .env.bak* (backups del .env con secrets).
+- v3.9.2 (FIXES auditoria): A1 -> forex_session_breakout calculaba el Asian range sobre velas de
+  HACE 5 DIAS (tomaba las primeras 32 posicionales de un feed de 5d); ahora filtra por timestamp a
+  la sesion 00:00-08:00 UTC de HOY. La estrategia MAS operada venia disparando contra niveles basura
+  -> su -0.08R no testeaba la hipotesis real. + cambio 24h (closes[-97]) + guard de frescura del
+  cache D1 del regime gate.
+- v3.9.3 (FIXES auditoria): el calendar gate dejo de estar CIEGO (suma ff_calendar_nextweek.xml: el
+  feed thisweek no rota hasta el finde -> 0 eventos futuros -> el gate era no-op, justo el caso
+  USDCAD/BOC) + gap_check revivido + ENABLE_REAL_TRADING hardcodeado de verdad (se leia del env; la
+  barrera real es _is_demo_account) + dashboard mode=ro + LogRedactor compartido + scripts/cot_backfill.py.
+- COT backfill HECHO: 5 años de historia (2340 filas, 9 mercados, 2021-2026) -> habilita COT index a futuro.
+- Scalping confirmado OFF (bot_state.scalping_active=false). OJO/gotcha: bot_state PISA al .env para
+  scalping y bot_mode (prioridad CLI > bot_state > .env); si algo ignora el .env, revisa bot_state.
 - GO_LIVE_RUNBOOK.md: el camino completo a real-money (gates, broker, codigo del dia-D,
   checklist). Real-money sigue HARDCODED bloqueado hasta que /readiness este verde.
 - preflight.py (raiz del repo, NO commiteado): chequea config + secretos + MT5 + el refocus
@@ -121,7 +133,7 @@ sobre los features actuales: ya se probó = callejón sin salida (AUC 0.475 OOS)
 PRIMERA TAREA AL RETOMAR:
 1. python preflight.py (chequea todo: config, secretos, MT5, refocus). Debe decir LISTO.
 2. correr: .\start_bot.ps1 (pide contraseña si STARTUP_PASSWORD_SHA256 está en .env).
-3. verificar en Telegram: /health (debe decir v3.9.1) + /readiness + /exposicion.
+3. verificar en Telegram: /health (debe decir v3.9.3) + /readiness + /exposicion + /scalping_status (inactivo).
    /market tarda ~50s en hardware chico — es normal, no es un bug.
 4. si OK, dejar correr. (Ollama opcional: ollama pull llama3.2:3b / llama3.1.)
 ```

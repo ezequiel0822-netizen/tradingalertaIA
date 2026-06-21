@@ -1,11 +1,11 @@
-# Estado Actual — v3.9.1 (2026-06-18)
+# Estado Actual — v3.9.3 (2026-06-20)
 
 > Reemplaza a [[14 - Estado Actual v2.7.0]] como nota de estado vigente.
 > Detalle por versión en `CHANGELOG.md`; arquitectura en `CONTEXTO_MAESTRO_v3.8.0.md`.
 
 ## Dónde estamos
 
-- **v3.9.1**, **692 tests verdes**, corriendo en la Lenovo contra MT5 demo. **COT collector VIVO** (v3.9.0).
+- **v3.9.3**, **697 tests verdes**, corriendo en la Lenovo contra MT5 demo. **COT collector VIVO + backfill 5yr hecho** (2340 filas). Scalping OFF.
 - **REFOCUS v3.7.0: 100% LA BOLSA** (acciones US + forex + oro). Memecoins CORTADAS
   (`ENABLE_MEMECOIN_ENGINE=false`; el user montó un bot aparte), scalping APAGADO, stock
   alerts ON. **v3.8.0: regime gate vivo** (`ENABLE_REGIME_GATE`, opt-in, downward-only):
@@ -40,6 +40,8 @@
 | backtest acciones | S1 (`stock_historical_loader`, Yahoo D1 ajustado) + S2 (harness `category=stock` + banner survivorship). Código hecho; run real pendiente (Yahoo 429; `stock_backtest_run.json` listo) + S3 |
 | v3.9.0 | **COT collector** (`app/collectors/cot_collector.py` + tabla `cot_snapshots` + `ENABLE_COT_COLLECTOR`): CFTC semanal, 9 mercados FX+oro, SOLO captura para research. Opt-in OFF. **VIVO** |
 | v3.9.1 | Fix dashboard Streamlit (bootstrap `sys.path`, `ModuleNotFoundError 'app'`) + chore `.gitignore .env.bak*` |
+| v3.9.2 | **Bug A1**: forex_session_breakout calculaba el Asian range sobre velas de hace ~5 días → por timestamp a hoy + cambio 24h + guard frescura cache D1 |
+| v3.9.3 | Auditoría: calendar gate dejó de estar ciego (nextweek) + gap_check + real-money hardcoded de verdad + dashboard ro/redactor + `cot_backfill.py`. COT backfill 5yr hecho |
 
 ## Hallazgos clave (honestos)
 
@@ -106,6 +108,15 @@
   modelos; `ENABLE_ML_PREDICTOR` queda OFF. Lección: para ML de trading, k-fold MIENTE → usar TimeSeriesSplit.
 - **v3.9.1 fix:** el dashboard Streamlit arranca de nuevo (bootstrap `sys.path`). + `.gitignore .env.bak*`.
 - **692 tests verdes.** `APP_VERSION=v3.9.1`. Regime gate + COT prendidos en el `.env` del user.
+
+## Cierre de sesión 2026-06-20 (auditoría multi-agente → v3.9.2/v3.9.3 + COT backfill)
+
+- **Super-análisis con 4 agentes** (bugs / edge / fuentes web / seguridad). Edge = **NO HAY** (5ª vía: walk-forward por slice invierte el único +R; es el rally del USD). Seguridad = sólida, sin altos.
+- **v3.9.2:** bug **A1** (forex_session_breakout calculaba el Asian range sobre velas de hace ~5 días — la estrategia más operada disparaba contra niveles basura; fix por timestamp) + cambio 24h + guard de frescura del cache D1.
+- **v3.9.3:** calendar gate dejó de estar **ciego** (`ff_calendar_nextweek.xml`) + gap_check revivido + **real-money hardcoded de verdad** (barrera real = `_is_demo_account`) + dashboard `mode=ro`/LogRedactor + `scripts/cot_backfill.py`.
+- **COT backfill HECHO:** 5 años (2340 filas, 9 mercados, 2021-2026) → habilita COT index/percentiles.
+- **Scalping apagado** (estaba prendido por `bot_state.scalping_active=true` viejo, que pisa al `.env`; ahora false).
+- **697 tests verdes.** `APP_VERSION=v3.9.3` (mejor: sacar el pin del `.env`, que mande el código).
 
 ## Qué sigue
 

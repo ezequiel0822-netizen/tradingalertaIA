@@ -14,9 +14,10 @@
 
 ## 1. Estado actual
 
-- **v3.9.1**, **692 tests verdes** (main, pusheado). v3.9.0 = **COT collector** (CFTC semanal,
-  opt-in OFF, **YA VIVO**): captura posicionamiento institucional para research, primer input
-  fuera del OHLCV. v3.9.1 = fix del dashboard Streamlit. ⚠️ **Fase D: gate de data CRUZADO
+- **v3.9.3**, **697 tests verdes** (main, pusheado). v3.9.0 = **COT collector** (CFTC semanal,
+  opt-in OFF, **YA VIVO** + backfill 5yr hecho): posicionamiento institucional, primer input
+  fuera del OHLCV. **v3.9.1-3 = fixes de la auditoría** (dashboard, **A1** forex_session_breakout,
+  calendar lookahead, real-money hardcoded; ver §2). Scalping confirmado OFF. ⚠️ **Fase D: gate de data CRUZADO
   (403/400) pero el ML resultó CALLEJÓN SIN SALIDA** sobre los features actuales — ver §3.
 - **REFOCUS v3.7.0: 100% LA BOLSA** — memecoins CORTADAS (`ENABLE_MEMECOIN_ENGINE=false`; bot
   aparte), scalping APAGADO, stock alerts ON. **v3.8.0: regime gate vivo** (`ENABLE_REGIME_GATE`,
@@ -57,6 +58,8 @@
 | **backtest acciones** | S1 (`stock_historical_loader`, Yahoo D1 ajustado) + S2 (harness `category=stock` + banner survivorship). Código hecho; run real PENDIENTE (Yahoo 429). `stock_backtest_run.json` + comando listos. S3 pendiente |
 | **v3.9.0** | **COT collector** (`app/collectors/cot_collector.py` + tabla `cot_snapshots` + `ENABLE_COT_COLLECTOR`): CFTC semanal, 9 mercados FX+oro por `cftc_contract_market_code`, SOLO captura para research. Opt-in OFF, soft-fail. **YA VIVO** en la Lenovo |
 | **v3.9.1** | Fix dashboard Streamlit (bootstrap `sys.path`, tiraba `ModuleNotFoundError 'app'`) + chore `.gitignore .env.bak*` (backups del `.env` con secrets) |
+| **v3.9.2** | **Bug A1**: `forex_session_breakout` calculaba el Asian range sobre velas de hace ~5 días (primeras 32 posicionales de un feed de 5d) → ahora por timestamp a 00:00-08:00 UTC de hoy + cambio 24h + guard de frescura del cache D1 del regime gate |
+| **v3.9.3** | Auditoría: calendar gate dejó de estar CIEGO (suma `ff_calendar_nextweek.xml`) + gap_check revivido + real-money hardcoded de verdad (barrera real = `_is_demo_account`) + dashboard `mode=ro`/LogRedactor + `scripts/cot_backfill.py`. **COT backfill HECHO: 5 años (2340 filas)** |
 
 (Detalle completo en `CHANGELOG.md`.)
 
@@ -160,7 +163,7 @@ Abrí Claude Code en `C:\Users\LENOVO\tradingalertaIA` y pegá esto como primer 
 
 ```
 Retomamos Trading Alert AI (bot de trading algorítmico LOCAL, Python 3.12, Windows).
-Estado: v3.9.1, main, 692 tests verdes, corriendo en la Lenovo vía .\start_bot.ps1.
+Estado: v3.9.3, main, 697 tests verdes, corriendo en la Lenovo vía .\start_bot.ps1.
 REFOCUS: 100% LA BOLSA (acciones+forex+oro); memecoins CORTADAS (bot aparte), scalping
 APAGADO. Protecciones: calendar gate, cap USD, exit shadow; regime gate + COT collector VIVOS.
 
@@ -173,7 +176,7 @@ Reglas inamovibles: real-money BLOQUEADO (ENABLE_REAL_TRADING=false HARDCODED) h
 que /readiness esté verde — el user ya lo pidió 3+ veces, la respuesta es el runbook,
 no el flag; order_send solo en mt5_demo_trader.py; LLM/ML SUBTRACTIVOS; los gates vivos
 (calendar/cap USD/regime) son DOWNWARD-ONLY (solo bajan a paper); todo opt-in OFF +
-soft-fail; mantener 692 tests verdes; al tocar Settings sincronizar los _settings() de
+soft-fail; mantener 697 tests verdes; al tocar Settings sincronizar los _settings() de
 test_score y test_alert_rules; versionado patch/minor sin saltos. El backtest (app/backtest/)
 escribe SOLO en backtest_*, NO cuenta para /readiness ni Fase D, no toca el ciclo vivo.
 NO inventar edge artificial (curve-fitting): el edge se descubre, no se inyecta.

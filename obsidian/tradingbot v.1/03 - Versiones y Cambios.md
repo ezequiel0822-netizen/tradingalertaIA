@@ -1,7 +1,7 @@
 ---
 tags: [versiones, historial, evolucion]
-version: v3.9.1
-updated: 2026-06-18
+version: v3.9.3
+updated: 2026-06-20
 ---
 
 # Versiones y Cambios
@@ -59,6 +59,8 @@ updated: 2026-06-18
 | backtest acciones | 2026-06-17 | S1 (`stock_historical_loader`, Yahoo D1 ajustado) + S2 (harness `category=stock` + banner survivorship). Run real pendiente (Yahoo 429; `stock_backtest_run.json` listo) + S3 |
 | **v3.9.0** | **2026-06-18** | **COT collector (`app/collectors/cot_collector.py` + tabla `cot_snapshots` + `ENABLE_COT_COLLECTOR`): CFTC semanal, 9 mercados FX+oro, SOLO captura para research. Opt-in OFF. VIVO** |
 | v3.9.1 | 2026-06-18 | Fix dashboard Streamlit (bootstrap `sys.path`, `ModuleNotFoundError 'app'`) + chore `.gitignore .env.bak*`. **Veredicto Fase D: gate de datos cruzado (403/400) pero ML sin señal forward (CV temporal 0.475 OOS) → NO construir** |
+| v3.9.2 | 2026-06-18 | **Auditoría: bug A1** — `forex_session_breakout` calculaba el Asian range sobre velas de hace ~5 días (32 primeras posicionales de un feed de 5d); fix por timestamp a 00:00-08:00 UTC de hoy. + cambio 24h (`closes[-97]`) + guard de frescura del cache D1 del regime gate |
+| v3.9.3 | 2026-06-20 | **Auditoría:** calendar gate dejó de estar ciego (`ff_calendar_nextweek.xml`) + `gap_check` revivido + `ENABLE_REAL_TRADING` hardcoded de verdad (barrera real = `_is_demo_account`) + dashboard `mode=ro`/LogRedactor + `scripts/cot_backfill.py`. **COT backfill HECHO: 5 años, 2340 filas** |
 
 ---
 

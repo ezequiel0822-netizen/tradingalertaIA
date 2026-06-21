@@ -1,4 +1,4 @@
-# CONTEXTO MAESTRO — Trading Alert AI v3.8.0 (+ addendum v3.9.0–v3.9.1 al final)
+# CONTEXTO MAESTRO — Trading Alert AI v3.8.0 (+ addendum v3.9.0–v3.9.3 al final)
 
 > Referencia de arquitectura/schema **vigente** (reemplaza a `CONTEXTO_MAESTRO_v3.6.0.md`,
 > que queda como base histórica). Local, Python 3.12, Windows + PowerShell + venv.
@@ -140,7 +140,7 @@ data; cuando tenga historia se re-evalúa el ML con features de COT (mirando Tim
 
 ## 9. Estado + gates de roadmap
 
-- **Hoy:** v3.9.1, **692 tests**, demo ~$88.6k (plano). Features-coverage **CRUZADO 403/400** —
+- **Hoy:** v3.9.3, **697 tests**, demo ~$88.6k (plano). Features-coverage **CRUZADO 403/400** —
   gate de Fase D cumplido, pero el ML resultó sin señal (ver §8).
 - **Backtest de acciones:** S1 + S2 HECHOS; falta el run real (Yahoo 429; `stock_backtest_run.json`
   listo) + S3.
@@ -165,12 +165,12 @@ Comandos Telegram: `/health`, `/expectancy`, `/edge`, `/performance`, `/readines
 - Bot: `cd <ruta>\tradingalertaIA` + **`.\start_bot.ps1`**. Chequeo previo: **`python preflight.py`**.
 - Harness forex: `$env:ENABLE_BACKTEST_HARNESS='true'` + `python -m app.backtest.replay_harness --config <run.json> --report`.
 - Loader de acciones: `$env:ENABLE_BACKTEST_HARNESS='true'` + `python -m app.backtest.stock_historical_loader`.
-- Tests: `.\.venv\Scripts\python.exe -m pytest -q` (debe dar **692 verdes**). OJO: con `| tail`
+- Tests: `.\.venv\Scripts\python.exe -m pytest -q` (debe dar **697 verdes**). OJO: con `| tail`
   el exit code es del pipe — verificar el CONTEO, no el exit.
 - Dashboard: `.\.venv\Scripts\streamlit run app/dashboard/streamlit_app.py --server.port 27333`
   → `localhost:27333` (abrir on-demand, cerrar al terminar — no dejarlo 24/7).
 
-## 12. Addendum v3.9.0–v3.9.1
+## 12. Addendum v3.9.0–v3.9.3
 
 **v3.9.0 — COT collector** (`app/collectors/cot_collector.py`). Pull semanal del Commitments of
 Traders de la CFTC vía la Socrata Open Data API (`publicreporting.cftc.gov/resource/6dca-aqww.json`,
@@ -191,3 +191,22 @@ Legacy Futures-Only). 9 mercados (EUR/GBP/JPY/AUD/CAD/CHF/NZD/US Dollar Index/Go
 **Fase D — veredicto (18-jun):** gate de datos cumplido (403/400) pero el ML sobre los features
 actuales NO tiene señal forward (CV temporal AUC 0.475 OOS; ver §8). NO construir el ensemble
 LightGBM/RF; re-evaluar solo cuando cambien los INPUTS (features de COT, mirando TimeSeriesSplit).
+
+**v3.9.2 — fixes de la auditoría.** (1) **Bug A1**: `forex_session_breakout` calculaba el Asian
+range sobre las primeras 32 velas POSICIONALES de un feed de 5 días (= niveles de hace ~5 días);
+ahora filtra por TIMESTAMP a la sesión 00:00-08:00 UTC de hoy. Era la estrategia más operada.
+(2) `forex_collector` cambio 24h: `closes[-97]` (96 velas de 15m), antes `-27` (~6.5h). (3) Regime
+gate: guard de frescura del cache D1 (si la última vela > 10 días → soft-allow + warning; el cache
+lo refrescan solo los loaders de backtest).
+
+**v3.9.3 — fixes de la auditoría.** (1) `economic_calendar_collector` junta `thisweek`+`nextweek`
+(el gate quedaba CIEGO cuando el feed no rotaba → 0 eventos futuros). (2) `data_quality.gap_check`
+revivido (el loop terminaba en `pass`; usaba `chain` wildcard que no matchea). (3) `enable_real_trading`
+**hardcoded False de verdad** en `settings.py` (se leía del env; la barrera real es `_is_demo_account`).
+(4) Dashboard abre la DB en `mode=ro` + LogRedactor (`log_redactor.install_log_redactor`, compartido).
+(5) `scripts/cot_backfill.py`: baja la historia del COT. **Backfill HECHO: 5 años, 2340 filas, 9
+mercados (2021-2026)** → habilita COT index a futuro.
+
+**Scalping:** confirmado OFF (`bot_state.scalping_active=false`). **Gotcha:** `resolve_scalping_state`
+y `resolve_bot_mode` dan prioridad `CLI > bot_state > .env` — un toggle de Telegram persistido en
+`bot_state` PISA al `.env`. Si el scalping/mode parece ignorar el `.env`, revisar `bot_state`.
