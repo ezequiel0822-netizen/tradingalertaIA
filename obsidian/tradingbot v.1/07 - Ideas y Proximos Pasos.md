@@ -1,13 +1,13 @@
 ---
 tags: [roadmap, ideas, futuro]
-version: v2.9.1
-updated: 2026-06-04
+version: v3.9.3
+updated: 2026-06-21
 ---
 
 # Ideas y Proximos Pasos
 
-> [!info] Estado actual v2.9.1
-> Bot mide la verdad neta de costos + tiene la herramienta de edge sliceado (`/edge`, v2.8.0) y el andamiaje ML (XGBoost dormido, v2.9.0). Toda estrategia sigue R negativo: falta **DATA**, no codigo. Phase 6+ requiere ≥1 strategy con R+ neto. Real-money bloqueado.
+> [!info] Estado actual v3.9.3 (2026-06-21) — ver [[24 - Estado Actual]]
+> Refocus 100% a la bolsa (memecoins cortadas, scalping off). Protecciones vivas downward-only (calendar gate, cap USD, regime gate) + COT collector vivo (+ backfill 5yr). El gate de data de Fase D se CRUZO (403/400) pero NO destrabo edge: el ML sobre los features actuales NO tiene senial forward (CV temporal 0.475 OOS) y el **experimento de COT del 21-jun** (`scripts/cot_ml_experiment.py`) tampoco la levanto sobre la barra (corte FX/oro 0.607 OOS pero dentro del ruido en ~1 mes). `ENABLE_ML_PREDICTOR` sigue OFF → re-correr cuando el COT acumule mas meses. NO hay edge probado (5+ vias). Real-money BLOQUEADO. Las ideas viejas de abajo quedan como backlog historico.
 
 ---
 

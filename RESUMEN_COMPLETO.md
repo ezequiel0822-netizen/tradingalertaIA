@@ -1,11 +1,11 @@
 # RESUMEN COMPLETO — Trading Alert AI (todo el proyecto en un documento)
 
-> **Actualizado: 2026-06-11.** Este documento es autocontenido: leyéndolo, cualquier
+> **Actualizado: 2026-06-21.** Este documento es autocontenido: leyéndolo, cualquier
 > persona (o cualquier sesión nueva de Claude, con el modelo que sea) entiende QUÉ es
 > el proyecto, DÓNDE está, POR QUÉ está así, y QUÉ sigue. Para profundizar:
-> `CONTEXTO_MAESTRO_v3.5.0.md` (arquitectura), `CHANGELOG.md` (historia por versión),
+> `CONTEXTO_MAESTRO_v3.8.0.md` (arquitectura vigente), `CHANGELOG.md` (historia por versión),
 > `PROXIMOS_PASOS.md` (roadmap + reglas), `GO_LIVE_RUNBOOK.md` (camino a real-money),
-> `HANDOFF.md` (migración de máquina).
+> `HANDOFF.md` (migración de máquina), `MAPA_DE_EDGE_Y_RUTA.md` (la ruta de edge — el porqué).
 
 ---
 
@@ -51,7 +51,7 @@ En una frase: **observa los mercados, apuesta en simulado, ejecuta a demo solo l
 pasa todos los filtros, gestiona y mide cada posición con honestidad brutal, y aprende
 de los resultados — sin tocar jamás dinero real.**
 
-## 2. Estado EXACTO al 17-jun-2026
+## 2. Estado EXACTO al 21-jun-2026
 
 | Qué | Estado |
 |---|---|
@@ -61,9 +61,10 @@ de los resultados — sin tocar jamás dinero real.**
 | Bot | Corriendo en la Lenovo vía **`.\start_bot.ps1`**. Preflight: `python preflight.py` |
 | Balance demo | ~$88,6xx (plano — el dinero real casi no se movió) |
 | Protecciones activas | calendar gate ✓, cap USD \|3\| ✓, cooldown 60 min ✓, exit shadow ✓; **regime gate** + **COT collector** VIVOS (`ENABLE_REGIME_GATE` / `ENABLE_COT_COLLECTOR=true`) |
-| Data hacia Fase D | **CRUZADO: 403/400** trades con features — pero el ML resultó SIN señal (CV temporal AUC 0.475 OOS), ver §3 |
+| Data hacia Fase D | **CRUZADO: 403/400** trades con features — pero el ML resultó SIN señal (CV temporal AUC 0.475 OOS), ver §3 y §2.7 |
+| Experimento COT | **CORRIDO el 21-jun** (`scripts/cot_ml_experiment.py`): features de COT + re-test temporal = **sin señal accionable** (OOS primario 0.533<0.55). ML sigue OFF. Ver §2.7 |
 | Real-money | BLOQUEADO; `/readiness` = NO LISTO |
-| Verdad de fondo | **No hay edge probado** — confirmado 4 vías: backtest D1, diagnóstico vivo (régimen), ML AUC 0.533, ML CV temporal 0.475 OOS |
+| Verdad de fondo | **No hay edge probado** — confirmado 5 vías: backtest D1, diagnóstico vivo (régimen), ML AUC 0.533, ML CV temporal 0.475 OOS, walk-forward por slice; el experimento de COT (21-jun) tampoco lo destrabó |
 
 ## 2.5 Serie v3.6.0 — Backtest Replay Harness — EN CURSO (actualizado 2026-06-14)
 
@@ -159,7 +160,39 @@ COT tenga historia, re-correr el test temporal del ML con features de COT. **NO 
 modelos sobre los features actuales** — ya se probó (AUC 0.475 OOS) = sin señal. Lo aprendido vale
 más que lo que el bot probablemente genere; el edge se DESCUBRE (info nueva), no se inyecta.
 
-**Tests:** 657 (v3.6.0) → 660 (v3.7.0) → 672 (v3.8.0) → 676 (backtest acciones S1-S2) → **692 (v3.9.0 COT)**, todos verdes por conteo.
+**Tests:** 657 (v3.6.0) → 660 (v3.7.0) → 672 (v3.8.0) → 676 (backtest acciones S1-S2) → 692 (v3.9.0 COT) → 694 (v3.9.2) → **697 (v3.9.3)**, todos verdes por conteo.
+
+## 2.7 Experimento de COT — el experimento REAL de Fase D (CORRIDO el 21-jun-2026)
+
+El handoff dejó como "próximo paso real": derivar features de COT (posicionamiento institucional
+CFTC) y re-correr el test temporal del ML. El backfill de 5 años (2340 filas) lo habilitó YA, sin
+esperar. Se hizo vía **`scripts/cot_ml_experiment.py`** (research-only: snapshot read-only de la DB
+viva, anti-lookahead con lag de release CFTC de 3 días — el reporte del martes se publica el viernes;
+mira SIEMPRE el TimeSeriesSplit OOS, nunca el k-fold).
+
+**Dataset:** 642 trades cerrados no-artifact (374 feature-complete con rsi/atr), ventana **2026-05-20
+→ 06-22 (~1 mes)**. COT: 2340 filas, 9 mercados.
+
+| Test (AUC) | n | TimeSeriesSplit OOS |
+|---|---|---|
+| Baseline features actuales (set completo) | 642 | 0.483 |
+| Baseline feature-complete | 374 | 0.509 |
+| + COT (test primario) | 374 | **0.533** (Δ +0.024) |
+| Solo trades FX/oro (sin COT) | 178 | 0.585 |
+| Solo trades FX/oro **+ COT** | 178 | **0.607** |
+
+**Veredicto: SIN SEÑAL accionable** — inconcluso-con-leve-indicio, NO un "no-edge" limpio. El baseline
+reprodujo lo conocido (features actuales sin señal forward; el k-fold shuffle 0.63-0.67 es el espejismo
+in-sample). El COT mete un empujón chico y, por 1ª vez, un corte (FX/oro, n=178) cruza 0.55 — PERO (a)
+el lift propio del COT es solo +0.022 (0.585→0.607), bajo el umbral pre-registrado Δ≥0.03; (b) la ventana
+es ~1 mes con COT semanal → solo ~4-5 lecturas distintas/mercado, así que el modelo agrupa por régimen,
+no usa dinámica de posicionamiento; (c) n=178/5-fold = ~30 trades por fold test → CI del AUC ≈±0.10, así
+que 0.585 vs 0.607 es indistinguible; (d) el gap in-sample/OOS persiste (k-fold 0.73 vs OOS 0.607).
+
+**Decisión (MAPA §9, anti-autoengaño): NO promover, `ENABLE_ML_PREDICTOR` sigue OFF.** El umbral existe
+justo para no perseguir un 0.607-sobre-178-trades-en-1-mes (misma forma del 0.627 que se desplomó a
+0.475). **Re-correr el MISMO script cuando el COT acumule MÁS MESES** (que las features varíen entre
+regímenes). Es el proyecto funcionando como fue diseñado: midió honesto y frenó antes de inyectar edge.
 
 ## 3. La verdad de fondo (la filosofía del proyecto)
 
@@ -175,7 +208,9 @@ más que lo que el bot probablemente genere; el edge se DESCUBRE (info nueva), n
    genio SIN edge. El edge sale de data + research, validado fuera de muestra. **Probado
    18-jun:** con el gate de datos cumplido (403/400), el ML sobre los features actuales dio
    **AUC temporal 0.475 OOS (peor que azar)** — el k-fold 0.69 era peeking in-sample. Sin señal
-   forward; `ENABLE_ML_PREDICTOR` queda OFF.
+   forward; `ENABLE_ML_PREDICTOR` queda OFF. **Probado de nuevo el 21-jun con features de COT** (§2.7):
+   el corte FX/oro nudgea a 0.607 OOS pero dentro del ruido (n=178, ~1 mes) y bajo el umbral → ML sigue
+   OFF; re-correr cuando el COT acumule meses. El edge sale de INFORMACIÓN nueva con muestra, no de modelos.
 4. **Todo se mide antes de creerse** (anti-autoengaño): gates que solo degradan a paper,
    shadow modes que simulan antes de activar, exclusión de artifacts a query-time.
 
@@ -226,15 +261,18 @@ contraseña de Windows + BitLocker.
 
 ## 8. Roadmap — qué sigue y sus GATES (no negociables)
 
-1. **AHORA (dos frentes en paralelo):** (a) **dejar correr** el libro vivo — la data
-   (70→400) es lo único que destraba Fase D; (b) **serie v3.6.0 — Backtest Replay
-   Harness** (ver §2.5): el código activo, para que el backtest descubra/descarte
-   en horas lo que el demo tardaría meses. Van juntos sin pisarse: el harness no
-   toca el ciclo vivo.
+1. **AHORA:** **dejar correr** el libro vivo + que el **COT acumule MÁS MESES** — es lo que
+   destraba el próximo experimento real (el re-test del COT del 21-jun salió sin señal por
+   ventana de ~1 mes; necesita más lecturas distintas). El gate de data de Fase D ya se cruzó
+   (403/400). El Backtest Replay Harness (v3.6.0) ya está HECHO y cubre forex + acciones; se usa
+   para descartar hipótesis offline, no toca el ciclo vivo.
 2. **En días**: `/exit_analysis` con muestra → si delta +R robusto, activar trailing de
    forex CON evidencia (cambiar los params de `lifecycle_manager` para forex).
-3. **Fase D — AdvancedPredictor** (LightGBM+RF+calibración sobre el XGBoost): GATE ≥400
-   trades limpios con features. EXTENDER `ml_predictor.py`, no reemplazar.
+3. **Fase D — AdvancedPredictor**: gate de data CRUZADO (403/400) PERO probada y descartada sobre los
+   features actuales (CV temporal 0.475 OOS) y con features de COT (21-jun, §2.7: 0.607 OOS pero dentro
+   del ruido). **NO construir el ensemble LightGBM/RF; `ENABLE_ML_PREDICTOR` sigue OFF.** Re-evaluar SOLO
+   cuando cambien los INPUTS con muestra (re-correr `scripts/cot_ml_experiment.py` con más meses de COT,
+   mirando TimeSeriesSplit). Si algún día aplica: EXTENDER `ml_predictor.py`, no reemplazar.
 4. **Fase E — StrategyMutator** (auto-evolución: propone variante, paper ≥5 días,
    promueve solo si gana): GATE ≥1 estrategia R+ neto + 3 meses de data.
 5. **Real-money**: `GO_LIVE_RUNBOOK.md` — 5 gates verdes en `/readiness` + broker
@@ -248,7 +286,7 @@ contraseña de Windows + BitLocker.
 - `order_send` SOLO en `mt5_demo_trader.py`. No tocar ese archivo ni `mt5_reconciler.py`.
 - LLM/ML **SUBTRACTIVOS**: vetan/degradan, jamás fuerzan ni habilitan.
 - Todo lo nuevo: **opt-in OFF + soft-fail** (apagado o roto = bot idéntico).
-- **572 tests verdes siempre**. Settings nuevos → sincronizar `_settings()` de
+- **697 tests verdes siempre**. Settings nuevos → sincronizar `_settings()` de
   `test_score` Y `test_alert_rules`. Cada módulo nuevo trae su test file.
 - **Versionado**: patch (v3.5.1) para fixes, minor (v3.6.0) solo features reales,
   sin saltar números.
@@ -293,12 +331,15 @@ peor que azar). El gate de data de Fase D se CRUZÓ (403/400) pero el ML es call
 sobre los features actuales — NO prender ENABLE_ML_PREDICTOR. El edge se DESCUBRE con info nueva
 (COT), no se inyecta. Dejar correr el libro + que el COT acumule.
 
+El experimento de COT YA se corrió (21-jun, scripts/cot_ml_experiment.py): sin señal accionable
+(OOS primario 0.533<0.55; corte FX/oro 0.607 pero dentro del ruido en ~1 mes). ML sigue OFF.
+
 Decime qué querés hacer: (A) revisar la data (/performance, /readiness, /exposicion, /ml_status);
 (B) completar el veredicto del backtest de ACCIONES cuando Yahoo no throttlee (stock_backtest_run.json
-listo + S3); (C) cuando el COT tenga semanas: features de COT a build_ml_dataset + re-correr el test
-temporal del ML (TimeSeriesSplit); (D) instrumentos descorrelacionados / backfill macro (MAPA §8);
-(E) otra cosa. NOTA: regime gate y COT ya VIVOS; NO Fase D / más modelos sobre features actuales
-(ya probado = sin señal, AUC 0.475 OOS).
+listo + S3); (C) RE-correr scripts/cot_ml_experiment.py cuando el COT acumule más meses (que las features
+de COT varíen entre regímenes; mirar SIEMPRE TimeSeriesSplit); (D) instrumentos descorrelacionados /
+backfill macro (MAPA §8); (E) otra cosa. NOTA: regime gate y COT ya VIVOS; NO Fase D / más modelos
+sobre features actuales (ya probado 2 veces = sin señal: AUC 0.475 OOS, y COT 0.607 dentro del ruido).
 ```
 
 ---

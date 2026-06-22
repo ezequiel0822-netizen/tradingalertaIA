@@ -1,8 +1,17 @@
-# Trading Alert AI v3.6.0
+# Trading Alert AI v3.9.3
 
-Trader engine algoritmico **local** (Python 3.12, Windows) que monitorea memecoins, acciones US, forex y oro. Observa datos publicos, guarda historial en SQLite, decide entradas/salidas con un strategy router (5 estrategias swing + 2 de scalping), opera paper trades simulados, aprende del P&L realizado neto de costos, y puede enviar ordenes **solo a cuenta MT5 demo** (con confirmacion manual o auto-confirmacion opt-in).
+Trader engine algoritmico **local** (Python 3.12, Windows) enfocado **100% a LA BOLSA** (acciones US + forex + oro). Observa datos publicos, guarda historial en SQLite, decide entradas/salidas con un strategy router swing, opera paper trades simulados, aprende del P&L realizado neto de costos, y puede enviar ordenes **solo a cuenta MT5 demo** (con confirmacion manual o auto-confirmacion opt-in).
 
-**Real-money trading sigue bloqueado por design (`ENABLE_REAL_TRADING=false`, hardcoded).** El sistema no es recomendacion financiera: filtra candidatos, simula y aprende para revision manual.
+**Real-money trading sigue bloqueado por design.** `enable_real_trading` es `False` HARDCODED en `settings.py` (ya no se lee del env), y la barrera real es `_is_demo_account()` en `mt5_demo_trader.py` (rechaza cualquier cuenta no-demo). El sistema no es recomendacion financiera: filtra candidatos, simula y aprende para revision manual.
+
+## Estado actual (v3.9.3, jun-2026)
+
+- **697 tests verdes.** Corriendo en la Lenovo contra MT5 demo via `.\start_bot.ps1`.
+- **REFOCUS v3.7.0 — 100% LA BOLSA.** Las **memecoins se cortaron** (`ENABLE_MEMECOIN_ENGINE=false`; el user tiene un bot aparte) y el **scalping se apago**. Acciones son paper-only; solo forex/oro ejecutan a MT5 demo.
+- **Protecciones vivas (todas downward-only, solo bajan a paper):** calendar gate, cap de exposicion neta USD, cooldown por simbolo, exit shadow (registrando), **regime gate** (`ENABLE_REGIME_GATE`) y **COT collector** (`ENABLE_COT_COLLECTOR`, + backfill de 5 años / 2340 filas en `cot_snapshots`).
+- **NO hay edge probado** — confirmado por multiples vias independientes (backtest D1, diagnostico vivo = regimen, ML AUC 0.533, CV temporal 0.475 OOS, walk-forward por slice). El gate de data de Fase D se cruzo (403/400) pero NO destrabo edge.
+- **Experimento de COT (2026-06-21, `scripts/cot_ml_experiment.py`):** se derivaron features de COT sobre los 5 anios de historia y se re-corrio el test temporal del ML. Veredicto: **sin senial accionable** (test primario TimeSeriesSplit OOS 0.533 < 0.55; corte FX/oro 0.585→0.607 pero dentro del ruido en n=178 sobre ~1 mes). `ENABLE_ML_PREDICTOR` sigue OFF; re-correr el script cuando el COT acumule mas meses.
+- Lo mas valioso ahora: **dejar correr el libro vivo + que el COT acumule** (es lo que destraba el proximo experimento real). El edge se DESCUBRE (informacion nueva), no se inyecta.
 
 ## Que hace
 
@@ -49,7 +58,7 @@ Copia `.env.example` como referencia y pon los valores reales solo en `.env`. Va
 # Obligatorias
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_CHAT_ID=
-APP_VERSION=v2.9.0
+# APP_VERSION: NO pinear (el default vive en settings.py = v3.9.3). Si se pinea, pisa al codigo.
 
 # MT5 (read + demo). Credenciales reales SOLO en tu .env.
 ENABLE_MT5_READER=true
@@ -70,9 +79,21 @@ ENABLE_AUTO_CONFIRM_DEMO=false
 ENABLE_REAL_TRADING=false
 DEMO_ALLOWED_SYMBOLS=EURUSD,XAUUSD
 
-# Scalping engine (thread dedicado, opt-in)
+# Scalping engine (thread dedicado, opt-in) — APAGADO en el refocus
 ENABLE_SCALPING_ENGINE=false
 SCALPING_ALLOWED_SYMBOLS=EURUSD,GBPUSD
+
+# Refocus v3.7.0: 100% LA BOLSA (memecoins cortadas, stock alerts on)
+ENABLE_MEMECOIN_ENGINE=false
+ENABLE_STOCK_TELEGRAM=true
+
+# Protecciones v3.5.0/v3.8.0 (downward-only, opt-in) + COT collector v3.9.0
+ENABLE_CALENDAR_GATE=true
+ENABLE_USD_EXPOSURE_CAP=true
+STRATEGY_SYMBOL_COOLDOWN_MINUTES=60
+ENABLE_EXIT_SHADOW=true
+ENABLE_REGIME_GATE=true
+ENABLE_COT_COLLECTOR=true
 
 # Aprendizaje honesto v2.7.0 (defaults ON)
 ENABLE_STRATEGY_PROMOTION_GATE=true
@@ -197,7 +218,7 @@ streamlit run app/dashboard/streamlit_app.py
 - **Position Sizer**: `(balance x risk_pct) / |entry - stop|`.
 - **MT5 Reader** (read-only): precios reales de MT5 para gestionar posiciones forex/oro; soft-fail a yfinance si MT5 no esta.
 - **Reportes Telegram** automaticos al abrir/cerrar trades.
-- Memecoins en **modo lab**: alimentan el aprendizaje pero no van a Telegram ni a MT5 (activar Telegram con `ENABLE_MEMECOIN_TELEGRAM=true`).
+- Memecoins **CORTADAS** desde el refocus v3.7.0 (`ENABLE_MEMECOIN_ENGINE=false`): el ciclo ni las colecta (el user tiene un bot aparte). El motor sigue en el código por si se reactiva.
 
 ## MT5 demo orders (Phase 5, v2.5.x)
 
@@ -255,7 +276,7 @@ Capa de Machine Learning que COMPLEMENTA las reglas (no las reemplaza): predice 
 - **Integracion**: con `ENABLE_ML_PREDICTOR=true` y muestra suficiente (`ML_GATE_MIN_SAMPLES`, default 400), el gate consulta la confianza: >0.65 pasa; 0.50-0.65 pasa con lot a la mitad; <0.50 queda paper-only. Comando **`/ml_status`**.
 - **Salvaguardas (no romper nada)**: master switch OFF por default; modo degradado (sin modelo, <100 muestras, o xgboost ausente) devuelve 0.5 neutral y el sistema se comporta EXACTAMENTE igual que antes; el ML jamas causa un order_send, solo puede prevenirlo.
 
-Encuadre honesto: con la data actual (189 trades) el ML esta **DORMIDO** — no toca ninguna decision. No crea edge; es andamiaje listo para cuando haya muestra. Ademas `rsi`/`atr` al entry no se persisten hoy (quedan NaN); para features tecnicas reales hay que capturarlas al crear el trade (mejora futura). Requiere `xgboost` + `scikit-learn`.
+Encuadre honesto: el ML esta **DORMIDO** y `ENABLE_ML_PREDICTOR` sigue OFF — no toca ninguna decision. No crea edge; es andamiaje. **Actualizado (v3.x):** `rsi`/`atr` al entry SI se persisten desde v2.11.0; el gate de data de Fase D se cruzo (403/400), pero el ML sobre los features actuales NO mostro senial forward (CV temporal AUC 0.475 OOS) y el experimento de COT del 21-jun tampoco la levanto sobre la barra (`scripts/cot_ml_experiment.py`, ver "Estado actual"). Se re-evalua cuando el COT acumule mas meses. Requiere `xgboost` + `scikit-learn`.
 
 ## Base de datos
 
@@ -274,12 +295,13 @@ SQLite en `SQLITE_PATH` (default `trading_alert_ai.db` en la raiz). Mantenela en
 - `app/dashboard`: Streamlit.
 - `app/intelligence` + `app/config` + `app/utils`: Claude/macro/calidad, settings, utilidades.
 - `obsidian/tradingbot v.1`: memoria del proyecto.
-- `tests`: 457 tests.
+- `scripts`: herramientas manuales de research (`cot_backfill.py`, `cot_ml_experiment.py`).
+- `tests`: 697 tests.
 
 ## Tests
 
 ```powershell
-python -m pytest tests/ -q     # 457 verdes
+python -m pytest tests/ -q     # 697 verdes
 ```
 
 ## Advertencia

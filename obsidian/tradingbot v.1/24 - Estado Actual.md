@@ -1,4 +1,4 @@
-# Estado Actual — v3.9.3 (2026-06-20)
+# Estado Actual — v3.9.3 (2026-06-21)
 
 > Reemplaza a [[14 - Estado Actual v2.7.0]] como nota de estado vigente.
 > Detalle por versión en `CHANGELOG.md`; arquitectura en `CONTEXTO_MAESTRO_v3.8.0.md`.
@@ -118,13 +118,29 @@
 - **Scalping apagado** (estaba prendido por `bot_state.scalping_active=true` viejo, que pisa al `.env`; ahora false).
 - **697 tests verdes.** `APP_VERSION=v3.9.3` (mejor: sacar el pin del `.env`, que mande el código).
 
+## Cierre de sesión 2026-06-21 (experimento de COT — el experimento REAL de Fase D)
+
+- Se corrió **`scripts/cot_ml_experiment.py`** (research-only, snapshot read-only de la DB viva,
+  anti-lookahead con lag de release CFTC de 3 días): features de COT + re-test temporal del ML.
+  Habilitado por el backfill de 5 años, sin esperar acumulación.
+- **Veredicto: SIN SEÑAL accionable** (inconcluso-con-leve-indicio, NO un "no-edge" limpio). Dataset
+  642 trades (374 feature-complete), ventana ~1 mes. Baseline OOS 0.48-0.51 (reprodujo lo conocido).
+  Test primario +COT: 0.509→**0.533** (Δ +0.024, bajo umbral OOS>0.55 ∧ Δ≥0.03). Corte FX/oro (n=178):
+  0.585→**0.607** — 1ª vez que un corte cruza 0.55, PERO el lift del COT (+0.022) está dentro del ruido
+  (CI ≈±0.10), la ventana es ~1 mes con COT semanal (~4-5 lecturas distintas/mercado → agrupa por
+  régimen, no usa dinámica) y el gap in-sample/OOS persiste (k-fold 0.73 vs OOS 0.607).
+- **Decisión:** NO promover, `ENABLE_ML_PREDICTOR` sigue OFF; re-correr el script cuando el COT acumule
+  MÁS MESES. El script quedó en `main` (PR #2). El bot **no se toca** — dejarlo correr es justo lo que
+  destraba el próximo experimento. 697 tests (sin cambios; el script es herramienta manual).
+
 ## Qué sigue
 
-1. **Dejar correr el libro vivo + que el COT acumule semanas** (lo de mayor valor ahora).
+1. **Dejar correr el libro vivo + que el COT acumule MÁS MESES** (lo de mayor valor ahora — es lo que
+   destraba el re-test del COT, que hoy salió sin señal por ventana de ~1 mes).
 2. Regime gate y COT ya VIVOS (`ENABLE_REGIME_GATE` / `ENABLE_COT_COLLECTOR=true`).
 3. **Completar el veredicto del backtest de acciones** cuando Yahoo no throttlee
    (`stock_backtest_run.json` + comando listos) + S3.
-4. **Cuando el COT tenga historia:** agregar features de COT a `build_ml_dataset` y re-correr el
-   test temporal del ML (TimeSeriesSplit). Solo si sube de ~0.55 OOS hay señal.
-5. **NO Fase D / más modelos** sobre los features actuales (ya probado = sin señal). Fase E con edge + 3 meses.
+4. **RE-correr `scripts/cot_ml_experiment.py`** cuando el COT tenga más meses (ya se probó el 21-jun =
+   inconcluso, 0.607 dentro del ruido). Mirar SIEMPRE TimeSeriesSplit. Solo si sube robusto de ~0.55 hay señal.
+5. **NO Fase D / más modelos** sobre los features actuales (ya probado 2 veces = sin señal). Fase E con edge + 3 meses.
 6. Real-money: `GO_LIVE_RUNBOOK.md` cuando `/readiness` esté verde, con decisión deliberada.
