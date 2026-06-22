@@ -1,5 +1,13 @@
 # Changelog
 
+## Research — Experimento de COT (2026-06-21, sin bump de versión)
+
+**Se corrió el experimento REAL de Fase D: features de COT + re-test temporal del ML.** Es tooling de research (no cambia el comportamiento del bot, no prende flags), por eso no sube versión — igual que `cot_backfill.py`.
+
+- **`scripts/cot_ml_experiment.py`**: research-only. Hace un snapshot read-only de la DB viva (backup API de sqlite → cero contención con el bot, dado el historial de "database is locked"), reproduce el baseline (split 80/20, k-fold shuffle = espejismo in-sample, TimeSeriesSplit OOS = el honesto) y deriva features de COT con rigor anti-lookahead (índice COT/Williams + percentil + net/OI + cambio, normalizados sobre los 5 años de historia, **con lag de release CFTC de 3 días** — el reporte del martes se publica el viernes; usarlo antes sería el mismo lookahead que arreglamos en v3.9.3). Re-corre el MISMO TimeSeriesSplit con las features de COT y da veredicto. Incluye fix de UTF-8 en stdout (la consola Windows cp1252 reventaba al imprimir Δ).
+- **Veredicto: SIN SEÑAL accionable.** Dataset 642 trades (374 feature-complete), ventana ~1 mes. Baseline OOS 0.48-0.51 (sin señal forward; el k-fold 0.63-0.67 es peeking). Test primario +COT: 0.509 → 0.533 (Δ +0.024, bajo el umbral pre-registrado OOS>0.55 ∧ Δ≥0.03). Corte FX/oro (n=178): 0.585 → 0.607 — 1ª vez que un corte cruza 0.55, pero el lift propio del COT (+0.022) está dentro del ruido (CI ≈±0.10), la ventana es ~1 mes con COT semanal (~4-5 lecturas distintas/mercado → agrupa por régimen) y el gap in-sample/OOS persiste.
+- **Decisión:** NO promover, `ENABLE_ML_PREDICTOR` sigue OFF. Re-correr el script cuando el COT acumule más meses. Es la 5ª-6ª confirmación de que no hay edge accionable; el proyecto frenó antes de inyectar edge (MAPA §9). Detalle en `RESUMEN_COMPLETO.md` §2.7. Sin cambios en tests (697); el script no tiene cobertura propia (herramienta manual, como `cot_backfill.py`).
+
 ## Trading Alert AI v3.9.3
 
 **Más fixes de la auditoría multi-agente** (los 3 agentes que faltaban — edge / fuentes web / seguridad — completaron):

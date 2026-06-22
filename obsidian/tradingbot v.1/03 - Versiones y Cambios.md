@@ -1,13 +1,15 @@
 ---
 tags: [versiones, historial, evolucion]
 version: v3.9.3
-updated: 2026-06-20
+updated: 2026-06-21
 ---
 
 # Versiones y Cambios
 
 > [!info] Trayectoria
 > 2 semanas de evolucion desde un MVP read-only hasta un trader engine con learning honesto basado en P&L realizado neto de costos.
+
+> [!warning] Las tablas de abajo llegan hasta v2.7.x (historico). Para v2.8.0 → v3.9.3 + el experimento de COT (21-jun), la historia canonica esta en `CHANGELOG.md` y el estado vigente en [[24 - Estado Actual]]. Resumen v3: refocus 100% a la bolsa (memecoins cortadas), regime gate + COT collector vivos, backtest replay harness, y NO hay edge probado (confirmado 5+ vias; el experimento de COT del 21-jun tampoco lo destrabo → ML sigue OFF).
 
 ---
 

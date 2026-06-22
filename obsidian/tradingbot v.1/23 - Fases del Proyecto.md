@@ -279,9 +279,9 @@ Bug fixes post-perdida de $12k:
 
 ## Resumen 3 lineas
 
-1. **Hoy estamos en:** v3.6.0 (serie v3 completa + Backtest Replay Harness offline). 657 tests verdes. Bot mide la verdad neta de costos en vivo y en backtest.
-2. **Siguiente paso:** dejar correr el libro vivo (data Fase D 70→400) + avanzar el harness con COT / instrumentos descorrelacionados (`MAPA_DE_EDGE_Y_RUTA.md`).
-3. **Bloqueado:** Phase 6 / Fase E requiere ≥1 strategy con R+ neto + 3 meses. El backtest v3.6.0 confirmó que no hay edge en estas estrategias sobre D1. Real-money HARDCODED OFF.
+1. **Hoy estamos en:** v3.9.3 (refocus a la bolsa + regime gate + COT collector vivos + backtest harness forex/acciones). 697 tests verdes. Bot mide la verdad neta de costos en vivo y en backtest. Estado vigente: [[24 - Estado Actual]].
+2. **Siguiente paso:** dejar correr el libro vivo + que el COT acumule MÁS MESES. El gate de data de Fase D ya se CRUZÓ (403/400) pero NO destrabó edge: el ML sobre los features actuales (CV temporal 0.475 OOS) y el experimento de COT del 21-jun (`scripts/cot_ml_experiment.py`, corte FX/oro 0.607 OOS pero dentro del ruido en ~1 mes) salieron SIN señal. `ENABLE_ML_PREDICTOR` OFF; re-correr el script con más COT (`MAPA_DE_EDGE_Y_RUTA.md`).
+3. **Bloqueado:** Phase 6 / Fase E requiere ≥1 strategy con R+ neto + 3 meses. El backtest confirmó que no hay edge en estas estrategias sobre D1; no hay edge probado (5+ vías). Real-money HARDCODED OFF.
 
 ---
 

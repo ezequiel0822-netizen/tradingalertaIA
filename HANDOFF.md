@@ -100,6 +100,10 @@ QUÉ SE CONSTRUYÓ (serie v3, todo pusheado):
   USDCAD/BOC) + gap_check revivido + ENABLE_REAL_TRADING hardcodeado de verdad (se leia del env; la
   barrera real es _is_demo_account) + dashboard mode=ro + LogRedactor compartido + scripts/cot_backfill.py.
 - COT backfill HECHO: 5 años de historia (2340 filas, 9 mercados, 2021-2026) -> habilita COT index a futuro.
+- EXPERIMENTO DE COT CORRIDO (21-jun, scripts/cot_ml_experiment.py, research-only, sin bump): features de
+  COT + re-test temporal del ML. Veredicto SIN SEÑAL accionable (test primario OOS 0.533<0.55; corte FX/oro
+  n=178 0.585->0.607 pero dentro del ruido en ~1 mes, COT semanal = ~4-5 lecturas distintas). ENABLE_ML_
+  PREDICTOR sigue OFF; re-correr el script cuando el COT acumule mas meses. Detalle en RESUMEN_COMPLETO §2.7.
 - Scalping confirmado OFF (bot_state.scalping_active=false). OJO/gotcha: bot_state PISA al .env para
   scalping y bot_mode (prioridad CLI > bot_state > .env); si algo ignora el .env, revisa bot_state.
 - GO_LIVE_RUNBOOK.md: el camino completo a real-money (gates, broker, codigo del dia-D,
@@ -124,10 +128,11 @@ ContinuousLearner OFF en la Lenovo (límite de hardware).
 PRÓXIMOS PASOS: 1) DEJAR CORRER el libro vivo + que el COT acumule semanas (lo de mayor valor
 ahora); 2) regime gate y COT ya están VIVOS (ENABLE_REGIME_GATE / ENABLE_COT_COLLECTOR=true en
 la Lenovo); 3) completar el veredicto del backtest de ACCIONES cuando Yahoo deje de throttlear
-(stock_backtest_run.json + comando listos) y cerrar S3; 4) cuando el COT tenga historia: agregar
-features de COT a build_ml_dataset y RE-CORRER el test temporal del ML (TimeSeriesSplit) — si
-sube de ~0.55 hay señal, si no, seguir esperando inputs nuevos. NO construir Fase D / más modelos
-sobre los features actuales: ya se probó = callejón sin salida (AUC 0.475 OOS); 5) Fase E (edge +
+(stock_backtest_run.json + comando listos) y cerrar S3; 4) features de COT YA se
+probaron (21-jun, scripts/cot_ml_experiment.py): inconcluso (OOS primario 0.533<0.55; corte FX/oro 0.607
+pero dentro del ruido en ~1 mes). RE-CORRER el MISMO script cuando el COT acumule MÁS MESES (que las
+features varíen entre regímenes), mirando TimeSeriesSplit — si sube robusto de ~0.55 hay señal. NO
+construir Fase D / más modelos sobre los features actuales: ya se probó 2 veces = sin señal (AUC 0.475 OOS); 5) Fase E (edge +
 3 meses) sigue lejos; 6) real-money: GO_LIVE_RUNBOOK.md cuando /readiness verde (sigue BLOQUEADO).
 
 PRIMERA TAREA AL RETOMAR:

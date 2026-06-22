@@ -210,3 +210,11 @@ mercados (2021-2026)** → habilita COT index a futuro.
 **Scalping:** confirmado OFF (`bot_state.scalping_active=false`). **Gotcha:** `resolve_scalping_state`
 y `resolve_bot_mode` dan prioridad `CLI > bot_state > .env` — un toggle de Telegram persistido en
 `bot_state` PISA al `.env`. Si el scalping/mode parece ignorar el `.env`, revisar `bot_state`.
+
+**Research — Experimento de COT (21-jun, `scripts/cot_ml_experiment.py`, sin bump de versión):** se
+corrió el experimento REAL de Fase D (features de COT + re-test temporal del ML), habilitado por el
+backfill de 5 años. Research-only: snapshot read-only de la DB viva, anti-lookahead con lag de release
+CFTC de 3 días, mira SIEMPRE TimeSeriesSplit OOS. **Veredicto: sin señal accionable** — test primario
+(n=374) OOS 0.509→0.533 (Δ +0.024, bajo umbral); corte FX/oro (n=178) 0.585→0.607 (1ª vez sobre 0.55
+pero dentro del ruido en ~1 mes, COT semanal = ~4-5 lecturas distintas). `ENABLE_ML_PREDICTOR` sigue
+OFF; re-correr el script cuando el COT acumule más meses. Detalle en `RESUMEN_COMPLETO.md` §2.7.
