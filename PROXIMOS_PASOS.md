@@ -86,6 +86,18 @@ confirma que NO hay edge. → **NO construir Fase D / más modelos sobre los fea
 (`ENABLE_ML_PREDICTOR` queda en false). El edge se descubre con INFORMACIÓN nueva (COT), no con
 sofisticación.
 
+**ACTUALIZACIÓN 2026-06-21 — el experimento de COT YA se corrió** (`scripts/cot_ml_experiment.py`,
+research-only, snapshot read-only + anti-lookahead con lag de release CFTC de 3 días). Dataset: 642
+trades cerrados (374 feature-complete), ventana ~1 mes (2026-05-20→06-22). **Veredicto: SIN SEÑAL
+accionable, pero inconcluso-con-leve-indicio** (NO un "no-edge" limpio). Test primario (n=374):
+baseline OOS 0.509 → +COT **0.533** (Δ +0.024, por debajo del umbral pre-registrado OOS>0.55 ∧ Δ≥0.03).
+Corte focalizado (solo trades FX/oro con COT, n=178): 0.585 → **0.607** — 1ª vez que un corte cruza
+0.55, PERO el lift propio del COT es solo +0.022 (dentro del ruido en n=178/5-fold), la ventana es ~1
+mes con COT semanal (solo ~4-5 lecturas distintas/mercado → agrupa por régimen, no usa dinámica de
+posicionamiento), y el gap in-sample/OOS persiste (k-fold 0.73 vs OOS 0.607). **Decisión: NO promover,
+`ENABLE_ML_PREDICTOR` sigue OFF; re-correr el MISMO script cuando el COT acumule MÁS MESES.** El script
+quedó commiteado y es reproducible. Es el proyecto funcionando como fue diseñado (MAPA §9).
+
 ## 4. Lo que FALTA (roadmap, en orden de valor)
 
 ### ✅ Fase C — ContinuousLearner *(HECHO — v3.2.0)*
@@ -103,9 +115,12 @@ sofisticación.
   data viva. **CV temporal AUC 0.475 OOS (peor que azar)** — el k-fold 0.69 / split simple 0.627
   eran peeking in-sample. NO hay señal forward. **NO construir el ensemble (LightGBM + RandomForest)
   ni prender `ENABLE_ML_PREDICTOR`** — más modelos no extraen señal inexistente (anti-lista MAPA §5).
-- **Cuándo re-evaluar:** SOLO cuando cambien los INPUTS (ej. features de COT, con semanas de
-  historia) → agregar a `build_ml_dataset` y re-correr el test mirando **TimeSeriesSplit** (no
-  k-fold). Si sube de ~0.55 OOS, ahí recién hay algo.
+- **COT features YA se probó (21-jun, `scripts/cot_ml_experiment.py`):** inconcluso. Test primario
+  OOS 0.533<0.55; corte FX/oro 0.585→0.607 pero el lift del COT (+0.022) está dentro del ruido y la
+  ventana es ~1 mes (COT semanal → ~4-5 lecturas/mercado). NO alcanza la barra → ML sigue OFF.
+- **Cuándo re-evaluar:** **re-correr el MISMO script `scripts/cot_ml_experiment.py`** cuando el COT
+  acumule MÁS MESES (que las features varíen entre regímenes). Mirar **TimeSeriesSplit** (no k-fold).
+  Solo si el corte FX/oro sube robustamente sobre ~0.55 con Δ≥0.03 del COT, ahí recién hay algo.
 - **Archivos (si algún día aplica):** EXTENDER `app/learning/ml_predictor.py` (22 tests), NO reemplazar.
 
 ### Fase E — StrategyMutator *(REQUIERE EDGE + 3 MESES DATA)*

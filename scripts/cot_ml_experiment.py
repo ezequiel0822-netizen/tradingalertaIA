@@ -42,6 +42,12 @@ import pandas as pd
 # Bootstrap: raíz del repo en sys.path para 'import app...'.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+# La consola de Windows usa cp1252 y no encodea Δ/—/etc. Forzamos UTF-8 en stdout.
+try:
+    sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
+except Exception:  # pragma: no cover
+    pass
+
 try:
     import xgboost as xgb
     from sklearn.metrics import roc_auc_score
