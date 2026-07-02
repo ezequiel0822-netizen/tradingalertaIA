@@ -514,7 +514,7 @@ Subida estimada: {gain}
 Caida estimada: {loss}
 Confianza: {confidence}/100
 
-Lectura: {'candidato fuerte para revisar' if self._as_float(row.get('latest_estimated_gain_pct')) >= self._threshold_for(category) else 'solo watchlist por ahora'}.
+Lectura: {'candidato fuerte para revisar' if (self._as_float(row.get('latest_estimated_gain_pct')) or 0.0) >= self._threshold_for(category) else 'solo watchlist por ahora'}.
 {DISCLAIMER}"""
 
     def config_message(self) -> str:

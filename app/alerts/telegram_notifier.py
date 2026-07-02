@@ -7,6 +7,27 @@ from app.config.settings import Settings
 
 logger = logging.getLogger(__name__)
 
+# Limite duro de Telegram por mensaje. Mensajes mas largos devuelven 400 y ANTES
+# se perdian enteros (ej. /edge con muchos slices) — v3.9.4 los parte en chunks.
+TELEGRAM_MAX_CHARS = 4096
+
+
+def split_message(text: str, limit: int = TELEGRAM_MAX_CHARS) -> list[str]:
+    """Parte un texto en chunks <= limit, cortando por salto de linea si se puede."""
+    if len(text) <= limit:
+        return [text]
+    chunks: list[str] = []
+    remaining = text
+    while len(remaining) > limit:
+        cut = remaining.rfind("\n", 1, limit)
+        if cut <= 0:
+            cut = limit
+        chunks.append(remaining[:cut])
+        remaining = remaining[cut:].lstrip("\n")
+    if remaining:
+        chunks.append(remaining)
+    return chunks
+
 
 class TelegramNotifier:
     def __init__(self, settings: Settings) -> None:
@@ -21,7 +42,12 @@ class TelegramNotifier:
         if not self.enabled():
             logger.warning("Telegram not configured: TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID missing")
             return False
+        ok = True
+        for chunk in split_message(text):
+            ok = self._send_single(chunk, chat_id) and ok
+        return ok
 
+    def _send_single(self, text: str, chat_id: str | None = None) -> bool:
         url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
         payload = {"chat_id": chat_id or self.chat_id, "text": text}
 

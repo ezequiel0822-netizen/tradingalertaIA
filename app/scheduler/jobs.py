@@ -172,9 +172,15 @@ class TradingAlertJob:
         # Phase 3.5: reset cycle counter para throttle de Claude
         self.claude_processor.reset_cycle()
 
-        handled = self.assistant.process_updates()
-        if handled:
-            logger.info("Telegram assistant handled %s message(s)", handled)
+        # v3.9.4: defensa en profundidad — el assistant es LO PRIMERO del ciclo;
+        # si falla (DB locked al persistir offset, etc.) el ciclo debe seguir igual
+        # (lifecycle/reconciler/alertas no pueden depender de Telegram).
+        try:
+            handled = self.assistant.process_updates()
+            if handled:
+                logger.info("Telegram assistant handled %s message(s)", handled)
+        except Exception:
+            logger.exception("Telegram assistant fallo; el ciclo sigue")
 
         # Phase 3 v2.2.0: macro context refresh (gateado por interval)
         try:
@@ -476,12 +482,17 @@ class TradingAlertJob:
             if id(record) in inserted_record_ids:
                 continue
             self.repository.insert_alert(record)
-        write_daily_memory_if_needed(
-            self.settings,
-            self.repository,
-            records,
-            sent_count,
-        )
+        # v3.9.4: soft-fail como su hermana weekly — un OSError del vault (OneDrive
+        # lockeado, permisos) no puede abortar learning/resumen/purga del ciclo.
+        try:
+            write_daily_memory_if_needed(
+                self.settings,
+                self.repository,
+                records,
+                sent_count,
+            )
+        except Exception:
+            logger.exception("Obsidian daily memory fallo; el ciclo sigue")
         if self.settings.enable_learning_engine:
             learning = run_learning_cycle(self.settings, self.repository)
             logger.info("Learning cycle complete. %s", learning.summary)

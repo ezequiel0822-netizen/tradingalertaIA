@@ -1,5 +1,15 @@
 # Changelog
 
+## Trading Alert AI v3.9.4
+
+**Fixes de robustez de la auditoría total (3 agentes, 2026-07-02).** El bot ya no puede quedar muerto/sordo por un comando de Telegram:
+
+- **Fix A1 (ALTO) — poison-message brickeaba el bot hasta 24h.** `TelegramAssistantPoller.process_updates` llamaba `handler.handle()` sin try/except y persistía el offset SOLO al final: un comando que crasheara (ej. `/analiza` sobre fila legacy con `latest_estimated_gain_pct` NULL → `None >= float` TypeError; `/entrenar` con DB locked) abortaba el ciclo ANTES de avanzar el offset → Telegram re-entregaba el MISMO update cada ciclo → sin lifecycle/reconciler/alertas y sordo hasta que el update expirara (~24h); un restart no ayudaba. Ahora: try/except POR update (responde "el bot sigue vivo" y sigue), offset en `finally` (un update problemático se procesa a lo sumo una vez), y defensa en profundidad en `jobs.run_once` (el assistant es lo primero del ciclo; si falla, el ciclo sigue). + fix del trigger concreto en `/analiza` (`None >= float`). `tests/test_telegram_assistant.py` (+2 regresión).
+- **Fix M3 — memoria diaria de Obsidian con soft-fail.** `write_daily_memory_if_needed` era la única I/O de archivos del ciclo sin try (la weekly sí lo tenía): un OSError del vault (OneDrive lockeado, permisos) abortaba learning/resumen/purga cada ciclo. Ahora envuelta como su hermana weekly.
+- **Fix M5 — límite 4096 de Telegram.** `send_message` no partía mensajes largos: Telegram devolvía 400 y la respuesta se perdía ENTERA (ej. `/edge` con muchos slices). Ahora `split_message` parte en chunks ≤4096 cortando por salto de línea. `tests/test_telegram_assistant.py` (+2).
+
+Ninguno toca el camino ejecución→MT5. 697 -> **701 verdes**. app_version -> v3.9.4.
+
 ## Research — Experimento de COT (2026-06-21, sin bump de versión)
 
 **Se corrió el experimento REAL de Fase D: features de COT + re-test temporal del ML.** Es tooling de research (no cambia el comportamiento del bot, no prende flags), por eso no sube versión — igual que `cot_backfill.py`.

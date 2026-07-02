@@ -38,28 +38,42 @@ class TelegramAssistantPoller:
         updates = self._get_updates()
         handled = 0
         last_update_id: int | None = None
-        for update in updates:
-            update_id = update.get("update_id")
-            if isinstance(update_id, int):
-                last_update_id = update_id
+        try:
+            for update in updates:
+                update_id = update.get("update_id")
+                if isinstance(update_id, int):
+                    last_update_id = update_id
 
-            message = update.get("message") or update.get("edited_message") or {}
-            chat = message.get("chat") or {}
-            chat_id = str(chat.get("id") or "")
-            text = str(message.get("text") or "").strip()
-            if not text:
-                continue
+                message = update.get("message") or update.get("edited_message") or {}
+                chat = message.get("chat") or {}
+                chat_id = str(chat.get("id") or "")
+                text = str(message.get("text") or "").strip()
+                if not text:
+                    continue
 
-            if chat_id != str(self.settings.telegram_chat_id):
-                logger.info("Ignoring Telegram message from unauthorized chat")
-                continue
+                if chat_id != str(self.settings.telegram_chat_id):
+                    logger.info("Ignoring Telegram message from unauthorized chat")
+                    continue
 
-            reply = self.handler.handle(text)
-            if self.notifier.send_message(reply, chat_id=chat_id):
-                handled += 1
-
-        if last_update_id is not None:
-            self.repository.set_state("telegram_last_update_id", str(last_update_id))
+                # v3.9.4: un comando que crashea NO envenena el bot. Antes, una
+                # excepcion aca impedia persistir el offset -> Telegram re-entregaba
+                # el MISMO update cada ciclo y el bot quedaba muerto/sordo hasta que
+                # el update expirara (~24h), con posiciones abiertas sin gestionar.
+                try:
+                    reply = self.handler.handle(text)
+                except Exception:
+                    logger.exception("Telegram command crashed; el bot sigue vivo")
+                    reply = (
+                        "Ese comando fallo internamente; el bot sigue vivo. "
+                        "Proba de nuevo o con otros argumentos."
+                    )
+                if self.notifier.send_message(reply, chat_id=chat_id):
+                    handled += 1
+        finally:
+            # El offset SIEMPRE avanza sobre lo ya leido (aun si algo lanza arriba):
+            # un update problematico se procesa a lo sumo una vez.
+            if last_update_id is not None:
+                self.repository.set_state("telegram_last_update_id", str(last_update_id))
 
         return handled
 
