@@ -44,6 +44,38 @@ agosto+septiembre > resto del año.
   positiva en AMBAS mitades del período, ≥60% de los años consistentes, t-stat
   Welch ≥ 2.39 (Bonferroni k=3).
 
+## RESULTADOS (corrida 2026-07-02, mismo día del pre-registro)
+
+> Backfill previo: COT extendido a ~40 años (15,633 filas, 1986→2026).
+
+**H-A1 (COT × precio) — NO PASA. La familia COT-legacy-extremos MUERE.**
+36 años, 12,689 semanas-evento (8 mercados), holdout 2 años excluido. Spreads
+direction-adjusted ALTO−BAJO: +3.8/+8.1/+19.9 bps (5/10/20d) — positivos pero:
+**la 2ª mitad del período es NEGATIVA en los 3 horizontes** (+7.3/−1.2,
++15.4/−1.9, +41.6/−5.2), años positivos solo 43-49%, t(decimada) ≤ 1.17. Lo que
+había era viejo y se desvaneció. Esto **supersede y explica el 0.607 del
+experimento de junio** (COT-sobre-trades-vivos, n=178): era ruido. NO se
+re-corta esta familia; una hipótesis TFF/Disaggregated requeriría pre-registro
+nuevo.
+
+**H-B1 (ToM SPY) — NO TESTEABLE HOY**: el cache no tiene SPY D1 (el run de
+acciones sigue pendiente por el 429). No se sustituyó símbolo (regla).
+
+**H-B2 (viernes del oro) — PASA exploración**: +10.08 bps/día viernes vs resto
+(n=1116/4537, XAUUSD D1 2004→2026), mitades +15.65/+4.48, 65% de 23 años,
+t=+2.64 ≥ 2.39. **Caveats honestos antes de entusiasmarse:** (a) t=2.64 queda
+EXACTAMENTE en el borde del Bonferroni de la tanda completa (k=6 → t≈2.64);
+(b) la familia B no tenía holdout pre-registrado — gap del protocolo, se declara;
+(c) +10 bps/día contra ~3-5 bps de costo round-trip en oro = margen fino.
+**Siguiente gate (pre-registrado): regla congelada en el harness §11 con costos
+×1.25 → si pasa, paper. NO prende nada vivo.**
+
+**H-B3 (ago+sep oro) — NO PASA. MUERE.** diff −0.17 bps/día, 50% años, t=−0.04.
+
+**Score de la tanda: 5 corridas de k=6 → 1 pase borderline, 3 muertas, 1 no
+testeable.** Con k=6 al 5%, la probabilidad de ≥1 falso positivo por azar es
+~26% — por eso H-B2 no es un hallazgo hasta que sobreviva el harness §11.
+
 ## Reglas de la tanda
 
 1. Los scripts (`scripts/cot_price_study.py`, `scripts/seasonality_study.py`) corren
