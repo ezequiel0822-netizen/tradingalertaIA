@@ -1,0 +1,8 @@
+{
+  "mode": "A",
+  "timeframe": "D1",
+  "category": "gold",
+  "symbols": ["XAUUSD"],
+  "strategies": ["gold_friday_hold"],
+  "notes": "Gate seccion 11 del viernes del oro (H-B2, unico candidato vivo de la tanda 2026-07-02). Regla CONGELADA pre-registrada en research/HIPOTESIS_2026-07-02.md ANTES de correr: senal jueves (weekday UTC==3), entrada viernes open, salida al open siguiente, stop 2.0xATR, sin TP, cost model gold x1.25. Seccion 11 ESTRICTO. Prediccion declarada: probable NO PASA expectancy por dilucion de R con stop 2xATR aunque el tilt sea real. Prohibido ajustar post-hoc."
+}

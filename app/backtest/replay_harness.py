@@ -79,11 +79,14 @@ class RunConfig:
 
 
 def default_strategy_registry() -> dict:
-    """Las 5 estrategias backtesteables con honestidad (ESPEC §3). Se instancian
+    """Las estrategias backtesteables con honestidad (ESPEC §3). Se instancian
     DIRECTO, sin filtrar por su enabled_setting_key: el backtest mide aunque la
-    estrategia este apagada en vivo (caso de `momentum` y `trend_following_d1`)."""
+    estrategia este apagada en vivo (caso de `momentum` y `trend_following_d1`).
+    `gold_friday_hold` es HARNESS-ONLY (regla congelada del gate §11 del viernes
+    del oro; no existe en el router vivo)."""
     from app.strategies.breakout import BreakoutStrategy
     from app.strategies.forex_session_breakout import ForexSessionBreakoutStrategy
+    from app.strategies.gold_friday_hold import GoldFridayHoldStrategy
     from app.strategies.mean_reversion import MeanReversionStrategy
     from app.strategies.momentum import MomentumStrategy
     from app.strategies.trend_following_d1 import TrendFollowingD1Strategy
@@ -94,6 +97,7 @@ def default_strategy_registry() -> dict:
         MomentumStrategy(),
         ForexSessionBreakoutStrategy(),
         TrendFollowingD1Strategy(),
+        GoldFridayHoldStrategy(),
     ]
     return {s.name: s for s in instances}
 
