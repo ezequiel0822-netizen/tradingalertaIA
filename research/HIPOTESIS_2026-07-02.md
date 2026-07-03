@@ -108,6 +108,33 @@ regla standalone con la matemática de riesgo de la casa" — y la familia B se
 CIERRA igual (sin re-cortes, sin achicar el stop post-hoc, que sería dredging).
 §11 mide tradeabilidad; esa es la pregunta que importa.
 
+### RESULTADO DEL GATE (corrida 2026-07-03, run 6 del harness — mismo día del pre-registro)
+
+**NO PASA §11 — la familia B se CIERRA.** n=1081 trades (21 años, 1/semana):
+
+| criterio §11 | resultado |
+|---|---|
+| Muestra n≥150 | PASA (1081) |
+| **Expectancy ≥ +0.10R (×1.25)** | **NO PASA (+0.040R)** |
+| Stress ×1.5 ≥ 0 | PASA (+0.037R) |
+| Consistencia (≥60% años + mitades) | PASA (**86% de años**, mitades OK) |
+| Drawdown ≤ 25R | PASA (5.67R) |
+| Profit factor ≥ 1.15 | PASA (1.33) |
+| Concentración | limpia (mejor trade 1%, top-10 8%) |
+
+**La predicción declarada se cumplió exacta** (~+0.03R predicho, +0.040R real):
+falla ÚNICAMENTE por la dilución de R (efecto ~+6 bps netos/semana vs stop de
+~2.4%). El veredicto pre-registrado aplica: **"tilt estadístico REAL pero NO
+TRADEABLE como regla standalone"** — 18 de 21 años completos positivos, robusto
+en todos los regímenes, sobrevive costos estresados… y aun así rinde ~+43R en 21
+años (≈ +1.7%/año sobre el capital arriesgado a 1%/trade). Real ≠ rentable.
+
+**Cierre:** NO se promueve a paper. NO se achica el stop post-hoc (dredging
+prohibido). La familia B queda cerrada. Cualquier uso futuro del tilt (p.ej.
+como FILTRO de timing sobre otra estrategia con edge propio, si algún día
+existe) requiere pre-registro NUEVO. Es la primera señal genuinamente real que
+encontró el proyecto — y la disciplina correcta es igual no tradearla.
+
 ## Reglas de la tanda
 
 1. Los scripts (`scripts/cot_price_study.py`, `scripts/seasonality_study.py`) corren

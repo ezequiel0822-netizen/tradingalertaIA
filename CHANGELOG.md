@@ -1,5 +1,11 @@
 # Changelog
 
+## Research — Veredicto del gate §11 del viernes del oro (2026-07-03, run 6)
+
+**NO PASA — pero es el resultado más instructivo del proyecto.** `gold_friday_hold` (n=1081, 21 años) falla ÚNICAMENTE en expectancy (**+0.040R** < +0.10R, exactamente la dilución de R predicha y declarada ANTES de correr) y **pasa todo lo demás**: **86% de años positivos** (18/21 completos), ambas mitades, stress de costos ×1.5 todavía positivo (+0.037R), PF 1.33, maxDD 5.67R, sin concentración (mejor trade 1%), positivo en TODOS los regímenes de tendencia y volatilidad.
+
+Lectura honesta: **el tilt del viernes del oro es REAL — la primera señal genuina que encontró el proyecto — y aun así NO se tradea**: ~+6 bps netos/semana contra un stop de ~2.4% rinde ≈ +1.7%/año sobre el capital arriesgado. Real ≠ rentable. Per el pre-registro: no se promueve a paper, no se achica el stop post-hoc (dredging), la familia B se cierra. Cualquier uso futuro (p.ej. filtro de timing sobre una estrategia con edge propio) requiere pre-registro nuevo. Reporte: `exports/backtest_6/report.md` (gitignored). Con esto, **la tanda 2026-07-02 queda 100% cerrada: k=6 → 0 tradeables**.
+
 ## Trading Alert AI v3.11.0
 
 **`gold_friday_hold`: la regla congelada del gate §11 del "viernes del oro" (harness-only).** H-B2 fue la única hipótesis de la tanda 2026-07-02 que pasó la exploración (+10 bps/día los viernes, 22 años, t=2.64); este es su único tiro al gate pre-registrado.
