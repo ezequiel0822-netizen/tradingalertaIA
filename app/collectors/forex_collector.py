@@ -7,6 +7,7 @@ Provisional hasta que se conecte una fuente MT5 directa en Fase 4.
 """
 
 import logging
+import time
 from typing import Any
 
 import requests
@@ -17,6 +18,10 @@ from app.database.models import TokenSnapshot
 
 
 logger = logging.getLogger(__name__)
+
+# v3.10.1 (M2): tras un 429 de Yahoo, pausa TODO el collector este rato en vez
+# de seguir golpeando a full rate simbolo por simbolo, ciclo tras ciclo.
+YAHOO_429_COOLDOWN_SECONDS = 600.0
 
 
 def _pct_change(current: float | None, previous: float | None) -> float | None:
@@ -38,13 +43,18 @@ class ForexCollector:
         self.settings = settings
         self.session = requests.Session()
         self.session.headers.update({"User-Agent": "TradingAlertAI/2.4"})
+        self._cooldown_until = 0.0
 
     def collect(self) -> list[TokenSnapshot]:
         if not self.settings.enable_forex_collector:
             return []
+        if time.monotonic() < self._cooldown_until:
+            return []
 
         snapshots: list[TokenSnapshot] = []
         for symbol in self.settings.forex_symbols:
+            if time.monotonic() < self._cooldown_until:
+                break  # un 429 a mitad de la lista corta el resto del batch
             snapshot = self._fetch_symbol(symbol.upper())
             if snapshot:
                 snapshots.append(snapshot)
@@ -62,6 +72,12 @@ class ForexCollector:
             response.raise_for_status()
             payload = response.json()
         except (requests.RequestException, ValueError) as exc:
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            if status == 429:
+                self._cooldown_until = time.monotonic() + YAHOO_429_COOLDOWN_SECONDS
+                logger.warning(
+                    "Yahoo 429 (forex): cooldown de %ss", int(YAHOO_429_COOLDOWN_SECONDS)
+                )
             logger.warning("Forex data failed for %s: %s", symbol, exc)
             return None
 

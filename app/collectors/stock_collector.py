@@ -1,4 +1,5 @@
 import logging
+import time
 from typing import Any
 
 import requests
@@ -9,6 +10,10 @@ from app.database.models import TokenSnapshot
 
 
 logger = logging.getLogger(__name__)
+
+# v3.10.1 (M2): tras un 429 de Yahoo, pausa TODO el collector este rato en vez
+# de seguir golpeando a full rate simbolo por simbolo, ciclo tras ciclo.
+YAHOO_429_COOLDOWN_SECONDS = 600.0
 
 
 def _pct_change(current: float | None, previous: float | None) -> float | None:
@@ -22,13 +27,18 @@ class StockCollector:
         self.settings = settings
         self.session = requests.Session()
         self.session.headers.update({"User-Agent": "TradingAlertAI/2.4"})
+        self._cooldown_until = 0.0
 
     def collect(self) -> list[TokenSnapshot]:
         if not self.settings.enable_stock_alerts:
             return []
+        if time.monotonic() < self._cooldown_until:
+            return []
 
         snapshots: list[TokenSnapshot] = []
         for symbol in self.settings.stock_symbols:
+            if time.monotonic() < self._cooldown_until:
+                break  # un 429 a mitad de la lista corta el resto del batch
             snapshot = self._fetch_symbol(symbol.upper())
             if snapshot:
                 snapshots.append(snapshot)
@@ -46,6 +56,12 @@ class StockCollector:
             response.raise_for_status()
             payload = response.json()
         except (requests.RequestException, ValueError) as exc:
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            if status == 429:
+                self._cooldown_until = time.monotonic() + YAHOO_429_COOLDOWN_SECONDS
+                logger.warning(
+                    "Yahoo 429 (stocks): cooldown de %ss", int(YAHOO_429_COOLDOWN_SECONDS)
+                )
             logger.warning("Stock data failed for %s: %s", symbol, exc)
             return None
 
@@ -56,7 +72,8 @@ class StockCollector:
 
         meta = result.get("meta") or {}
         quote = (((result.get("indicators") or {}).get("quote") or [{}])[0]) or {}
-        closes = [value for value in quote.get("close") or [] if value is not None]
+        raw_closes = quote.get("close") or []
+        closes = [value for value in raw_closes if value is not None]
         volumes = quote.get("volume") or []
         if len(closes) < 2:
             return None
@@ -66,7 +83,11 @@ class StockCollector:
         previous_1h = closes[-5] if len(closes) >= 5 else None
         previous_24h = closes[-27] if len(closes) >= 27 else closes[0]
 
-        dollar_volumes = self._dollar_volumes(closes, volumes)
+        # v3.10.1 (M4): zipear los arrays CRUDOS — antes se zipeaba closes ya
+        # filtrado de Nones contra volumes crudo, y desde el primer close nulo
+        # cada close se multiplicaba por el volumen de OTRA vela (contaminaba
+        # volume_5m/1h/24h y liquidity_usd, que entran al scoring).
+        dollar_volumes = self._dollar_volumes(raw_closes, volumes)
         volume_latest = dollar_volumes[-1] if dollar_volumes else None
         volume_1h = sum(dollar_volumes[-4:]) if dollar_volumes else None
         volume_24h = sum(dollar_volumes[-26:]) if dollar_volumes else None
@@ -105,7 +126,7 @@ class StockCollector:
     ) -> list[float]:
         output: list[float] = []
         for close, volume in zip(closes, volumes):
-            if volume is None:
+            if close is None or volume is None:
                 continue
             try:
                 output.append(float(close) * float(volume))

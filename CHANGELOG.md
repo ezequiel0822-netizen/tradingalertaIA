@@ -1,5 +1,17 @@
 # Changelog
 
+## Trading Alert AI v3.10.1
+
+**Cierre del batch de fixes de la auditoría total (A2, M1, M2, M4 + short trailing).**
+
+- **A2 (ALTO, dormido) — el scalping solo podía crear UN paper trade en toda la vida de la DB**: insertaba `alert_id=0` fijo contra el UNIQUE de `paper_trades.alert_id` → del segundo scalp en adelante todo fallaba en silencio. Ahora ids sintéticos NEGATIVOS únicos (semilla epoch + incremento; negativo = no colisiona con alerts reales, mismo espíritu que `-trade_id` en outcomes). El scalping sigue OFF; la mina quedó desactivada.
+- **M1 (sleeper) — `/mt5_status` o `/demo_*` dejaban al bot ciego de MT5**: esos comandos crean un `MT5DemoTrader` efímero cuyo `disconnect()` llama `mt5.shutdown()` (GLOBAL al proceso) → el `mt5_reader` compartido quedaba con `_connected=True` stale: lifecycle marcaba con precio Yahoo viejo y el reconciler veía 0 posiciones, sin ningún log. `is_connected()` ahora re-valida contra `terminal_info()` (IPC local barato) y se auto-corrige → el próximo `connect()` re-inicializa.
+- **M2 — cooldown 429 para Yahoo** (stock + forex collectors): un 429 corta el resto del batch y pausa el collector 10 min, en vez de seguir golpeando símbolo por símbolo cada ciclo (complementa el poll 120s y el cache de news de v3.9.5 contra el 429 autoinfligido).
+- **M4 — dollar volumes desalineados**: `_dollar_volumes` zipeaba `closes` FILTRADO de Nones contra `volumes` crudo → desde el primer close nulo (frecuente en la vela parcial de Yahoo), cada close se multiplicaba por el volumen de OTRA vela, contaminando `volume_5m/1h/24h` y `liquidity_usd` (entran al scoring). Ahora se zipean los arrays crudos y se saltean pares incompletos.
+- **Short trailing + mark-to-market por lado** (hallazgo de la auditoría del camino vivo): el trailing era long-only — en shorts (el lado rentable según el slicing) `trailing_active` se marcaba pero el stop JAMÁS se movía; ahora baja con el precio y nunca afloja. Y `_fresh_price` marcaba todo al `bid`: un short se cierra COMPRANDO al `ask` — el sesgo de ~1 spread en MFE/MAE y `realized_pnl_today` (kill-switch) quedó corregido.
+
+`tests/test_fixes_v3101.py` (+6) y `tests/test_lifecycle_manager.py` (+3). 708 -> **717 verdes**. app_version -> v3.10.1.
+
 ## Trading Alert AI v3.10.0
 
 **`forex_session_breakout` es REPLAYABLE — la estrategia más operada del libro vivo por fin puede tener veredicto histórico.** La auditoría de edge (2026-07-02) encontró que la estrategia usaba `datetime.now()` para definir "hoy" y exigía `macro['active_sessions']` (que el harness no puede poblar, B11) → **jamás disparaba en el harness** y su validación histórica era CERO, mientras ~8 años de H1 (50k barras/símbolo) ya estaban cacheados.
@@ -33,6 +45,12 @@ Estimado neto: ciclo ~92s → ~35-45s y ~60-70% menos tráfico a Yahoo. Honestid
 - **Fix M5 — límite 4096 de Telegram.** `send_message` no partía mensajes largos: Telegram devolvía 400 y la respuesta se perdía ENTERA (ej. `/edge` con muchos slices). Ahora `split_message` parte en chunks ≤4096 cortando por salto de línea. `tests/test_telegram_assistant.py` (+2).
 
 Ninguno toca el camino ejecución→MT5. 697 -> **701 verdes**. app_version -> v3.9.4.
+
+## Research — Veredicto H1 de forex_session_breakout (2026-07-02, run 5 del harness)
+
+**NO PASA §11 — unánime y definitivo.** Primer juicio histórico de la estrategia MÁS operada del libro vivo (posible recién con la replayabilidad de v3.10.0): **14,213 trades simulados sobre ~8 años de H1 × 7 pares** (50k barras/símbolo, costos ×1.25). Resultado: **avg −0.161R, PF 0.72, 0% de años positivos (2018-2026), negativa en TODOS los slices** — los 7 símbolos, ambas sesiones (LDN-NY/NY), ambas direcciones (long −0.190R / short −0.129R) y todos los regímenes (trend y vol). Sin concentración (no es un outlier: es estructural). Stress ×1.5: −0.189R.
+
+Lectura honesta: el promotion gate ya la tenía en SHADOW por su expectancy viva (−0.11R, n=218); el harness confirma con 65× esa muestra que **no tiene edge y nunca lo tuvo** — el +0.38R histórico era el artefacto del bug A1. La hipótesis "session breakout" sobre estos pares queda **descartada como familia** (no ajustar parámetros hasta que pase: prohibido por §11). El bot puede seguir generando sus paper trades (miden el régimen vivo), pero no hay razón para esperar que se promueva jamás. Reporte: `exports/backtest_5/report.md` (gitignored).
 
 ## Research — Tanda pre-registrada 2026-07-02 (k=6, sin bump de versión)
 

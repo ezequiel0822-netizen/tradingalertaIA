@@ -151,3 +151,85 @@ def test_fresh_price_maps_yahoo_gold_symbol_to_mt5() -> None:
     price = _fresh_price(trade, repo, reader, "icmarkets")
     assert reader.seen_symbol == "XAUUSD"
     assert price == 4520.5
+
+
+# --------------------------------------------------------------------------- #
+# v3.10.1 — trailing en SHORTS + mark-to-market por lado (bid/ask)
+# --------------------------------------------------------------------------- #
+class _TickReader:
+    """Stub de MT5Reader: siempre conectado, tick fijo bid/ask."""
+
+    def __init__(self, bid: float, ask: float) -> None:
+        self._bid, self._ask = bid, ask
+
+    def is_connected(self) -> bool:
+        return True
+
+    def get_tick(self, symbol: str) -> dict:
+        return {"bid": self._bid, "ask": self._ask, "last": None, "time": 0}
+
+
+def _trailing_settings(base):
+    return type(base)(**{
+        **base.__dict__,
+        "enable_trailing_stop": True,
+        "trailing_activation_pct_stock": 5.0,
+        "trailing_distance_pct_stock": 2.0,
+        "enable_partial_close_at_tp1": False,
+    })
+
+
+def test_short_trailing_moves_stop_down() -> None:
+    """v3.10.1: el trailing era long-only — en un short ganador el stop ahora
+    BAJA con el precio (latest * (1 + distance))."""
+    settings = _trailing_settings(_settings())
+    repo = _repo()
+    _seed(repo, "NVDA", 100.0, 108.0, 80.0, 70.0, opened_hours_ago=2,
+          direction="short")
+    _set_token_price(repo, "NVDA", 90.0)  # +10% a favor del short (>= activacion 5%)
+
+    manage_open_positions(settings, repo)
+
+    row = repo.fetch_paper_trades(limit=1)[0]
+    assert row["trailing_active"] == 1
+    assert abs(row["stop_loss"] - 91.8) < 1e-6  # 90 * 1.02
+
+
+def test_short_trailing_never_loosens() -> None:
+    """El stop de un short trailea hacia abajo y JAMAS vuelve a subir."""
+    settings = _trailing_settings(_settings())
+    repo = _repo()
+    _seed(repo, "NVDA", 100.0, 108.0, 80.0, 70.0, opened_hours_ago=2,
+          direction="short")
+    _set_token_price(repo, "NVDA", 90.0)
+    manage_open_positions(settings, repo)  # stop -> 91.8
+
+    _set_token_price(repo, "NVDA", 91.0)  # rebota: 91*1.02=92.82 seria AFLOJAR
+    manage_open_positions(settings, repo)
+
+    row = repo.fetch_paper_trades(limit=1)[0]
+    assert abs(row["stop_loss"] - 91.8) < 1e-6  # no se movio
+
+
+def test_fresh_price_marks_short_at_ask_and_long_at_bid() -> None:
+    """v3.10.1: un short se cierra COMPRANDO al ask; un long vendiendo al bid."""
+    base = _settings()
+    settings = type(base)(**{**base.__dict__, "enable_trailing_stop": False,
+                             "enable_partial_close_at_tp1": False})
+    reader = _TickReader(bid=99.0, ask=101.0)
+
+    repo_short = _repo()
+    _seed(repo_short, "NVDA", 100.0, 110.0, 80.0, 70.0, opened_hours_ago=2,
+          direction="short")
+    manage_open_positions(settings, repo_short, mt5_reader=reader)
+    row = repo_short.fetch_paper_trades(limit=1)[0]
+    assert abs(row["latest_price"] - 101.0) < 1e-6  # ask
+    assert abs(row["unrealized_return_pct"] - (-1.0)) < 1e-6
+
+    repo_long = _repo()
+    _seed(repo_long, "NVDA", 100.0, 95.0, 120.0, 130.0, opened_hours_ago=2,
+          direction="long")
+    manage_open_positions(settings, repo_long, mt5_reader=reader)
+    row = repo_long.fetch_paper_trades(limit=1)[0]
+    assert abs(row["latest_price"] - 99.0) < 1e-6  # bid
+    assert abs(row["unrealized_return_pct"] - (-1.0)) < 1e-6
