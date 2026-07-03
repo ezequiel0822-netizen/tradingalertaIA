@@ -1,0 +1,8 @@
+{
+  "mode": "A",
+  "timeframe": "H1",
+  "category": "forex",
+  "symbols": ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD", "USDCHF", "NZDUSD"],
+  "strategies": ["forex_session_breakout"],
+  "notes": "v3.10.0 - PRIMER veredicto historico de forex_session_breakout (la estrategia MAS operada del libro vivo, hasta ahora irreplayable por datetime.now + macro). H1 ~8 anios x 7 pares (50k barras/simbolo en cache). Solo FX con cost model forex (XAUUSD se excluye para no mezclar cost models). Veredicto por seccion 11 de la ESPEC; el backtest solo puede DESCARTAR o habilitar paper - jamas MT5."
+}

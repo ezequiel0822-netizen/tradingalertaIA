@@ -1,5 +1,15 @@
 # Changelog
 
+## Trading Alert AI v3.10.0
+
+**`forex_session_breakout` es REPLAYABLE — la estrategia más operada del libro vivo por fin puede tener veredicto histórico.** La auditoría de edge (2026-07-02) encontró que la estrategia usaba `datetime.now()` para definir "hoy" y exigía `macro['active_sessions']` (que el harness no puede poblar, B11) → **jamás disparaba en el harness** y su validación histórica era CERO, mientras ~8 años de H1 (50k barras/símbolo) ya estaban cacheados.
+
+- **Bar-time como reloj**: "ahora" es el timestamp de la ÚLTIMA vela del contexto (`timestamp` del feed vivo Yahoo o `time` del cache MT5 del harness), y el overlap London/NY (13-17 UTC) se deriva de ese bar-time — se elimina la dependencia de `macro` y del reloj de pared. En vivo ambos relojes coinciden (feed fresco): comportamiento idéntico.
+- **Guard de frescura SOLO-vivo (anti-A1)**: si la última vela tiene >2h respecto del reloj de pared, no se opera (un feed colgado no puede disparar contra niveles viejos — la lección del bug A1). En replay (`raw['backtest']=True`) el guard no aplica: el bar-time ES el reloj. Bonus de robustez que antes no existía: un feed semi-stale (2-24h) ahora también se rechaza.
+- Tests reescritos deterministas (congelan `datetime.now` con fecha fija — ya no dependen de la hora del día en que corra la suite) + 2 nuevos: replay con velas del harness (clave `time`, 2019, dispara) y guard de frescura. `session_breakout_h1_run.json` listo (7 pares FX, H1, cost model forex; XAUUSD excluido para no mezclar cost models).
+
+El primer run H1 real y su veredicto §11 se documentan en la sección research. 706 -> **708 verdes**. app_version -> v3.10.0.
+
 ## Trading Alert AI v3.9.5
 
 **Performance del ciclo: más barato, no más rápido (auditoría medida sobre la DB viva).** El ciclo real era ~92s con `POLL_INTERVAL_SECONDS=60` → el bot corría espalda-con-espalda 24/7, con ~111 HTTP/ciclo (~100k hits/día a Yahoo = el 429 **autoinfligido** que bloquea el backtest de acciones) y una DB de 5.3GB creciendo 130MB/día sin retención. Ninguno de estos cambios toca la lógica de trading:
@@ -23,6 +33,15 @@ Estimado neto: ciclo ~92s → ~35-45s y ~60-70% menos tráfico a Yahoo. Honestid
 - **Fix M5 — límite 4096 de Telegram.** `send_message` no partía mensajes largos: Telegram devolvía 400 y la respuesta se perdía ENTERA (ej. `/edge` con muchos slices). Ahora `split_message` parte en chunks ≤4096 cortando por salto de línea. `tests/test_telegram_assistant.py` (+2).
 
 Ninguno toca el camino ejecución→MT5. 697 -> **701 verdes**. app_version -> v3.9.4.
+
+## Research — Tanda pre-registrada 2026-07-02 (k=6, sin bump de versión)
+
+**El cambio de unidad de análisis (trade vivo → barra/semana histórica) dio veredictos EN HORAS.** Backfill de COT extendido a ~40 años (15,633 filas, 1986→2026, `cot_backfill.py --weeks 2100`). Protocolo anti-dredging: hipótesis y umbrales commiteados ANTES de correr (`research/HIPOTESIS_2026-07-02.md`), Bonferroni, holdout.
+
+- **H-A1 — COT × precio (36 años, 12,689 semanas-evento): NO PASA, la familia COT-legacy-extremos MUERE.** Spreads +3.8/+8.1/+19.9 bps pero la 2ª mitad del período es NEGATIVA en los 3 horizontes, años+ 43-49%, t≤1.17. **Supersede y explica el 0.607 del experimento de junio: era ruido.** Se cierra la pregunta COT-legacy definitivamente (`scripts/cot_price_study.py`).
+- **H-B2 — viernes del oro: PASA exploración** (+10.08 bps/día, mitades +15.65/+4.48, 65% de 23 años, t=2.64) — PERO t queda en el borde exacto del Bonferroni de tanda (k=6), la familia B no tenía holdout (gap declarado), y el margen vs costos es fino. **Siguiente gate: regla congelada en harness §11 ×1.25 → paper. Nada vivo se prende.** (`scripts/seasonality_study.py`)
+- H-B1 (ToM SPY): no testeable (sin SPY en cache — el 429 sigue bloqueando el run de acciones). H-B3 (ago+sep oro): NO PASA, muere.
+- Score: 1 pase borderline / 3 muertas / 1 no-testeable de k=6 (≥1 falso positivo por azar ≈26% — por eso el gate §11).
 
 ## Research — Experimento de COT (2026-06-21, sin bump de versión)
 
