@@ -1,4 +1,5 @@
 import logging
+import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 
@@ -8,6 +9,11 @@ from app.config.settings import Settings
 
 
 logger = logging.getLogger(__name__)
+
+# v3.9.5: TTL del cache de titulares. El ciclo llamaba el RSS por CADA stock cada
+# ~92s (46 GETs/ciclo ~= 40k hits/dia a Yahoo -> parte del 429 autoinfligido)
+# para noticias que no cambian en minutos.
+NEWS_CACHE_TTL_SECONDS = 1200.0
 
 
 @dataclass
@@ -23,10 +29,16 @@ class NewsCollector:
         self.settings = settings
         self.session = requests.Session()
         self.session.headers.update({"User-Agent": "TradingAlertAI/2.4"})
+        self._cache: dict[str, tuple[float, list[NewsItem]]] = {}
 
     def collect_for_symbol(self, symbol: str) -> list[NewsItem]:
         if not self.settings.enable_news_intel:
             return []
+
+        key = symbol.upper()
+        hit = self._cache.get(key)
+        if hit is not None and time.monotonic() - hit[0] < NEWS_CACHE_TTL_SECONDS:
+            return hit[1]
 
         url = "https://feeds.finance.yahoo.com/rss/2.0/headline"
         params = {"s": symbol.upper(), "region": "US", "lang": "en-US"}
@@ -54,4 +66,6 @@ class NewsCollector:
             published = (item.findtext("pubDate") or "").strip()
             if title:
                 items.append(NewsItem(title=title, link=link, published=published))
-        return items[: self.settings.max_news_per_symbol]
+        result = items[: self.settings.max_news_per_symbol]
+        self._cache[key] = (time.monotonic(), result)  # solo exitos; fallos reintentan
+        return result

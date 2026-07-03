@@ -67,6 +67,9 @@ from app.utils.time_utils import minutes_ago, utc_now
 
 logger = logging.getLogger(__name__)
 
+# v3.9.5: retencion (dias) de alerts no-enviadas/outcomes/security_checks.
+LEARNING_RETENTION_DAYS = 90
+
 
 class TradingAlertJob:
     def __init__(
@@ -342,11 +345,13 @@ class TradingAlertJob:
                 snapshot.category == "stock"
                 and sec_analyses < self.settings.max_sec_filings_per_run
             )
-            intel_reasons, intel_rank_bonus, used_chart, used_sec = self._market_intelligence(
-                snapshot,
-                allow_chart,
-                allow_sec,
-                security,
+            intel_reasons, intel_rank_bonus, used_chart, used_sec, pro_setup = (
+                self._market_intelligence(
+                    snapshot,
+                    allow_chart,
+                    allow_sec,
+                    security,
+                )
             )
             if used_chart:
                 chart_analyses += 1
@@ -400,9 +405,13 @@ class TradingAlertJob:
                     self.repository.insert_price_snapshot(snapshot, token_id)
                 except Exception:
                     logger.exception("Failed to insert price snapshot")
-            self.repository.save_security_check(
-                snapshot.chain, snapshot.token_address, security
-            )
+            # v3.9.5: solo memecoins tienen chequeo de seguridad real (GoPlus).
+            # Para stock/forex/gold se escribia una fila "unknown" por snapshot
+            # (~65k filas basura/dia con memecoins apagadas).
+            if snapshot.category == "memecoin":
+                self.repository.save_security_check(
+                    snapshot.chain, snapshot.token_address, security
+                )
 
             should_send = should_send_alert(
                 adjusted_score,
@@ -445,6 +454,9 @@ class TradingAlertJob:
                 intel_rank_bonus=intel_rank_bonus,
                 sent_to_telegram=False,
             )
+            # v3.9.5: atributo transitorio (no es campo del dataclass, no se
+            # persiste) para expandir con LLM SOLO lo que se envia.
+            alert_record._pro_setup = pro_setup  # type: ignore[attr-defined]
             records.append(alert_record)
 
             # Fase 2.5: Strategy router → potencialmente abre paper trade
@@ -522,6 +534,20 @@ class TradingAlertJob:
                     logger.info("Purged %s old price snapshots", deleted)
                 except Exception:
                     logger.exception("Failed to purge old price snapshots")
+
+        # v3.9.5: retencion de las tablas calientes (alerts/signal_outcomes/
+        # security_checks crecian ~65k filas/dia c/u sin limite). 1x/dia.
+        # Conserva alerts enviadas y las vinculadas a paper_trades.
+        last_learning_purge = self.repository.get_state("learning_last_purge")
+        if last_learning_purge is None or last_learning_purge < minutes_ago(24 * 60):
+            try:
+                purged = self.repository.purge_old_learning_data(
+                    LEARNING_RETENTION_DAYS
+                )
+                self.repository.set_state("learning_last_purge", minutes_ago(0))
+                logger.info("Purged learning data: %s", purged)
+            except Exception:
+                logger.exception("Failed to purge learning data")
 
         if self.settings.enable_weekly_obsidian_report:
             try:
@@ -635,6 +661,9 @@ class TradingAlertJob:
             if sent_count >= self.settings.max_alerts_per_run:
                 return sent_count
 
+            # v3.9.5: expand LLM SOLO para lo que se envia (antes corria en el hot
+            # path para ~54 snapshots/ciclo; aca son <= slots por categoria).
+            self._enrich_with_llm(category_candidates)
             message = format_grouped_telegram_alert(
                 category_candidates,
                 category,
@@ -651,6 +680,25 @@ class TradingAlertJob:
                     len(category_candidates),
                 )
         return sent_count
+
+    def _enrich_with_llm(self, records: list[AlertRecord]) -> None:
+        """v3.9.5: expande con LLM (Claude/Ollama) las reasons de los records que SI
+        van a Telegram. Reemplaza el expand por-snapshot del hot path (~30-50s/ciclo
+        para alertas que en un 99.9% no se enviaban). Soft-fail por record."""
+        if not self.settings.enable_pro_intelligence:
+            return
+        for record in records:
+            pro = getattr(record, "_pro_setup", None)
+            if pro is None:
+                continue
+            try:
+                claude_text = self.claude_processor.expand_pro_analysis(
+                    pro, record.snapshot
+                )
+                if claude_text:
+                    record.reasons.append(f"🤖 IA: {claude_text}")
+            except Exception:
+                logger.exception("Claude expand_pro_analysis failed")
 
     def _alert_rank(self, record: AlertRecord) -> float:
         event_score = ALERT_PRIORITY.get(record.alert_type, 0)
@@ -728,6 +776,7 @@ class TradingAlertJob:
                 reasons.append(f"SEC filings: {filing_label} (score {filing_score}).")
                 reasons.extend(filing_reasons[:3])
 
+        pro_setup = None
         if self.settings.enable_pro_intelligence:
             pro = analyze_professional_setup(
                 snapshot,
@@ -738,6 +787,7 @@ class TradingAlertJob:
                 filing_label,
                 filing_score,
             )
+            pro_setup = pro
             rank_bonus += pro.score * 1.2
             reasons.append(
                 f"IA Pro: {pro.label}, sesgo {pro.bias}, confianza {pro.confidence}/100."
@@ -745,16 +795,12 @@ class TradingAlertJob:
             reasons.append(f"Setup: {pro.setup}.")
             reasons.extend(pro.reasons[:3])
             reasons.extend([f"Riesgo pro: {risk}" for risk in pro.risks[:2]])
+            # v3.9.5: el expand LLM (Claude/Ollama) salio de aca — corria para CADA
+            # snapshot (~30-50s/ciclo medidos) y el 99.9% de esas alertas jamas se
+            # enviaba. Ahora se expande SOLO lo que se envia (_enrich_with_llm en el
+            # send-path); el pro se devuelve para eso.
 
-            # Phase 3.5 v2.2.0: Claude expand
-            try:
-                claude_text = self.claude_processor.expand_pro_analysis(pro, snapshot)
-                if claude_text:
-                    reasons.append(f"🤖 IA: {claude_text}")
-            except Exception:
-                logger.exception("Claude expand_pro_analysis failed")
-
-        return reasons[:12], rank_bonus, used_chart, used_sec
+        return reasons[:12], rank_bonus, used_chart, used_sec, pro_setup
 
     def _limit_snapshots(self, snapshots: list[TokenSnapshot]) -> list[TokenSnapshot]:
         unique: dict[tuple[str, str, str, str], TokenSnapshot] = {}

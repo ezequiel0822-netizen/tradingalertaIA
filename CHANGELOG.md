@@ -1,5 +1,19 @@
 # Changelog
 
+## Trading Alert AI v3.9.5
+
+**Performance del ciclo: más barato, no más rápido (auditoría medida sobre la DB viva).** El ciclo real era ~92s con `POLL_INTERVAL_SECONDS=60` → el bot corría espalda-con-espalda 24/7, con ~111 HTTP/ciclo (~100k hits/día a Yahoo = el 429 **autoinfligido** que bloquea el backtest de acciones) y una DB de 5.3GB creciendo 130MB/día sin retención. Ninguno de estos cambios toca la lógica de trading:
+
+- **Índice faltante** `idx_signal_outcomes_evaluated`: `fetch_signal_outcomes` (cada ciclo, learning) hacía full scan de 2.55M filas con `ORDER BY evaluated_at DESC` — **11.4s/ciclo medidos** → milisegundos.
+- **LLM fuera del hot path** (cumple la regla de la casa): `expand_pro_analysis` (Claude/Ollama) corría por CADA snapshot (~30-50s/ciclo medidos) decorando alertas que en un 99.94% jamás se enviaban. Ahora `_enrich_with_llm` expande SOLO los candidatos que van a Telegram, en el send-path (`_market_intelligence` devuelve el pro; se adjunta transitorio al record).
+- **SQLite WAL** + `synchronous=NORMAL` + `busy_timeout=5000` en `get_connection`: el repo abre conexión por operación con commit propio (cientos de transacciones de 1 fila/ciclo en modo `delete` = journal+fsync c/u). WAL además mata los "database is locked" (cot_backfill, dashboard).
+- **Poll default 60→120s** (.env.example actualizado): para swing sobre velas de 15m no se pierde nada; recorta el tráfico Yahoo ~40-60%.
+- **Retención 90 días** (`purge_old_learning_data`, 1×/día): alerts no-enviadas (conserva SIEMPRE las enviadas y las vinculadas a `paper_trades` — el ml_dataset las necesita), `signal_outcomes` y `security_checks` viejos.
+- **Basura eliminada**: `save_security_check` escribía una fila "unknown" por CADA snapshot stock/forex (~65k filas basura/día con memecoins apagadas) → ahora solo memecoins.
+- **Cache TTL de news RSS** (20 min): se pedía el RSS por cada stock cada ~92s (~40k hits/día) para titulares que no cambian en minutos.
+
+Estimado neto: ciclo ~92s → ~35-45s y ~60-70% menos tráfico a Yahoo. Honestidad: esto NO mueve la aguja de trading (la vela de 15m se re-analizaba ~10 veces) — compra **calidad de data** (menos 429 = menos huecos), menos locks, y destraba el run del backtest de acciones. `tests/test_perf_v395.py` (+5). 701 -> **706 verdes**. app_version -> v3.9.5.
+
 ## Trading Alert AI v3.9.4
 
 **Fixes de robustez de la auditoría total (3 agentes, 2026-07-02).** El bot ya no puede quedar muerto/sordo por un comando de Telegram:

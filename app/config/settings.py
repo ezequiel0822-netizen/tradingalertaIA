@@ -487,7 +487,7 @@ def load_settings() -> Settings:
         obsidian_vault_path = safe_obsidian
 
     return Settings(
-        app_version=os.getenv("APP_VERSION", "v3.9.4"),
+        app_version=os.getenv("APP_VERSION", "v3.9.5"),
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
         telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID"),
         dexscreener_base_url=os.getenv(
@@ -504,7 +504,10 @@ def load_settings() -> Settings:
         min_volume_1h_usd=_get_float("MIN_VOLUME_1H_USD", 15000),
         alert_score_threshold=_get_int("ALERT_SCORE_THRESHOLD", 65),
         critical_risk_alerts=_get_bool("CRITICAL_RISK_ALERTS", True),
-        poll_interval_seconds=_get_int("POLL_INTERVAL_SECONDS", 60),
+        # v3.9.5: default 120 (el ciclo tarda ~35-90s; con 60 el bot corria
+        # espalda-con-espalda 24/7 y quemaba ~100k hits/dia a Yahoo -> 429).
+        # Para swing sobre velas de 15m no se pierde nada con 120s.
+        poll_interval_seconds=_get_int("POLL_INTERVAL_SECONDS", 120),
         max_alerts_per_run=_get_int("MAX_ALERTS_PER_RUN", 10),
         dedup_window_minutes=_get_int("DEDUP_WINDOW_MINUTES", 360),
         max_snapshots_per_run=_get_int("MAX_SNAPSHOTS_PER_RUN", 80),
