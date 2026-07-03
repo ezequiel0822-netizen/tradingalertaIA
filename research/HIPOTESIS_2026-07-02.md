@@ -76,6 +76,38 @@ EXACTAMENTE en el borde del Bonferroni de la tanda completa (k=6 → t≈2.64);
 testeable.** Con k=6 al 5%, la probabilidad de ≥1 falso positivo por azar es
 ~26% — por eso H-B2 no es un hallazgo hasta que sobreviva el harness §11.
 
+## GATE §11 — regla congelada `gold_friday_hold` (pre-registrado 2026-07-03, ANTES de correr)
+
+H-B2 pasó la exploración → este es su único tiro al gate §11 (el pre-registrado).
+La regla se CONGELA acá; después de correr no se ajusta nada (§11: "prohibido
+ajustar hasta que pase").
+
+**Regla exacta (ejecutable, no la hipótesis cruda):**
+- Señal: al CLOSE de la barra D1 de XAUUSD cuyo bar-time (UTC, misma convención
+  `weekday()` que usó `seasonality_study.py`) sea **jueves (weekday==3)**.
+- Entrada: open de la barra siguiente (el "viernes" del estudio). Long only.
+- Salida: open de la barra siguiente a la de entrada (time exit, 1 barra D1 —
+  en la práctica: viernes open → lunes open, que es el cierre ejecutable del
+  viernes + gap de finde; el gap NO era parte de la hipótesis cruda y se declara).
+- Stop: entry × (1 − 2.0 × ATR%/100) — **2.0 = ATR_STOP_MULTIPLIER default de la
+  casa, congelado como literal**. Sin TP (targets=[]; la salida es por tiempo).
+- Costos: gold 0.03% round-trip × 1.25 (stress ×1.5), slippage 0.05×ATR — los del
+  harness.
+- Implementación: `app/strategies/gold_friday_hold.py`, registrada SOLO en el
+  registry del harness (NO en el router vivo → no puede operar en vivo, sin flag).
+
+**Criterio de pase: §11 ESTRICTO, sin modificaciones.** El mismo que reprobó a
+session_breakout: n≥150, avg R neto ≥ +0.10 (×1.25), stress ×1.5 ≥ 0,
+consistencia (≥60% años + ambas mitades), maxDD ≤ 25R, PF ≥ 1.15.
+
+**Predicción declarada ANTES de correr (honestidad):** con stop 2×ATR (~2.4% en
+oro), un efecto de +10 bps/viernes bruto (~+6.3 neto) diluye a **~+0.03R** → es
+probable que NO PASE la barra de expectancy aunque el efecto sea real. Si falla,
+el veredicto documentado es: "tilt estadístico posible pero NO TRADEABLE como
+regla standalone con la matemática de riesgo de la casa" — y la familia B se
+CIERRA igual (sin re-cortes, sin achicar el stop post-hoc, que sería dredging).
+§11 mide tradeabilidad; esa es la pregunta que importa.
+
 ## Reglas de la tanda
 
 1. Los scripts (`scripts/cot_price_study.py`, `scripts/seasonality_study.py`) corren

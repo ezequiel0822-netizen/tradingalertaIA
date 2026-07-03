@@ -1,5 +1,16 @@
 # Changelog
 
+## Trading Alert AI v3.11.0
+
+**`gold_friday_hold`: la regla congelada del gate §11 del "viernes del oro" (harness-only).** H-B2 fue la única hipótesis de la tanda 2026-07-02 que pasó la exploración (+10 bps/día los viernes, 22 años, t=2.64); este es su único tiro al gate pre-registrado.
+
+- **`app/strategies/gold_friday_hold.py`**: señal al close de la barra D1 de XAUUSD cuyo bar-time UTC es JUEVES (misma convención `weekday()` que el estudio) → el harness entra al open del viernes y sale al open siguiente (time exit 1 barra). Long only, stop 2.0×ATR (default de la casa, congelado como literal), sin TP. Replayable por diseño (bar-time, v3.10.0).
+- **HARNESS-ONLY por construcción**: registrada solo en `default_strategy_registry` del replay_harness — NO está en el `StrategyRouter` vivo, no tiene flag, no puede abrir paper trades ni órdenes. Test de seguridad explícito. Si algún día pasa §11, promoverla a paper es un cambio deliberado aparte.
+- **Pre-registro ANTES de correr** (`research/HIPOTESIS_2026-07-02.md`): regla exacta + criterio §11 ESTRICTO + predicción declarada — con stop 2×ATR (~2.4%), +10 bps/viernes diluye a ~+0.03R → probable NO PASA expectancy aunque el tilt sea real; si falla, el veredicto es "no tradeable como regla standalone" y la familia B se cierra sin re-cortes. §11 mide tradeabilidad. `gold_friday_run.json` listo.
+- `tests/test_gold_friday_hold.py` (+4: contrato congelado + seguridad harness-only).
+
+El veredicto del run se documenta en la sección research. 717 -> **721 verdes**. app_version -> v3.11.0.
+
 ## Trading Alert AI v3.10.1
 
 **Cierre del batch de fixes de la auditoría total (A2, M1, M2, M4 + short trailing).**
