@@ -87,6 +87,14 @@ def manage_open_positions(
                 if stop is None or new_stop > stop:
                     stop = new_stop
                     updates["stop_loss"] = round(new_stop, 8)
+            elif trailing_active and direction == "short":
+                # v3.10.1: el trailing era long-only — en shorts (el lado rentable
+                # segun el slicing) trailing_active se marcaba pero el stop jamas
+                # se movia. Para un short el stop baja con el precio y nunca sube.
+                new_stop = latest * (1 + distance / 100.0)
+                if stop is None or new_stop < stop:
+                    stop = new_stop
+                    updates["stop_loss"] = round(new_stop, 8)
 
         # Partial close en TP1
         partial_closed = int(trade.get("partial_closed") or 0)
@@ -178,8 +186,18 @@ def _fresh_price(
             mt5_symbol = yahoo_to_mt5(str(raw_symbol), broker_profile) or str(raw_symbol)
             try:
                 tick = mt5_reader.get_tick(mt5_symbol)
-                if tick and tick.get("bid"):
-                    return float(tick["bid"])
+                if tick:
+                    # v3.10.1: mark-to-market por lado — un short se cierra
+                    # COMPRANDO al ask; usar bid sesgaba MFE/MAE y el kill-switch
+                    # por ~1 spread en el lado rentable.
+                    side = (
+                        "ask"
+                        if str(trade.get("direction") or "long") == "short"
+                        else "bid"
+                    )
+                    value = tick.get(side) or tick.get("bid")
+                    if value:
+                        return float(value)
             except Exception:
                 pass
     # 2. token.latest_price del repo

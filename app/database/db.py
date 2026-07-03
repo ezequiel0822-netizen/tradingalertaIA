@@ -6,6 +6,17 @@ def get_connection(db_path: Path) -> sqlite3.Connection:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(db_path)
     connection.row_factory = sqlite3.Row
+    # v3.9.5: WAL (persistente en el archivo) + NORMAL + busy_timeout. El repo abre
+    # una conexion por operacion con commit propio -> cientos de transacciones de
+    # una fila por ciclo; en journal_mode=delete cada commit crea/borra el journal
+    # con fsync sobre una DB de GB, y la contencion daba "database is locked"
+    # (cot_backfill, dashboard). WAL baja ese costo y permite lectores concurrentes.
+    try:
+        connection.execute("PRAGMA journal_mode=WAL")
+        connection.execute("PRAGMA synchronous=NORMAL")
+        connection.execute("PRAGMA busy_timeout=5000")
+    except sqlite3.DatabaseError:
+        pass  # DB corrupta se reporta en init_db; no bloquear la conexion aca
     return connection
 
 
@@ -514,6 +525,8 @@ def _init_db_unsafe(db_path: Path) -> None:
                 ON tokens(latest_score);
             CREATE INDEX IF NOT EXISTS idx_signal_outcomes_label
                 ON signal_outcomes(outcome_label);
+            CREATE INDEX IF NOT EXISTS idx_signal_outcomes_evaluated
+                ON signal_outcomes(evaluated_at);
             CREATE INDEX IF NOT EXISTS idx_paper_trades_status
                 ON paper_trades(status);
             CREATE INDEX IF NOT EXISTS idx_price_snapshots_token_time

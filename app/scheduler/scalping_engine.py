@@ -92,6 +92,11 @@ class ScalpingEngine:
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
         self._last_signal_ts: dict[str, float] = {}
+        # v3.10.1 (A2): alert_id sintetico NEGATIVO unico por scalp. Con el 0 fijo
+        # de antes, el UNIQUE de paper_trades.alert_id hacia que SOLO el primer
+        # scalp de la historia se creara (los demas fallaban en silencio). Semilla
+        # epoch + incremento: unico dentro del proceso y entre restarts.
+        self._synthetic_alert_seq = int(time.time())
         self._trades_since_heartbeat = 0
         self._cycle_count = 0
         # v2.6.2 diagnostic instrumentation
@@ -502,8 +507,11 @@ class ScalpingEngine:
 
         # 1. Crear paper_trade con is_scalping=1
         now_iso = utc_now_iso()
+        self._synthetic_alert_seq += 1
         paper_trade = {
-            "alert_id": 0,
+            # v3.10.1 (A2): negativo = sintetico (no colisiona con alerts reales;
+            # mismo espiritu que _record_scalping_outcome con -trade_id).
+            "alert_id": -self._synthetic_alert_seq,
             "token_id": 0,
             "category": category,
             "chain": category,

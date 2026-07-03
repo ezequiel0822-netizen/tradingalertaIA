@@ -1756,6 +1756,36 @@ class Repository:
             )
             return int(cursor.rowcount or 0)
 
+    def purge_old_learning_data(self, retention_days: int) -> dict[str, int]:
+        """v3.9.5: retencion para las tablas calientes que crecian sin limite
+        (~65k filas/dia CADA UNA; la DB viva llego a 5.3GB creciendo 130MB/dia).
+
+        Conserva SIEMPRE: alerts enviadas a Telegram y alerts vinculadas a
+        paper_trades (el ml_dataset_builder extrae features de esas). Los
+        alert_outcome_horizons huerfanos no se tocan (chicos, y se leen via
+        el alert -> quedan inertes)."""
+        cutoff = minutes_ago(retention_days * 24 * 60)
+        out: dict[str, int] = {}
+        with get_connection(self.db_path) as connection:
+            cursor = connection.execute(
+                """
+                DELETE FROM alerts
+                WHERE created_at < ? AND sent_to_telegram = 0
+                  AND id NOT IN (SELECT alert_id FROM paper_trades)
+                """,
+                (cutoff,),
+            )
+            out["alerts"] = int(cursor.rowcount or 0)
+            cursor = connection.execute(
+                "DELETE FROM signal_outcomes WHERE evaluated_at < ?", (cutoff,)
+            )
+            out["signal_outcomes"] = int(cursor.rowcount or 0)
+            cursor = connection.execute(
+                "DELETE FROM security_checks WHERE checked_at < ?", (cutoff,)
+            )
+            out["security_checks"] = int(cursor.rowcount or 0)
+        return out
+
     def upsert_alert_outcome_horizon(self, row: dict[str, Any]) -> bool:
         with get_connection(self.db_path) as connection:
             existing = connection.execute(

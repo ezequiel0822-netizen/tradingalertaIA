@@ -111,7 +111,27 @@ class MT5Reader:
         self._connected = False
 
     def is_connected(self) -> bool:
-        return self._connected and self._mt5 is not None
+        if not self._connected or self._mt5 is None:
+            return False
+        # v3.10.1 (M1): mt5.shutdown() es GLOBAL al proceso — otro consumidor
+        # (p.ej. el MT5DemoTrader efimero de /mt5_status o /demo_*) podia matar
+        # la conexion dejando este flag stale=True: el bot quedaba ciego de MT5
+        # (lifecycle marcaba con precio Yahoo viejo, reconciler veia 0 posiciones)
+        # sin ningun log. terminal_info() es un IPC local barato y dice la verdad;
+        # al detectar el shutdown ajeno, el proximo connect() re-inicializa.
+        # (Un modulo sin terminal_info — mocks de test — conserva el comporta-
+        # miento anterior: el modulo real de MetaTrader5 siempre lo tiene.)
+        info_fn = getattr(self._mt5, "terminal_info", None)
+        if info_fn is None:
+            return True
+        try:
+            if info_fn() is None:
+                self._connected = False
+                return False
+        except Exception:
+            self._connected = False
+            return False
+        return True
 
     def get_tick(self, symbol: str) -> dict | None:
         if not self.is_connected():

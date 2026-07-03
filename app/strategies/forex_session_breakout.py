@@ -4,12 +4,42 @@ Solo activa durante London/NY overlap (UTC 13-17). Calcula Asian range
 high/low (00:00-08:00 UTC) y abre long si rompe el high, short si rompe el low.
 
 Solo aplica a category forex y gold.
+
+v3.10.0 — REPLAYABILIDAD: "ahora" es el timestamp de la ULTIMA vela del contexto,
+no el reloj de pared, y el overlap London/NY se deriva de ese bar-time (antes
+dependia de macro['active_sessions'], que el harness no puede poblar — B11 — y de
+datetime.now(), que hacia la estrategia irreplayable). En vivo ambos relojes
+coinciden (feed fresco); en el harness permite reproducir ~8 anios de H1. La
+proteccion anti-A1 (velas stale) se conserva con un guard de frescura SOLO-vivo:
+si la ultima vela tiene mas de 2h respecto del reloj de pared, no se opera
+(en replay, ctx.snapshot.raw['backtest']=True lo desactiva).
 """
 
 from datetime import datetime, timezone
 
 from app.config.settings import Settings
 from app.strategies.base import StrategyContext, StrategySignal
+
+# Frescura maxima del feed en vivo: sin vela de menos de 2h, no se opera contra
+# niveles potencialmente viejos (la leccion del bug A1).
+_MAX_LIVE_STALENESS_SECONDS = 2 * 3600
+
+# London/NY overlap en UTC (mismas franjas que macro_context).
+_OVERLAP_START_HOUR = 13
+_OVERLAP_END_HOUR = 17
+
+
+def _candle_epoch(candle: dict) -> float | None:
+    """Epoch (s) de una vela: 'timestamp' (feed vivo Yahoo) o 'time' (cache MT5
+    del harness). None si no hay ninguna."""
+    for key in ("timestamp", "time"):
+        value = candle.get(key)
+        if value is not None:
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                continue
+    return None
 
 
 class ForexSessionBreakoutStrategy:
@@ -21,32 +51,41 @@ class ForexSessionBreakoutStrategy:
     ) -> StrategySignal | None:
         if ctx.snapshot.category not in {"forex", "gold"}:
             return None
-        macro = ctx.macro or {}
-        # Solo durante London/NY overlap
-        active = set(macro.get("active_sessions", []))
-        if not ({"london", "ny"}.issubset(active)):
-            return None
 
         candles = ctx.candles or []
         if len(candles) < 30:
             return None
 
-        # Asian range REAL: velas de la sesion 00:00-08:00 UTC de HOY, filtradas por
-        # TIMESTAMP. El feed de forex trae range=5d/interval=15m (mas viejas primero), asi
-        # que tomar las primeras N posicionales daba el rango de hace ~5 dias (bug A1). Si
-        # no hay sesion asiatica de hoy en la data -> no operar (soft, devuelve None).
+        # v3.10.0: bar-time = reloj de la estrategia (replayable).
+        last_epoch = _candle_epoch(candles[-1])
+        if last_epoch is None:
+            return None
+
+        # Guard de frescura SOLO-vivo (anti-A1): en replay el harness marca
+        # raw['backtest']=True y el guard no aplica (bar-time ES el reloj).
+        is_replay = bool((ctx.snapshot.raw or {}).get("backtest"))
+        if not is_replay:
+            age = datetime.now(timezone.utc).timestamp() - last_epoch
+            if age > _MAX_LIVE_STALENESS_SECONDS:
+                return None
+
+        bar_now = datetime.fromtimestamp(last_epoch, tz=timezone.utc)
+
+        # Solo durante London/NY overlap (13-17 UTC), derivado del bar-time.
+        if not (_OVERLAP_START_HOUR <= bar_now.hour < _OVERLAP_END_HOUR):
+            return None
+
+        # Asian range REAL: velas de la sesion 00:00-08:00 UTC del DIA de la barra,
+        # filtradas por timestamp (fix del bug A1: nada de posiciones).
         day_start = (
-            datetime.now(timezone.utc)
-            .replace(hour=0, minute=0, second=0, microsecond=0)
-            .timestamp()
+            bar_now.replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
         )
         asian_end = day_start + 8 * 3600
-        asian_slice = [
-            c
-            for c in candles
-            if c.get("timestamp") is not None
-            and day_start <= float(c["timestamp"]) < asian_end
-        ]
+        asian_slice = []
+        for candle in candles:
+            epoch = _candle_epoch(candle)
+            if epoch is not None and day_start <= epoch < asian_end:
+                asian_slice.append(candle)
         if len(asian_slice) < 4:
             return None
         highs = [c.get("high") for c in asian_slice if c.get("high") is not None]

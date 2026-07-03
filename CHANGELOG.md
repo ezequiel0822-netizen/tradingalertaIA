@@ -1,5 +1,66 @@
 # Changelog
 
+## Trading Alert AI v3.10.1
+
+**Cierre del batch de fixes de la auditoría total (A2, M1, M2, M4 + short trailing).**
+
+- **A2 (ALTO, dormido) — el scalping solo podía crear UN paper trade en toda la vida de la DB**: insertaba `alert_id=0` fijo contra el UNIQUE de `paper_trades.alert_id` → del segundo scalp en adelante todo fallaba en silencio. Ahora ids sintéticos NEGATIVOS únicos (semilla epoch + incremento; negativo = no colisiona con alerts reales, mismo espíritu que `-trade_id` en outcomes). El scalping sigue OFF; la mina quedó desactivada.
+- **M1 (sleeper) — `/mt5_status` o `/demo_*` dejaban al bot ciego de MT5**: esos comandos crean un `MT5DemoTrader` efímero cuyo `disconnect()` llama `mt5.shutdown()` (GLOBAL al proceso) → el `mt5_reader` compartido quedaba con `_connected=True` stale: lifecycle marcaba con precio Yahoo viejo y el reconciler veía 0 posiciones, sin ningún log. `is_connected()` ahora re-valida contra `terminal_info()` (IPC local barato) y se auto-corrige → el próximo `connect()` re-inicializa.
+- **M2 — cooldown 429 para Yahoo** (stock + forex collectors): un 429 corta el resto del batch y pausa el collector 10 min, en vez de seguir golpeando símbolo por símbolo cada ciclo (complementa el poll 120s y el cache de news de v3.9.5 contra el 429 autoinfligido).
+- **M4 — dollar volumes desalineados**: `_dollar_volumes` zipeaba `closes` FILTRADO de Nones contra `volumes` crudo → desde el primer close nulo (frecuente en la vela parcial de Yahoo), cada close se multiplicaba por el volumen de OTRA vela, contaminando `volume_5m/1h/24h` y `liquidity_usd` (entran al scoring). Ahora se zipean los arrays crudos y se saltean pares incompletos.
+- **Short trailing + mark-to-market por lado** (hallazgo de la auditoría del camino vivo): el trailing era long-only — en shorts (el lado rentable según el slicing) `trailing_active` se marcaba pero el stop JAMÁS se movía; ahora baja con el precio y nunca afloja. Y `_fresh_price` marcaba todo al `bid`: un short se cierra COMPRANDO al `ask` — el sesgo de ~1 spread en MFE/MAE y `realized_pnl_today` (kill-switch) quedó corregido.
+
+`tests/test_fixes_v3101.py` (+6) y `tests/test_lifecycle_manager.py` (+3). 708 -> **717 verdes**. app_version -> v3.10.1.
+
+## Trading Alert AI v3.10.0
+
+**`forex_session_breakout` es REPLAYABLE — la estrategia más operada del libro vivo por fin puede tener veredicto histórico.** La auditoría de edge (2026-07-02) encontró que la estrategia usaba `datetime.now()` para definir "hoy" y exigía `macro['active_sessions']` (que el harness no puede poblar, B11) → **jamás disparaba en el harness** y su validación histórica era CERO, mientras ~8 años de H1 (50k barras/símbolo) ya estaban cacheados.
+
+- **Bar-time como reloj**: "ahora" es el timestamp de la ÚLTIMA vela del contexto (`timestamp` del feed vivo Yahoo o `time` del cache MT5 del harness), y el overlap London/NY (13-17 UTC) se deriva de ese bar-time — se elimina la dependencia de `macro` y del reloj de pared. En vivo ambos relojes coinciden (feed fresco): comportamiento idéntico.
+- **Guard de frescura SOLO-vivo (anti-A1)**: si la última vela tiene >2h respecto del reloj de pared, no se opera (un feed colgado no puede disparar contra niveles viejos — la lección del bug A1). En replay (`raw['backtest']=True`) el guard no aplica: el bar-time ES el reloj. Bonus de robustez que antes no existía: un feed semi-stale (2-24h) ahora también se rechaza.
+- Tests reescritos deterministas (congelan `datetime.now` con fecha fija — ya no dependen de la hora del día en que corra la suite) + 2 nuevos: replay con velas del harness (clave `time`, 2019, dispara) y guard de frescura. `session_breakout_h1_run.json` listo (7 pares FX, H1, cost model forex; XAUUSD excluido para no mezclar cost models).
+
+El primer run H1 real y su veredicto §11 se documentan en la sección research. 706 -> **708 verdes**. app_version -> v3.10.0.
+
+## Trading Alert AI v3.9.5
+
+**Performance del ciclo: más barato, no más rápido (auditoría medida sobre la DB viva).** El ciclo real era ~92s con `POLL_INTERVAL_SECONDS=60` → el bot corría espalda-con-espalda 24/7, con ~111 HTTP/ciclo (~100k hits/día a Yahoo = el 429 **autoinfligido** que bloquea el backtest de acciones) y una DB de 5.3GB creciendo 130MB/día sin retención. Ninguno de estos cambios toca la lógica de trading:
+
+- **Índice faltante** `idx_signal_outcomes_evaluated`: `fetch_signal_outcomes` (cada ciclo, learning) hacía full scan de 2.55M filas con `ORDER BY evaluated_at DESC` — **11.4s/ciclo medidos** → milisegundos.
+- **LLM fuera del hot path** (cumple la regla de la casa): `expand_pro_analysis` (Claude/Ollama) corría por CADA snapshot (~30-50s/ciclo medidos) decorando alertas que en un 99.94% jamás se enviaban. Ahora `_enrich_with_llm` expande SOLO los candidatos que van a Telegram, en el send-path (`_market_intelligence` devuelve el pro; se adjunta transitorio al record).
+- **SQLite WAL** + `synchronous=NORMAL` + `busy_timeout=5000` en `get_connection`: el repo abre conexión por operación con commit propio (cientos de transacciones de 1 fila/ciclo en modo `delete` = journal+fsync c/u). WAL además mata los "database is locked" (cot_backfill, dashboard).
+- **Poll default 60→120s** (.env.example actualizado): para swing sobre velas de 15m no se pierde nada; recorta el tráfico Yahoo ~40-60%.
+- **Retención 90 días** (`purge_old_learning_data`, 1×/día): alerts no-enviadas (conserva SIEMPRE las enviadas y las vinculadas a `paper_trades` — el ml_dataset las necesita), `signal_outcomes` y `security_checks` viejos.
+- **Basura eliminada**: `save_security_check` escribía una fila "unknown" por CADA snapshot stock/forex (~65k filas basura/día con memecoins apagadas) → ahora solo memecoins.
+- **Cache TTL de news RSS** (20 min): se pedía el RSS por cada stock cada ~92s (~40k hits/día) para titulares que no cambian en minutos.
+
+Estimado neto: ciclo ~92s → ~35-45s y ~60-70% menos tráfico a Yahoo. Honestidad: esto NO mueve la aguja de trading (la vela de 15m se re-analizaba ~10 veces) — compra **calidad de data** (menos 429 = menos huecos), menos locks, y destraba el run del backtest de acciones. `tests/test_perf_v395.py` (+5). 701 -> **706 verdes**. app_version -> v3.9.5.
+
+## Trading Alert AI v3.9.4
+
+**Fixes de robustez de la auditoría total (3 agentes, 2026-07-02).** El bot ya no puede quedar muerto/sordo por un comando de Telegram:
+
+- **Fix A1 (ALTO) — poison-message brickeaba el bot hasta 24h.** `TelegramAssistantPoller.process_updates` llamaba `handler.handle()` sin try/except y persistía el offset SOLO al final: un comando que crasheara (ej. `/analiza` sobre fila legacy con `latest_estimated_gain_pct` NULL → `None >= float` TypeError; `/entrenar` con DB locked) abortaba el ciclo ANTES de avanzar el offset → Telegram re-entregaba el MISMO update cada ciclo → sin lifecycle/reconciler/alertas y sordo hasta que el update expirara (~24h); un restart no ayudaba. Ahora: try/except POR update (responde "el bot sigue vivo" y sigue), offset en `finally` (un update problemático se procesa a lo sumo una vez), y defensa en profundidad en `jobs.run_once` (el assistant es lo primero del ciclo; si falla, el ciclo sigue). + fix del trigger concreto en `/analiza` (`None >= float`). `tests/test_telegram_assistant.py` (+2 regresión).
+- **Fix M3 — memoria diaria de Obsidian con soft-fail.** `write_daily_memory_if_needed` era la única I/O de archivos del ciclo sin try (la weekly sí lo tenía): un OSError del vault (OneDrive lockeado, permisos) abortaba learning/resumen/purga cada ciclo. Ahora envuelta como su hermana weekly.
+- **Fix M5 — límite 4096 de Telegram.** `send_message` no partía mensajes largos: Telegram devolvía 400 y la respuesta se perdía ENTERA (ej. `/edge` con muchos slices). Ahora `split_message` parte en chunks ≤4096 cortando por salto de línea. `tests/test_telegram_assistant.py` (+2).
+
+Ninguno toca el camino ejecución→MT5. 697 -> **701 verdes**. app_version -> v3.9.4.
+
+## Research — Veredicto H1 de forex_session_breakout (2026-07-02, run 5 del harness)
+
+**NO PASA §11 — unánime y definitivo.** Primer juicio histórico de la estrategia MÁS operada del libro vivo (posible recién con la replayabilidad de v3.10.0): **14,213 trades simulados sobre ~8 años de H1 × 7 pares** (50k barras/símbolo, costos ×1.25). Resultado: **avg −0.161R, PF 0.72, 0% de años positivos (2018-2026), negativa en TODOS los slices** — los 7 símbolos, ambas sesiones (LDN-NY/NY), ambas direcciones (long −0.190R / short −0.129R) y todos los regímenes (trend y vol). Sin concentración (no es un outlier: es estructural). Stress ×1.5: −0.189R.
+
+Lectura honesta: el promotion gate ya la tenía en SHADOW por su expectancy viva (−0.11R, n=218); el harness confirma con 65× esa muestra que **no tiene edge y nunca lo tuvo** — el +0.38R histórico era el artefacto del bug A1. La hipótesis "session breakout" sobre estos pares queda **descartada como familia** (no ajustar parámetros hasta que pase: prohibido por §11). El bot puede seguir generando sus paper trades (miden el régimen vivo), pero no hay razón para esperar que se promueva jamás. Reporte: `exports/backtest_5/report.md` (gitignored).
+
+## Research — Tanda pre-registrada 2026-07-02 (k=6, sin bump de versión)
+
+**El cambio de unidad de análisis (trade vivo → barra/semana histórica) dio veredictos EN HORAS.** Backfill de COT extendido a ~40 años (15,633 filas, 1986→2026, `cot_backfill.py --weeks 2100`). Protocolo anti-dredging: hipótesis y umbrales commiteados ANTES de correr (`research/HIPOTESIS_2026-07-02.md`), Bonferroni, holdout.
+
+- **H-A1 — COT × precio (36 años, 12,689 semanas-evento): NO PASA, la familia COT-legacy-extremos MUERE.** Spreads +3.8/+8.1/+19.9 bps pero la 2ª mitad del período es NEGATIVA en los 3 horizontes, años+ 43-49%, t≤1.17. **Supersede y explica el 0.607 del experimento de junio: era ruido.** Se cierra la pregunta COT-legacy definitivamente (`scripts/cot_price_study.py`).
+- **H-B2 — viernes del oro: PASA exploración** (+10.08 bps/día, mitades +15.65/+4.48, 65% de 23 años, t=2.64) — PERO t queda en el borde exacto del Bonferroni de tanda (k=6), la familia B no tenía holdout (gap declarado), y el margen vs costos es fino. **Siguiente gate: regla congelada en harness §11 ×1.25 → paper. Nada vivo se prende.** (`scripts/seasonality_study.py`)
+- H-B1 (ToM SPY): no testeable (sin SPY en cache — el 429 sigue bloqueando el run de acciones). H-B3 (ago+sep oro): NO PASA, muere.
+- Score: 1 pase borderline / 3 muertas / 1 no-testeable de k=6 (≥1 falso positivo por azar ≈26% — por eso el gate §11).
+
 ## Research — Experimento de COT (2026-06-21, sin bump de versión)
 
 **Se corrió el experimento REAL de Fase D: features de COT + re-test temporal del ML.** Es tooling de research (no cambia el comportamiento del bot, no prende flags), por eso no sube versión — igual que `cot_backfill.py`.
