@@ -1,5 +1,13 @@
 # Changelog
 
+## Research — Carry trade vía FRED (2026-07-04): NO PASA, carry cerrado
+
+Tasas de FRED (8 divisas, 46,585 filas, USD desde 1954) en un sqlite de research aparte (`scripts/rates_backfill.py`). Pre-registro `research/HIPOTESIS_2026-07-04_carry.md`, commiteado ANTES de correr.
+
+- **H-C1 (componente de PRECIO, `scripts/carry_study.py`): NO PASA.** 10,016 semanas-evento; el precio orientado por el carry es ruido (+0.4/+0.9/+0.6 bps, t<1.4, 2ª mitad negativa). Reconocido como gate MAL DISEÑADO: el edge del carry es el interés, no el precio. En vez de correr H-C2 igual (mover el arco), se pre-registró limpio el test correcto (H-D1) ANTES de correrlo.
+- **H-D1 (retorno TOTAL neto de swap, `scripts/carry_total_return.py`): NO PASA. Carry cerrado.** 6,524 trades. **El carry es REAL y el edge es el interés** (bruto +17.1 bps/trade, de los cuales +16.9 son interés, +0.3 precio). Pero neto de swap 1% da +9.2 bps/trade (~+1.16%/año) y falla: **2ª mitad NEGATIVA** (+25.2 → −6.8 bps: el régimen de carry murió post-2008) y t=1.46<2.0. Sensibilidad al swap: t=2.03 a 0.5% (irreal) → 0.33 a 2.0%.
+- **Veredicto: carry REAL pero NO tradeable retail en D1** — 2ª señal genuina del proyecto (tras el viernes del oro) que falla por costos + régimen no estacionario. Familia carry cerrada; no cherry-pick de AUD/NZD, no bajar swap post-hoc. Sin bump de versión (research).
+
 ## Research — Veredicto del gate §11 del viernes del oro (2026-07-03, run 6)
 
 **NO PASA — pero es el resultado más instructivo del proyecto.** `gold_friday_hold` (n=1081, 21 años) falla ÚNICAMENTE en expectancy (**+0.040R** < +0.10R, exactamente la dilución de R predicha y declarada ANTES de correr) y **pasa todo lo demás**: **86% de años positivos** (18/21 completos), ambas mitades, stress de costos ×1.5 todavía positivo (+0.037R), PF 1.33, maxDD 5.67R, sin concentración (mejor trade 1%), positivo en TODOS los regímenes de tendencia y volatilidad.
