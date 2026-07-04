@@ -15,8 +15,12 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import sys
+
 import numpy as np
 import pandas as pd
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from scripts.cot_price_study import (  # noqa: E402
     HI, LO, HORIZONS, LAG_DAYS, _MARKET_TO_PAIR, cot_index, load_daily_closes,

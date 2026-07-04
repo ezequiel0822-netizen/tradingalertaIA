@@ -51,6 +51,52 @@ Bucket ALTO (idx≥0.8) − bucket BAJO (idx≤0.2) del retorno forward del par
   tradeable" otra vez es el resultado más probable.
 - **F1 (commercials):** probable NO PASA (mismo destino que specs).
 
+## RESULTADOS (corrida 2026-07-05)
+
+Nota de data: Stooq quedó detrás de un challenge JS → SPY/QQQ/IWM se bajaron con
+el loader Yahoo del proyecto (`scripts/equity_backfill.py`, backoff anti-429):
+SPY 1993→2026 (8413), QQQ 1999→, IWM 2000→.
+
+**E1 — Turn-of-month: NO PASA.** ToM positivo pero débil: SPY +7.4 vs +3.1 bps/día
+(t=1.30), QQQ +9.2 vs +2.5 (t=1.20), IWM t=0.08 (2ª mitad negativa). Pool t=1.48.
+El efecto existe pero no cruza Bonferroni t≥2.40. Muere.
+
+**F1 — COT commercials: NO PASA.** Spread ALTO−BAJO NEGATIVO (−5.8/−9.7/−21.5 bps,
+o sea commercials-long → precio baja) pero no significativo (t=−1.14/−0.15/−0.75).
+Ruido, espejo de los specs (H-A1). La familia COT queda definitivamente cerrada
+por ambos lados. Muere.
+
+**E2 — Overnight vs intraday: PASA EXISTENCIA, fuerte y limpio.** Casi todo el
+retorno de los índices es overnight (close→open); el intraday es ~0/negativo:
+- SPY: overnight +3.78 bps/día (~+9.5%/año, **t=5.17**), intraday +0.30 bps.
+- QQQ: overnight +5.16 bps/día (~+13%/año, t=4.75), intraday −1.08 bps.
+- IWM: overnight +4.98 bps/día (~+12.5%/año, t=4.82), intraday −1.61 bps.
+Los 3 índices, t muy por encima de 2.40. **Es la 1ª hipótesis del proyecto que
+cruza claramente la barra de existencia.**
+
+### E2 — test de tradeabilidad (`overnight_tradeability.py`, el gate pre-registrado)
+
+A diferencia de TODO lo anterior, **sobrevive costos realistas** (sensibilidad,
+sin elegir el costo): SPY neto ~+7%/año @1bp, ~+4.5% @2bp; QQQ +10.5%/+8%; IWM
++10%/+7.5%. 79-85% de años positivos. **PERO caveats duros (declarados):**
+1. **El bot NO puede tradearlo** — US equities + órdenes MOC/MOO, fuera del
+   universo MT5-forex demo. No accionable acá sin infra nueva.
+2. **Sharpe ~0.7, maxDD ~35-45%** — real pero modesto; parecido a buy-and-hold del
+   índice con caídas brutales.
+3. **Crítica Lachance 2021**: el precio de apertura puede NO ser ejecutable (el
+   auction limpia el desbalance nocturno; un comprador sistemático lo mueve). El
+   efecto puede encogerse mucho con ejecución real.
+4. Es archi-conocido → probablemente **compensación por riesgo overnight**, no
+   plata gratis; por eso persiste.
+
+**Veredicto E2:** REAL, robusto, sobrevive costos idealizados — el mejor resultado
+del proyecto — PERO no accionable para este bot y con ejecución real contestada.
+NO es luz verde a tradear; es "genuino, entenderlo, ojos abiertos". Cualquier
+intento serio = proyecto aparte (broker de acciones + MOC/MOO), con los caveats
+1-4 sobre la mesa. NO se prende nada vivo.
+
+**Score tanda 2026-07-05 (k=3): E1 muere, F1 muere, E2 real+no-accionable.**
+
 ## Reglas
 
 1. Scripts read-only sobre snapshot de la DB viva + research_rates.db.
