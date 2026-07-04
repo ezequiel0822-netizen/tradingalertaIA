@@ -86,7 +86,8 @@ def load_daily_closes(con: sqlite3.Connection, symbol: str) -> pd.DataFrame:
     df = pd.read_sql_query("SELECT time, close FROM mt5_historical_cache "
                            "WHERE symbol=? AND timeframe=? ORDER BY time",
                            con, params=(symbol, best[0])).dropna()
-    df["date"] = pd.to_datetime(df["time"], unit="s", utc=True).dt.tz_localize(None)
+    df["date"] = (pd.to_datetime(df["time"], unit="s", utc=True)
+                  .dt.tz_localize(None).astype("datetime64[ns]"))
     return df[["date", "close"]]
 
 
@@ -97,9 +98,9 @@ def load_rate_series(rcon: sqlite3.Connection, ccy: str) -> pd.DataFrame:
                            "WHERE currency=? ORDER BY date", rcon, params=(ccy,))
     if df.empty:
         return df
-    df["date"] = pd.to_datetime(df["date"])
+    df["date"] = pd.to_datetime(df["date"]).astype("datetime64[ns]")
     lag = np.where(df["freq"] == "D", pd.Timedelta(days=1), pd.Timedelta(days=32))
-    df["available_from"] = df["date"] + pd.to_timedelta(lag)
+    df["available_from"] = (df["date"] + pd.to_timedelta(lag)).astype("datetime64[ns]")
     return df[["available_from", "rate"]].sort_values("available_from")
 
 
