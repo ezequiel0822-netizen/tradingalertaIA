@@ -123,10 +123,34 @@ interés) probablemente sea positivo, pero el markup de swap + los drawdowns de
 reversión lo dejan al borde; 50/50 que pase el t≥2.0 en return-space. Con markup
 1.5% probablemente NO pase.
 
+### RESULTADO H-D1 (corrida 2026-07-04) — NO PASA. Carry cerrado.
+
+6,524 trades semanales, 1993→2024 (holdout excluido).
+- **El carry es REAL y el edge ES el interés** (confirma la tesis): bruto
+  +17.1 bps/trade, de los cuales **+16.9 son interés** y solo +0.3 el precio.
+  H-C1 (precio) tenía razón en fallar — el precio no aporta; el diferencial sí.
+- **Neto de swap 1.0%: +9.2 bps/trade (~+1.16%/año) pero NO PASA:**
+  - **2ª mitad NEGATIVA** (mitades +25.22 / −6.78 bps): el régimen de carry
+    MURIÓ post-2008 (tasas a cero comprimieron los diferenciales; los crashes de
+    reversión se hicieron más violentos). Falla el criterio de estacionariedad —
+    justo lo que existe para atrapar efectos dependientes de régimen.
+  - t(decim)=1.46 < 2.0. Años+ 69% (pasa ese, pero no alcanza).
+- **Sensibilidad al swap:** t=2.03 a markup 0.5% (irrealmente generoso) → 1.46 a
+  1.0% → 0.90 a 1.5% → 0.33 a 2.0%. Solo "sobrevive" con un swap que ningún
+  broker retail da, y aun así la 2ª mitad negativa lo mata por consistencia.
+
+**Veredicto: carry REAL pero NO TRADEABLE retail en D1 standalone.** El interés
+existe pero (a) el régimen se murió en la 2ª mitad (no estacionario) y (b) el
+swap retail se lo come. Es la 2ª señal genuina del proyecto (tras el viernes del
+oro) que falla en tradeabilidad — mismo patrón: efecto real, costos+régimen lo
+matan. **Familia carry CERRADA.** No achicar el stop, no cherry-pickear AUD/NZD,
+no bajar el swap post-hoc (todo dredging). Cualquier uso futuro (p.ej. carry como
+FILTRO de régimen sobre otra estrategia) requiere pre-registro nuevo.
+
 ## Reglas
 
 1. Scripts read-only sobre snapshot de la DB viva; backfill de tasas idempotente.
 2. Resultado documentado gane o pierda (CHANGELOG research + memoria).
-3. Holdout: últimos 2 años excluidos; un tiro si pasa.
+3. Holdout: últimos 2 años excluidos; un tiro si pasa (no se llegó: no pasó).
 4. Denominadores: familia carry original k=3 (H-C1 falló, H-C2/H-C3 cerrados);
-   tanda 2026-07-04b k=1 (H-D1). Todo resultado positivo se reporta con su k.
+   tanda 2026-07-04b k=1 (H-D1 falló). Todo resultado positivo se reporta con su k.
