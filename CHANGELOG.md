@@ -1,5 +1,14 @@
 # Changelog
 
+## Research — Tanda equities + COT smart-money (2026-07-05): E2 overnight es REAL (1er pase de existencia)
+
+Data: SPY/QQQ/IWM D1 vía el loader Yahoo del proyecto (`scripts/equity_backfill.py`; Stooq quedó tras un challenge JS). Pre-registro `research/HIPOTESIS_2026-07-05_batch.md` (k=3, Bonferroni t≥2.40), commiteado ANTES de correr.
+
+- **E1 turn-of-month (`equity_anomaly_study.py`): NO PASA.** Positivo pero débil (SPY t=1.30, QQQ t=1.20, IWM t=0.08). Muere.
+- **F1 COT commercials (`cot_commercials_study.py`): NO PASA.** Ruido, espejo de los specs. La familia COT queda cerrada por ambos lados.
+- **E2 overnight vs intraday: PASA EXISTENCIA — el 1er pase claro del proyecto.** Casi todo el retorno de los índices es overnight: SPY +9.5%/año (t=5.17), QQQ +13% (t=4.75), IWM +12.5% (t=4.82); el intraday es ~0/negativo. **Y sobrevive costos idealizados** (`overnight_tradeability.py`): SPY neto ~+7%/año @1bp, +4.5% @2bp; 79-85% años positivos.
+- **PERO no accionable para este bot** (US equities + órdenes MOC/MOO, fuera del MT5-forex demo), Sharpe ~0.7 con maxDD ~40%, la ejecución al auction de apertura está contestada (Lachance 2021), y es archi-conocido → probable compensación por riesgo overnight. Veredicto: REAL y posiblemente tradeable, pero **NO es luz verde ni accionable acá** — cualquier intento serio es un proyecto aparte. NADA se prende vivo. Sin bump de versión (research).
+
 ## Research — Carry trade vía FRED (2026-07-04): NO PASA, carry cerrado
 
 Tasas de FRED (8 divisas, 46,585 filas, USD desde 1954) en un sqlite de research aparte (`scripts/rates_backfill.py`). Pre-registro `research/HIPOTESIS_2026-07-04_carry.md`, commiteado ANTES de correr.
