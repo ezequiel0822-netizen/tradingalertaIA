@@ -1,12 +1,13 @@
-# Trading Alert AI v3.9.3
+# Trading Alert AI v3.11.0
 
 Trader engine algoritmico **local** (Python 3.12, Windows) enfocado **100% a LA BOLSA** (acciones US + forex + oro). Observa datos publicos, guarda historial en SQLite, decide entradas/salidas con un strategy router swing, opera paper trades simulados, aprende del P&L realizado neto de costos, y puede enviar ordenes **solo a cuenta MT5 demo** (con confirmacion manual o auto-confirmacion opt-in).
 
 **Real-money trading sigue bloqueado por design.** `enable_real_trading` es `False` HARDCODED en `settings.py` (ya no se lee del env), y la barrera real es `_is_demo_account()` en `mt5_demo_trader.py` (rechaza cualquier cuenta no-demo). El sistema no es recomendacion financiera: filtra candidatos, simula y aprende para revision manual.
 
-## Estado actual (v3.9.3, jun-2026)
+## Estado actual (v3.11.0, jul-2026)
 
-- **697 tests verdes.** Corriendo en la Lenovo contra MT5 demo via `.\start_bot.ps1`.
+- **721 tests verdes.** Corriendo en la Lenovo contra MT5 demo via `.\start_bot.ps1`.
+- **Búsqueda de edge CERRADA (jul-2026): 9 hipótesis con rigor (pre-registro/holdout/Bonferroni), 0 tradeables.** El promotion gate tiene TODAS las estrategias en SHADOW → cero órdenes a MT5 (protección, no bug). Detalle: `RESUMEN_COMPLETO.md` §2.8, `research/HIPOTESIS_*.md`, `exports/INFORME_PROYECTO_2026-07.xlsx`.
 - **REFOCUS v3.7.0 — 100% LA BOLSA.** Las **memecoins se cortaron** (`ENABLE_MEMECOIN_ENGINE=false`; el user tiene un bot aparte) y el **scalping se apago**. Acciones son paper-only; solo forex/oro ejecutan a MT5 demo.
 - **Protecciones vivas (todas downward-only, solo bajan a paper):** calendar gate, cap de exposicion neta USD, cooldown por simbolo, exit shadow (registrando), **regime gate** (`ENABLE_REGIME_GATE`) y **COT collector** (`ENABLE_COT_COLLECTOR`, + backfill de 5 años / 2340 filas en `cot_snapshots`).
 - **NO hay edge probado** — confirmado por multiples vias independientes (backtest D1, diagnostico vivo = regimen, ML AUC 0.533, CV temporal 0.475 OOS, walk-forward por slice). El gate de data de Fase D se cruzo (403/400) pero NO destrabo edge.
@@ -58,7 +59,7 @@ Copia `.env.example` como referencia y pon los valores reales solo en `.env`. Va
 # Obligatorias
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_CHAT_ID=
-# APP_VERSION: NO pinear (el default vive en settings.py = v3.9.3). Si se pinea, pisa al codigo.
+# APP_VERSION: NO pinear (el default vive en settings.py = v3.11.0). Si se pinea, pisa al codigo.
 
 # MT5 (read + demo). Credenciales reales SOLO en tu .env.
 ENABLE_MT5_READER=true
@@ -296,12 +297,12 @@ SQLite en `SQLITE_PATH` (default `trading_alert_ai.db` en la raiz). Mantenela en
 - `app/intelligence` + `app/config` + `app/utils`: Claude/macro/calidad, settings, utilidades.
 - `obsidian/tradingbot v.1`: memoria del proyecto.
 - `scripts`: herramientas manuales de research (`cot_backfill.py`, `cot_ml_experiment.py`).
-- `tests`: 697 tests.
+- `tests`: 721 tests.
 
 ## Tests
 
 ```powershell
-python -m pytest tests/ -q     # 697 verdes
+python -m pytest tests/ -q     # 721 verdes
 ```
 
 ## Advertencia

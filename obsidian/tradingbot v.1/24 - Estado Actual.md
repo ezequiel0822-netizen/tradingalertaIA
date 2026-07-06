@@ -1,11 +1,13 @@
-# Estado Actual — v3.9.3 (2026-06-21)
+# Estado Actual — v3.11.0 (2026-07-06)
 
 > Reemplaza a [[14 - Estado Actual v2.7.0]] como nota de estado vigente.
 > Detalle por versión en `CHANGELOG.md`; arquitectura en `CONTEXTO_MAESTRO_v3.8.0.md`.
+> Búsqueda de edge (jul-2026): `RESUMEN_COMPLETO.md` §2.8 + `research/HIPOTESIS_*.md`.
 
 ## Dónde estamos
 
-- **v3.9.3**, **697 tests verdes**, corriendo en la Lenovo contra MT5 demo. **COT collector VIVO + backfill 5yr hecho** (2340 filas). Scalping OFF.
+- **v3.11.0**, **721 tests verdes**, corriendo en la Lenovo contra MT5 demo. Scalping OFF.
+- **BÚSQUEDA DE EDGE CERRADA (jul-2026): 9 hipótesis con rigor, 0 tradeables.** El promotion gate tiene TODAS las estrategias en SHADOW → cero órdenes a MT5 desde el 17-jun (protección, no bug). Reales-no-tradeables: viernes del oro, carry. Real-fuera-de-scope: overnight equities. Informe: `exports/INFORME_PROYECTO_2026-07.xlsx`.
 - **REFOCUS v3.7.0: 100% LA BOLSA** (acciones US + forex + oro). Memecoins CORTADAS
   (`ENABLE_MEMECOIN_ENGINE=false`; el user montó un bot aparte), scalping APAGADO, stock
   alerts ON. **v3.8.0: regime gate vivo** (`ENABLE_REGIME_GATE`, opt-in, downward-only):
@@ -133,14 +135,24 @@
   MÁS MESES. El script quedó en `main` (PR #2). El bot **no se toca** — dejarlo correr es justo lo que
   destraba el próximo experimento. 697 tests (sin cambios; el script es herramienta manual).
 
+## Cierre de sesión 2026-07-02→06 (auditoría total + búsqueda de edge exhaustiva)
+
+- **Auditoría de 3 agentes → v3.9.4-v3.11.0** (detalle en `CHANGELOG.md` + `CONTEXTO §addendum` + `RESUMEN §2.8`):
+  A1 poison-message (brickeaba el bot 24h), perf del ciclo (índice/LLM-fuera-del-hot-path/WAL/poll 120/retención),
+  session_breakout replayable, A2/M1/M2/M4 + short trailing, gold_friday_hold (§11 harness-only). **721 tests.**
+- **Búsqueda de edge CERRADA: 9 hipótesis con pre-registro/holdout/Bonferroni → 0 tradeables.**
+  COT specs+commercials (40yr), carry, estacionalidad, session_breakout H1, ML: MUERTOS. Viernes del oro y
+  carry: REALES pero NO tradeables (costos/régimen). Overnight equities (SPY/QQQ/IWM): REAL, sobrevive costos
+  (~+7-10%/año) PERO fuera del scope del bot (US equities + MOC/MOO). Scripts en `scripts/`, veredictos en
+  `research/HIPOTESIS_*.md`, data nueva en `research_rates.db`, informe en `exports/INFORME_PROYECTO_2026-07.xlsx`.
+- **Conclusión honesta**: no hay edge tradeable al alcance de este bot. El valor es la infra + la disciplina.
+
 ## Qué sigue
 
-1. **Dejar correr el libro vivo + que el COT acumule MÁS MESES** (lo de mayor valor ahora — es lo que
-   destraba el re-test del COT, que hoy salió sin señal por ventana de ~1 mes).
-2. Regime gate y COT ya VIVOS (`ENABLE_REGIME_GATE` / `ENABLE_COT_COLLECTOR=true`).
-3. **Completar el veredicto del backtest de acciones** cuando Yahoo no throttlee
-   (`stock_backtest_run.json` + comando listos) + S3.
-4. **RE-correr `scripts/cot_ml_experiment.py`** cuando el COT tenga más meses (ya se probó el 21-jun =
-   inconcluso, 0.607 dentro del ruido). Mirar SIEMPRE TimeSeriesSplit. Solo si sube robusto de ~0.55 hay señal.
-5. **NO Fase D / más modelos** sobre los features actuales (ya probado 2 veces = sin señal). Fase E con edge + 3 meses.
-6. Real-money: `GO_LIVE_RUNBOOK.md` cuando `/readiness` esté verde, con decisión deliberada.
+1. **CONSOLIDAR**: dejar el bot corriendo en demo juntando data. Es el camino honesto ahora que la búsqueda
+   de edge se cerró con evidencia.
+2. **NO ir a real-money** (no hay edge que lo justifique; sigue HARDCODED bloqueado).
+3. **NO re-abrir familias cerradas** ni cherry-pickear (dredging). Una hipótesis NUEVA = pre-registro nuevo.
+4. **NO más modelos/IA** sobre los mismos datos (el mercado precia la info pública; probado con ML: 0.475 OOS).
+5. Si algún día se persigue el **overnight** en serio: proyecto APARTE (broker de acciones + infra MOC/MOO), no este bot.
+6. Real-money: `GO_LIVE_RUNBOOK.md` cuando `/readiness` esté verde (no lo está).
