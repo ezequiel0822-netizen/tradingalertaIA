@@ -16,13 +16,16 @@ REFOCUS v3.7.0: 100% LA BOLSA (acciones US + forex + oro). Las MEMECOINS se cort
 (ENABLE_MEMECOIN_ENGINE=false; el user tiene un bot aparte para memecoins) y el SCALPING
 se apagó. Decide con un strategy router (swing), hace paper trades y manda órdenes a MT5
 demo (MetaQuotes-Demo, solo forex/oro ejecutan; acciones son paper). Real-money BLOQUEADO
-por diseño (HARDCODED de verdad desde v3.9.3). Estado: v3.9.3, 697 tests verdes. Demo ~$88.6k (plano).
+por diseño (HARDCODED de verdad desde v3.9.3). Estado: v3.11.0, 721 tests verdes. Demo ~$88.6k (plano).
+BÚSQUEDA DE EDGE CERRADA (jul-2026): 9 hipótesis probadas con rigor, 0 tradeables (RESUMEN §2.8).
+El promotion gate tiene TODAS las estrategias en SHADOW → cero órdenes a MT5 (protección, no bug).
 
-ANTES DE TOCAR NADA leé (en el repo, en este orden): RESUMEN_COMPLETO.md (todo en uno),
-PROXIMOS_PASOS.md, CONTEXTO_MAESTRO_v3.8.0.md (arquitectura vigente + addendum v3.9.0 al final),
-CHANGELOG.md (historia hasta v3.9.3), GO_LIVE_RUNBOOK.md (camino a real-money), y para el backtest
-ESPEC_BACKTEST_REPLAY_v1.md (forex) + ESPEC_BACKTEST_STOCKS_v1.md (acciones) +
-MAPA_DE_EDGE_Y_RUTA.md (la ruta de edge). Y la carpeta de memoria de Claude.
+ANTES DE TOCAR NADA leé (en el repo, en este orden): RESUMEN_COMPLETO.md (todo en uno; §2.8 =
+auditoría jul + búsqueda de edge), PROXIMOS_PASOS.md, CONTEXTO_MAESTRO_v3.8.0.md (arquitectura
+vigente + addendum v3.9.4→v3.11.0 al final), CHANGELOG.md (historia hasta v3.11.0),
+research/HIPOTESIS_*.md (los veredictos de edge, pre-registrados), GO_LIVE_RUNBOOK.md,
+MAPA_DE_EDGE_Y_RUTA.md. Y la carpeta de memoria de Claude. Informe consolidado en
+exports/INFORME_PROYECTO_2026-07.xlsx.
 
 REGLAS INAMOVIBLES (no romper nunca):
 - ENABLE_REAL_TRADING=false HARDCODED. Real-money prohibido sin autorización nueva y
@@ -31,7 +34,7 @@ REGLAS INAMOVIBLES (no romper nunca):
 - El LLM y el ML son SUBTRACTIVOS: solo pueden vetar / bajar-a-paper, JAMÁS forzar una orden.
 - Todo lo nuevo (Ollama, asesor, ensemble veto, resumen diario) es opt-in OFF + soft-fail:
   si está apagado, el bot corre idéntico a antes.
-- Nunca leer/mostrar el .env real ni secrets. Mantener pytest verde (692). Al tocar
+- Nunca leer/mostrar el .env real ni secrets. Mantener pytest verde (721). Al tocar
   Settings, sincronizar tests/test_score._settings() Y tests/test_alert_rules._settings().
 - Versionado: patch para fixes, minor SOLO para features reales, sin saltar números.
 - Real-money: el user ya lo pidió 3+ veces; la respuesta es GO_LIVE_RUNBOOK.md +
@@ -104,6 +107,14 @@ QUÉ SE CONSTRUYÓ (serie v3, todo pusheado):
   COT + re-test temporal del ML. Veredicto SIN SEÑAL accionable (test primario OOS 0.533<0.55; corte FX/oro
   n=178 0.585->0.607 pero dentro del ruido en ~1 mes, COT semanal = ~4-5 lecturas distintas). ENABLE_ML_
   PREDICTOR sigue OFF; re-correr el script cuando el COT acumule mas meses. Detalle en RESUMEN_COMPLETO §2.7.
+- AUDITORIA TOTAL + BUSQUEDA DE EDGE (jul-2026, v3.9.4->v3.11.0, RESUMEN §2.8): 3 agentes hallaron bugs ->
+  v3.9.4 (A1 poison-message brickeaba el bot 24h + M3/M5), v3.9.5 (perf: indice, LLM fuera del hot path,
+  WAL, poll 120, retencion), v3.10.0 (session_breakout replayable), v3.10.1 (A2/M1/M2/M4 + short trailing),
+  v3.11.0 (gold_friday_hold harness-only). EDGE: 9 hipotesis con pre-registro/holdout/Bonferroni ->
+  0 tradeables. COT (specs+commercials), carry, estacionalidad, session_breakout H1: MUERTOS. Viernes del
+  oro y carry: REALES pero NO tradeables (costos/regimen). Overnight equities: REAL y sobrevive costos
+  (~+7-10%/año) PERO fuera del scope del bot (US equities + MOC/MOO). Scripts en scripts/, veredictos en
+  research/HIPOTESIS_*.md, data nueva en trading_data/research_rates.db. NO re-abrir familias cerradas.
 - Scalping confirmado OFF (bot_state.scalping_active=false). OJO/gotcha: bot_state PISA al .env para
   scalping y bot_mode (prioridad CLI > bot_state > .env); si algo ignora el .env, revisa bot_state.
 - GO_LIVE_RUNBOOK.md: el camino completo a real-money (gates, broker, codigo del dia-D,
@@ -120,25 +131,26 @@ breakout pierde -0.57R en LONGS y gana +1.29R en SHORTS; oro longs -2.57R = rég
 TimeSeriesSplit AUC 0.475 (PEOR que azar) OOS, aunque el k-fold con shuffle daba 0.69 y un split
 simple 0.627 — la brecha es la firma de cero señal forward + overfitting in-sample. NO es
 volatilidad (VIX ~16, calmo). El −11% del demo fue el bug de mayo; limpio queda ~plano (~$88.6k).
-El LLM/ML filtran, explican, protegen — NO crean edge (NO prender ENABLE_ML_PREDICTOR: el filtro
-sobre esta data es ruido). Lo más valioso: DEJAR CORRER el libro vivo y que el COT acumule.
-Hardware: la GPU no banca LLM local rápido (~50s/gen) — nada de LLM en el hot path;
-ContinuousLearner OFF en la Lenovo (límite de hardware).
+El LLM/ML filtran, explican, protegen — NO crean edge. **ACTUALIZACIÓN jul-2026: la búsqueda de
+edge se CERRÓ con evidencia (RESUMEN §2.8): 9 hipótesis con rigor, 0 tradeables.** Familias muertas:
+COT (specs+commercials, 40yr), carry, estacionalidad, session_breakout H1, ML. Reales-no-tradeables:
+viernes del oro (+0.040R) y carry (2ª mitad neg + swap). Real-fuera-de-scope: overnight equities
+(~+7-10%/año, sobrevive costos, PERO US equities + MOC/MOO, no el universo MT5-forex del bot).
+Conclusión honesta: NO hay edge tradeable al alcance de este bot. Su valor es la infra + la disciplina.
+Hardware: la GPU no banca LLM local rápido (~50s/gen) — nada de LLM en el hot path (v3.9.5 lo movió al
+send-path); ContinuousLearner OFF en la Lenovo.
 
-PRÓXIMOS PASOS: 1) DEJAR CORRER el libro vivo + que el COT acumule semanas (lo de mayor valor
-ahora); 2) regime gate y COT ya están VIVOS (ENABLE_REGIME_GATE / ENABLE_COT_COLLECTOR=true en
-la Lenovo); 3) completar el veredicto del backtest de ACCIONES cuando Yahoo deje de throttlear
-(stock_backtest_run.json + comando listos) y cerrar S3; 4) features de COT YA se
-probaron (21-jun, scripts/cot_ml_experiment.py): inconcluso (OOS primario 0.533<0.55; corte FX/oro 0.607
-pero dentro del ruido en ~1 mes). RE-CORRER el MISMO script cuando el COT acumule MÁS MESES (que las
-features varíen entre regímenes), mirando TimeSeriesSplit — si sube robusto de ~0.55 hay señal. NO
-construir Fase D / más modelos sobre los features actuales: ya se probó 2 veces = sin señal (AUC 0.475 OOS); 5) Fase E (edge +
-3 meses) sigue lejos; 6) real-money: GO_LIVE_RUNBOOK.md cuando /readiness verde (sigue BLOQUEADO).
+PRÓXIMOS PASOS (jul-2026): 1) CONSOLIDAR — dejar el bot corriendo en demo juntando data; es el camino
+honesto. 2) NO ir a real-money (no hay edge que lo justifique; sigue HARDCODED bloqueado). 3) NO
+re-abrir familias cerradas ni cherry-pickear (dredging); una hipótesis NUEVA requiere pre-registro nuevo
+(research/HIPOTESIS_*.md). 4) NO más modelos/IA sobre los mismos datos (el mercado precia la info pública).
+5) Si algún día se persigue el overnight en serio, es un PROYECTO APARTE (broker de acciones + infra
+MOC/MOO), no este bot. Informe consolidado: exports/INFORME_PROYECTO_2026-07.xlsx.
 
 PRIMERA TAREA AL RETOMAR:
 1. python preflight.py (chequea todo: config, secretos, MT5, refocus). Debe decir LISTO.
 2. correr: .\start_bot.ps1 (pide contraseña si STARTUP_PASSWORD_SHA256 está en .env).
-3. verificar en Telegram: /health (debe decir v3.9.3) + /readiness + /exposicion + /scalping_status (inactivo).
+3. verificar en Telegram: /health (debe decir v3.11.0) + /readiness + /exposicion + /scalping_status (inactivo).
    /market tarda ~50s en hardware chico — es normal, no es un bug.
 4. si OK, dejar correr. (Ollama opcional: ollama pull llama3.2:3b / llama3.1.)
 ```

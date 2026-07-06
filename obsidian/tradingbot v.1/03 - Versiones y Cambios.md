@@ -1,7 +1,7 @@
 ---
 tags: [versiones, historial, evolucion]
-version: v3.9.3
-updated: 2026-06-21
+version: v3.11.0
+updated: 2026-07-06
 ---
 
 # Versiones y Cambios
@@ -9,7 +9,7 @@ updated: 2026-06-21
 > [!info] Trayectoria
 > 2 semanas de evolucion desde un MVP read-only hasta un trader engine con learning honesto basado en P&L realizado neto de costos.
 
-> [!warning] Las tablas de abajo llegan hasta v2.7.x (historico). Para v2.8.0 → v3.9.3 + el experimento de COT (21-jun), la historia canonica esta en `CHANGELOG.md` y el estado vigente en [[24 - Estado Actual]]. Resumen v3: refocus 100% a la bolsa (memecoins cortadas), regime gate + COT collector vivos, backtest replay harness, y NO hay edge probado (confirmado 5+ vias; el experimento de COT del 21-jun tampoco lo destrabo → ML sigue OFF).
+> [!warning] Las tablas de abajo llegan hasta v2.7.x (historico). Para v2.8.0 → **v3.11.0** la historia canonica esta en `CHANGELOG.md` y el estado vigente en [[24 - Estado Actual]]. Resumen: refocus 100% a la bolsa, regime gate + COT collector vivos, backtest replay harness, auditoria total jul-2026 (v3.9.4-v3.11.0: A1 poison-message, perf del ciclo, session_breakout replayable, gold_friday_hold). **BUSQUEDA DE EDGE CERRADA (jul-2026): 9 hipotesis con rigor, 0 tradeables** (COT/carry/estacionalidad/session_breakout muertos; oro-viernes y carry reales-no-tradeables; overnight equities real-fuera-de-scope). Detalle: `RESUMEN §2.8` + `research/HIPOTESIS_*.md`.
 
 ---
 

@@ -98,6 +98,17 @@ posicionamiento), y el gap in-sample/OOS persiste (k-fold 0.73 vs OOS 0.607). **
 `ENABLE_ML_PREDICTOR` sigue OFF; re-correr el MISMO script cuando el COT acumule MÁS MESES.** El script
 quedó commiteado y es reproducible. Es el proyecto funcionando como fue diseñado (MAPA §9).
 
+**ACTUALIZACIÓN 2026-07 — BÚSQUEDA DE EDGE CERRADA (v3.9.4→v3.11.0, RESUMEN §2.8).** Se aplicó el cambio
+de paradigma (unidad de análisis: trade vivo → barra/semana histórica backfilleable → veredicto en horas)
+y se probaron **9 hipótesis con rigor** (pre-registro commiteado ANTES de correr en `research/HIPOTESIS_*.md`,
+holdout, Bonferroni): **0 tradeables.** COT × precio (specs, 40yr), COT commercials, carry (tasas FRED, 31yr),
+estacionalidad/turn-of-month, session_breakout H1 (14.213 trades), ML: MUERTOS. Viernes del oro y carry:
+REALES pero NO tradeables (costos + régimen). Overnight equities (SPY/QQQ/IWM, 34yr): REAL y sobrevive
+costos (~+7-10%/año) PERO fuera del scope del bot (US equities + órdenes MOC/MOO). **Conclusión: no hay edge
+tradeable al alcance de este bot.** Camino honesto: consolidar (dejar correr en demo), NO re-abrir familias
+cerradas (dredging), NO más modelos/IA sobre los mismos datos, NO real-money. En paralelo, auditoría de 3
+agentes → fixes v3.9.4-v3.10.1 (A1 poison-message, perf del ciclo, etc.). Informe: `exports/INFORME_PROYECTO_2026-07.xlsx`.
+
 ## 4. Lo que FALTA (roadmap, en orden de valor)
 
 ### ✅ Fase C — ContinuousLearner *(HECHO — v3.2.0)*

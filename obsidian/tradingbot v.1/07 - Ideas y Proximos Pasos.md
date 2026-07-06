@@ -1,13 +1,13 @@
 ---
 tags: [roadmap, ideas, futuro]
-version: v3.9.3
-updated: 2026-06-21
+version: v3.11.0
+updated: 2026-07-06
 ---
 
 # Ideas y Proximos Pasos
 
-> [!info] Estado actual v3.9.3 (2026-06-21) — ver [[24 - Estado Actual]]
-> Refocus 100% a la bolsa (memecoins cortadas, scalping off). Protecciones vivas downward-only (calendar gate, cap USD, regime gate) + COT collector vivo (+ backfill 5yr). El gate de data de Fase D se CRUZO (403/400) pero NO destrabo edge: el ML sobre los features actuales NO tiene senial forward (CV temporal 0.475 OOS) y el **experimento de COT del 21-jun** (`scripts/cot_ml_experiment.py`) tampoco la levanto sobre la barra (corte FX/oro 0.607 OOS pero dentro del ruido en ~1 mes). `ENABLE_ML_PREDICTOR` sigue OFF → re-correr cuando el COT acumule mas meses. NO hay edge probado (5+ vias). Real-money BLOQUEADO. Las ideas viejas de abajo quedan como backlog historico.
+> [!info] Estado actual v3.11.0 (2026-07-06) — ver [[24 - Estado Actual]]
+> Refocus 100% a la bolsa (memecoins cortadas, scalping off). Protecciones vivas downward-only (calendar gate, cap USD, regime gate) + COT collector vivo. Auditoria total jul-2026 (v3.9.4-v3.11.0): A1 poison-message arreglado, perf del ciclo (LLM fuera del hot path, WAL, poll 120), session_breakout replayable, gold_friday_hold. **BUSQUEDA DE EDGE CERRADA: 9 hipotesis con pre-registro/holdout/Bonferroni → 0 tradeables** (COT specs+commercials, carry, estacionalidad, session_breakout H1, ML: muertos; oro-viernes y carry: reales-no-tradeables; overnight equities: real y sobrevive costos pero fuera del scope del bot). Conclusion: no hay edge tradeable al alcance de este bot; el valor es la infra + la disciplina. NO re-abrir familias cerradas, NO mas modelos/IA, NO real-money. Detalle: `RESUMEN §2.8` + `research/HIPOTESIS_*.md` + `exports/INFORME_PROYECTO_2026-07.xlsx`. Las ideas viejas de abajo son backlog historico.
 
 ---
 

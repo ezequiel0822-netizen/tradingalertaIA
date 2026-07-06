@@ -51,20 +51,20 @@ En una frase: **observa los mercados, apuesta en simulado, ejecuta a demo solo l
 pasa todos los filtros, gestiona y mide cada posición con honestidad brutal, y aprende
 de los resultados — sin tocar jamás dinero real.**
 
-## 2. Estado EXACTO al 21-jun-2026
+## 2. Estado EXACTO al 06-jul-2026
 
 | Qué | Estado |
 |---|---|
-| Versión | **v3.9.3** (main, pusheado) |
-| Tests | **697 verdes** |
+| Versión | **v3.11.0** (main, pusheado) |
+| Tests | **721 verdes** |
 | Foco | **100% LA BOLSA** (acciones US + forex + oro). Memecoins CORTADAS (bot aparte), scalping APAGADO |
 | Bot | Corriendo en la Lenovo vía **`.\start_bot.ps1`**. Preflight: `python preflight.py` |
 | Balance demo | ~$88,6xx (plano — el dinero real casi no se movió) |
-| Protecciones activas | calendar gate ✓, cap USD \|3\| ✓, cooldown 60 min ✓, exit shadow ✓; **regime gate** + **COT collector** VIVOS (`ENABLE_REGIME_GATE` / `ENABLE_COT_COLLECTOR=true`) |
-| Data hacia Fase D | **CRUZADO: 403/400** trades con features — pero el ML resultó SIN señal (CV temporal AUC 0.475 OOS), ver §3 y §2.7 |
-| Experimento COT | **CORRIDO el 21-jun** (`scripts/cot_ml_experiment.py`): features de COT + re-test temporal = **sin señal accionable** (OOS primario 0.533<0.55). ML sigue OFF. Ver §2.7 |
+| Protecciones activas | calendar gate ✓, cap USD \|3\| ✓, cooldown 60 min ✓, exit shadow ✓, regime gate ✓, COT collector ✓; **poll 120s** (v3.9.5) |
+| Órdenes a MT5 | CERO desde el 17-jun: **el promotion gate tiene TODAS las estrategias en SHADOW** (todas con avg_r<0 probado). Es el gate protegiendo capital, no un bug |
+| Búsqueda de edge | **CERRADA con evidencia (jul-2026): 9 hipótesis, 0 tradeables.** Ver §2.8. Informe consolidado en `exports/INFORME_PROYECTO_2026-07.xlsx` |
 | Real-money | BLOQUEADO; `/readiness` = NO LISTO |
-| Verdad de fondo | **No hay edge probado** — confirmado 5 vías: backtest D1, diagnóstico vivo (régimen), ML AUC 0.533, ML CV temporal 0.475 OOS, walk-forward por slice; el experimento de COT (21-jun) tampoco lo destrabó |
+| Verdad de fondo | **No hay edge tradeable** en los mercados que el bot opera. 7 familias muertas; 2 señales reales-no-tradeables (oro-viernes, carry); 1 real-fuera-de-scope (overnight equities) |
 
 ## 2.5 Serie v3.6.0 — Backtest Replay Harness — EN CURSO (actualizado 2026-06-14)
 
@@ -194,6 +194,42 @@ justo para no perseguir un 0.607-sobre-178-trades-en-1-mes (misma forma del 0.62
 0.475). **Re-correr el MISMO script cuando el COT acumule MÁS MESES** (que las features varíen entre
 regímenes). Es el proyecto funcionando como fue diseñado: midió honesto y frenó antes de inyectar edge.
 
+## 2.8 Auditoría total + búsqueda de edge exhaustiva (jul-2026) — v3.9.4→v3.11.0
+
+**Auditoría de 3 agentes (2-jul)** encontró bugs reales y se arreglaron en cadena:
+- **v3.9.4**: **A1 (ALTO)** — un comando de Telegram que crasheara brickeaba el bot hasta
+  24h (offset no avanzaba → poison-message); + M3 (obsidian soft-fail) + M5 (límite 4096).
+- **v3.9.5 — performance**: índice faltante (−11s/ciclo), **LLM fuera del hot path** (~30-50s/
+  ciclo que decoraba alertas no enviadas), **WAL** (mata "database is locked"), poll 60→120s,
+  retención 90d. Ciclo ~92s→~35-45s; suite de tests 4.5× más rápida.
+- **v3.10.0**: `forex_session_breakout` **replayable** (bar-time en vez de `datetime.now()`;
+  antes era irreplayable → cero validación histórica).
+- **v3.10.1**: A2 (scalping alert_id), M1 (`mt5.shutdown` global dejaba el reader ciego),
+  M2 (cooldown 429), M4 (dollar-volumes desalineados), short trailing + mark al ask.
+- **v3.11.0**: `gold_friday_hold` (regla congelada del gate §11, harness-only).
+
+**Búsqueda de edge — el cambio de paradigma que funcionó**: la unidad de análisis pasó de
+"trade vivo" (meses de espera) a "barra/semana histórica" backfilleable (veredicto en horas).
+Protocolo estricto: pre-registro commiteado ANTES de correr (`research/HIPOTESIS_*.md`),
+holdout, Bonferroni. **9 hipótesis, 0 tradeables:**
+
+| Familia | Muestra | Veredicto |
+|---|---|---|
+| ML features actuales / +COT | 374 / 178 trades | MUERTO (0.475 / 0.607 ruido) |
+| COT × precio (specs, 40yr) | 12.689 sem | MUERTO (2ª mitad negativa) |
+| COT commercials (smart money) | 12.689 sem | MUERTO (ruido) → **COT cerrado por ambos lados** |
+| forex_session_breakout (H1, 8yr) | 14.213 trades | MUERTO (−0.16R, 0% años+) |
+| Turn-of-month / estacionalidad | SPY 34yr | MUERTO/débil (t=1.3) |
+| **Viernes del oro** (§11, 21yr) | 1.081 trades | **REAL pero NO tradeable** (+0.040R < 0.10) |
+| **Carry trade** (FRED tasas, 31yr) | 6.524 trades | **REAL pero NO tradeable** (2ª mitad neg + swap) |
+| **Overnight equities** (34yr) | SPY/QQQ/IWM | **REAL, sobrevive costos** (~+7-10%/año) PERO **fuera del scope del bot** (US equities + MOC/MOO) |
+
+**Conclusión honesta**: no hay edge tradeable al alcance de este bot (forex/oro en MT5). Las
+señales reales que aparecieron o no sobreviven costos, o están en un mercado que el bot no
+opera. El valor del proyecto es la infraestructura + la disciplina de descartar rápido y no
+autoengañarse — no una estrategia rentable. Más IA/modelos NO ayudan (el mercado precia la info
+pública). Data nueva bajada: tasas FRED (`research_rates.db`), índices SPY/QQQ/IWM.
+
 ## 3. La verdad de fondo (la filosofía del proyecto)
 
 1. **El cuello de botella es DATA, no código.** No hay edge probado: el único +R agregado
@@ -286,7 +322,7 @@ contraseña de Windows + BitLocker.
 - `order_send` SOLO en `mt5_demo_trader.py`. No tocar ese archivo ni `mt5_reconciler.py`.
 - LLM/ML **SUBTRACTIVOS**: vetan/degradan, jamás fuerzan ni habilitan.
 - Todo lo nuevo: **opt-in OFF + soft-fail** (apagado o roto = bot idéntico).
-- **697 tests verdes siempre**. Settings nuevos → sincronizar `_settings()` de
+- **721 tests verdes siempre**. Settings nuevos → sincronizar `_settings()` de
   `test_score` Y `test_alert_rules`. Cada módulo nuevo trae su test file.
 - **Versionado**: patch (v3.5.1) para fixes, minor (v3.6.0) solo features reales,
   sin saltar números.
@@ -308,19 +344,21 @@ contraseña de Windows + BitLocker.
 
 ```
 Retomamos Trading Alert AI (bot de trading algorítmico LOCAL, Python 3.12, Windows).
-Estado: v3.9.3, main, 697 tests verdes, corriendo en la Lenovo vía .\start_bot.ps1.
+Estado: v3.11.0, main, 721 tests verdes, corriendo en la Lenovo vía .\start_bot.ps1.
 REFOCUS: 100% LA BOLSA (acciones+forex+oro); memecoins CORTADAS (bot aparte) y scalping
 APAGADO. Protecciones: calendar gate, cap USD, exit shadow; regime gate + COT collector VIVOS.
+BÚSQUEDA DE EDGE CERRADA (jul-2026): 9 hipótesis probadas con rigor, 0 tradeables (ver §2.8).
+El promotion gate tiene TODAS las estrategias en SHADOW → cero órdenes a MT5 (protección, no bug).
 
-Leé en este orden ANTES de tocar nada: RESUMEN_COMPLETO.md (todo el proyecto en uno),
-PROXIMOS_PASOS.md (qué sigue + reglas), CONTEXTO_MAESTRO_v3.8.0.md (arquitectura),
-CHANGELOG.md, GO_LIVE_RUNBOOK.md, y para el backtest ESPEC_BACKTEST_REPLAY_v1.md (forex) +
-ESPEC_BACKTEST_STOCKS_v1.md (acciones) + MAPA_DE_EDGE_Y_RUTA.md.
+Leé en este orden ANTES de tocar nada: RESUMEN_COMPLETO.md (todo el proyecto en uno, §2.8 =
+auditoría + edge), PROXIMOS_PASOS.md (qué sigue + reglas), CONTEXTO_MAESTRO_v3.8.0.md
+(arquitectura + addendum v3.9.4→v3.11.0 al final), CHANGELOG.md, research/HIPOTESIS_*.md
+(los veredictos de edge), GO_LIVE_RUNBOOK.md, MAPA_DE_EDGE_Y_RUTA.md.
 
 Reglas inamovibles: real-money BLOQUEADO (ENABLE_REAL_TRADING=false HARDCODED) hasta
 que /readiness esté verde; order_send solo en mt5_demo_trader.py; LLM/ML SUBTRACTIVOS;
 los gates vivos (calendar/cap USD/regime) son DOWNWARD-ONLY (solo bajan a paper); todo
-opt-in OFF + soft-fail; mantener 697 tests verdes; sincronizar los _settings() de
+opt-in OFF + soft-fail; mantener 721 tests verdes; sincronizar los _settings() de
 test_score y test_alert_rules al tocar Settings; versionado patch/minor sin saltos; el
 backtest escribe SOLO en backtest_*, no cuenta para /readiness ni Fase D. NO inventar edge
 artificial (curve-fitting). Hardware: GPU chica, nada de LLM en el hot path (~50s/gen).
@@ -331,15 +369,16 @@ peor que azar). El gate de data de Fase D se CRUZÓ (403/400) pero el ML es call
 sobre los features actuales — NO prender ENABLE_ML_PREDICTOR. El edge se DESCUBRE con info nueva
 (COT), no se inyecta. Dejar correr el libro + que el COT acumule.
 
-El experimento de COT YA se corrió (21-jun, scripts/cot_ml_experiment.py): sin señal accionable
-(OOS primario 0.533<0.55; corte FX/oro 0.607 pero dentro del ruido en ~1 mes). ML sigue OFF.
+La BÚSQUEDA DE EDGE está CERRADA (§2.8): 9 hipótesis con rigor (pre-registro/holdout/Bonferroni),
+0 tradeables para este bot. Reales-no-tradeables: viernes del oro, carry. Real-fuera-de-scope:
+overnight equities (~+7-10%/año pero US equities + MOC/MOO, no el universo MT5-forex del bot).
+NO re-abrir familias cerradas ni cherry-pickear (sería dredging). Nueva hipótesis = pre-registro nuevo.
 
-Decime qué querés hacer: (A) revisar la data (/performance, /readiness, /exposicion, /ml_status);
-(B) completar el veredicto del backtest de ACCIONES cuando Yahoo no throttlee (stock_backtest_run.json
-listo + S3); (C) RE-correr scripts/cot_ml_experiment.py cuando el COT acumule más meses (que las features
-de COT varíen entre regímenes; mirar SIEMPRE TimeSeriesSplit); (D) instrumentos descorrelacionados /
-backfill macro (MAPA §8); (E) otra cosa. NOTA: regime gate y COT ya VIVOS; NO Fase D / más modelos
-sobre features actuales (ya probado 2 veces = sin señal: AUC 0.475 OOS, y COT 0.607 dentro del ruido).
+Decime qué querés hacer: (A) revisar la data viva (/performance, /readiness, /exposicion); (B) CONSOLIDAR
+y dejar el bot corriendo en demo juntando data (el camino honesto — su valor es la infra + disciplina);
+(C) una hipótesis de edge NUEVA y específica, con pre-registro (no re-cortar lo ya cerrado); (D) otra cosa.
+NOTA: NO hay edge tradeable probado; NO ir a real-money; más IA/modelos NO ayuda (el mercado precia la
+info pública). Informe consolidado: exports/INFORME_PROYECTO_2026-07.xlsx.
 ```
 
 ---

@@ -1,4 +1,4 @@
-# CONTEXTO MAESTRO — Trading Alert AI v3.8.0 (+ addendum v3.9.0–v3.9.3 al final)
+# CONTEXTO MAESTRO — Trading Alert AI v3.8.0 (+ addendum v3.9.0–v3.11.0 al final)
 
 > Referencia de arquitectura/schema **vigente** (reemplaza a `CONTEXTO_MAESTRO_v3.6.0.md`,
 > que queda como base histórica). Local, Python 3.12, Windows + PowerShell + venv.
@@ -218,3 +218,30 @@ CFTC de 3 días, mira SIEMPRE TimeSeriesSplit OOS. **Veredicto: sin señal accio
 (n=374) OOS 0.509→0.533 (Δ +0.024, bajo umbral); corte FX/oro (n=178) 0.585→0.607 (1ª vez sobre 0.55
 pero dentro del ruido en ~1 mes, COT semanal = ~4-5 lecturas distintas). `ENABLE_ML_PREDICTOR` sigue
 OFF; re-correr el script cuando el COT acumule más meses. Detalle en `RESUMEN_COMPLETO.md` §2.7.
+
+**Addendum v3.9.4→v3.11.0 (auditoría total + búsqueda de edge, jul-2026 — detalle en RESUMEN §2.8):**
+
+*Fixes de la auditoría de 3 agentes (2-jul):* **v3.9.4** — A1 (ALTO): un comando de Telegram que
+crasheara brickeaba el bot hasta 24h (el offset no avanzaba → poison-message; try/except por update +
+offset en `finally` + defensa en `run_once`); + M3 (obsidian soft-fail), M5 (split 4096). **v3.9.5
+(perf)** — índice `signal_outcomes(evaluated_at)` (−11s/ciclo), **LLM fuera del hot path** (`_enrich_with_llm`
+solo en el send-path; antes corría por cada snapshot), **WAL + busy_timeout** en `get_connection` (mata
+"database is locked"), poll default 60→120s, retención 90d (`purge_old_learning_data`), cache TTL de news,
+skip de `security_check` basura. **v3.10.0** — `forex_session_breakout` replayable (bar-time del último
+candle en vez de `datetime.now()` + guard de frescura solo-vivo). **v3.10.1** — A2 (scalping alert_id
+negativo único), M1 (`is_connected` re-valida con `terminal_info()`; `mt5.shutdown` es global), M2 (cooldown
+429 Yahoo), M4 (dollar-volumes alineados), short trailing + mark al ask. **v3.11.0** — `gold_friday_hold`
+(regla congelada del gate §11, registrada SOLO en `default_strategy_registry` del harness, jamás en el
+`StrategyRouter` vivo — test de seguridad lo garantiza).
+
+*Búsqueda de edge (research-only, pre-registrado):* 9 hipótesis con protocolo anti-dredging (pre-registro
+commiteado ANTES de correr en `research/HIPOTESIS_*.md`, holdout, Bonferroni). **0 tradeables.** COT ×
+precio (specs, 40yr) y COT commercials: muertos → COT cerrado. Carry (tasas FRED, 31yr): real pero no
+tradeable (2ª mitad neg + swap). Estacionalidad/turn-of-month: muerta/débil. session_breakout H1 (14.213
+trades): muerto (−0.16R). Viernes del oro (§11): real pero no tradeable (+0.040R < 0.10). **Overnight
+equities (SPY/QQQ/IWM): REAL y sobrevive costos (~+7-10%/año) PERO fuera del scope del bot** (US equities +
+órdenes MOC/MOO, no el universo MT5-forex). Scripts nuevos en `scripts/` (cot_price_study, carry_*,
+equity_*, overnight_tradeability, etc.); data nueva en `trading_data/research_rates.db` (tasas + índices);
+informe consolidado en `exports/INFORME_PROYECTO_2026-07.xlsx`. **Conclusión: no hay edge tradeable al
+alcance de este bot; el valor es la infra + la disciplina. NO re-abrir familias cerradas (dredging); NO
+más modelos/IA sobre los mismos datos; NO real-money.**
