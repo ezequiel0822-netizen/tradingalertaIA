@@ -14,6 +14,16 @@
 
 ## 1. Estado actual
 
+> **⚠️ ACTUALIZACIÓN 6-jul-2026: v3.12.0, 801 tests verdes.** Post-v3.9.3: v3.10.0
+> (session breakout replayable, bar-time), v3.10.1 (fixes auditoría A2/M1/M2/M4 +
+> short trailing), v3.11.0 (`gold_friday_hold` harness-only; §11 = NO PASA, tilt real
+> pero no tradeable), research jul (carry/ToM/COT-commercials cerrados; overnight real
+> pero NO accionable), y **v3.12.0**: `app/indicators/` (VWAP + Hurst + footprint lite,
+> puros/replayables), integración INFORMATIVA (score/gates intactos), captura al entry
+> → ML dataset (ML sigue OFF), VWAP gate downward-only (`ENABLE_VWAP_GATE=false`) y
+> `/claude_analyze` (LLM a demanda, analista secundario). Detalle: CHANGELOG.md y
+> RESUMEN_COMPLETO §2.8. Lo de abajo sigue siendo la base histórica.
+
 - **v3.9.3**, **697 tests verdes** (main, pusheado). v3.9.0 = **COT collector** (CFTC semanal,
   opt-in OFF, **YA VIVO** + backfill 5yr hecho): posicionamiento institucional, primer input
   fuera del OHLCV. **v3.9.1-3 = fixes de la auditoría** (dashboard, **A1** forex_session_breakout,
@@ -178,7 +188,7 @@ Abrí Claude Code en `C:\Users\LENOVO\tradingalertaIA` y pegá esto como primer 
 
 ```
 Retomamos Trading Alert AI (bot de trading algorítmico LOCAL, Python 3.12, Windows).
-Estado: v3.9.3, main, 697 tests verdes, corriendo en la Lenovo vía .\start_bot.ps1.
+Estado: v3.12.0, main, 801 tests verdes, corriendo en la Lenovo vía .\start_bot.ps1.
 REFOCUS: 100% LA BOLSA (acciones+forex+oro); memecoins CORTADAS (bot aparte), scalping
 APAGADO. Protecciones: calendar gate, cap USD, exit shadow; regime gate + COT collector VIVOS.
 
@@ -190,8 +200,8 @@ ESPEC_BACKTEST_REPLAY_v1.md (forex) + ESPEC_BACKTEST_STOCKS_v1.md (acciones) + M
 Reglas inamovibles: real-money BLOQUEADO (ENABLE_REAL_TRADING=false HARDCODED) hasta
 que /readiness esté verde — el user ya lo pidió 3+ veces, la respuesta es el runbook,
 no el flag; order_send solo en mt5_demo_trader.py; LLM/ML SUBTRACTIVOS; los gates vivos
-(calendar/cap USD/regime) son DOWNWARD-ONLY (solo bajan a paper); todo opt-in OFF +
-soft-fail; mantener 697 tests verdes; al tocar Settings sincronizar los _settings() de
+(calendar/cap USD/regime/vwap) son DOWNWARD-ONLY (solo bajan a paper); todo opt-in OFF +
+soft-fail; mantener 801 tests verdes; al tocar Settings sincronizar los _settings() de
 test_score y test_alert_rules; versionado patch/minor sin saltos. El backtest (app/backtest/)
 escribe SOLO en backtest_*, NO cuenta para /readiness ni Fase D, no toca el ciclo vivo.
 NO inventar edge artificial (curve-fitting): el edge se descubre, no se inyecta.

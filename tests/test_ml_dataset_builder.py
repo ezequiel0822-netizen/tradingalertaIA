@@ -66,6 +66,11 @@ def _seed_trade(
     atr: float | None = None,
     macd: float | None = None,
     macd_signal: float | None = None,
+    vwap_dist: float | None = None,
+    vwap_week_dist: float | None = None,
+    hurst: float | None = None,
+    clv: float | None = None,
+    strength: str | None = None,
 ) -> None:
     now = opened_at or utc_now_iso()
     repo.create_paper_trade({
@@ -80,6 +85,10 @@ def _seed_trade(
         # v2.11.0 features tecnicas al entry (None = trade viejo / scalping)
         "rsi_entry": rsi, "atr_value": atr,
         "macd_value": macd, "macd_signal_value": macd_signal,
+        # v3.12.0 VWAP al entry (None = trade viejo / forex sin volumen)
+        "vwap_dist_pct": vwap_dist, "vwap_week_dist_pct": vwap_week_dist,
+        # v3.12.0 Hurst + footprint lite al entry
+        "hurst_entry": hurst, "clv_entry": clv, "candle_strength": strength,
     })
 
 
@@ -222,3 +231,54 @@ def test_feature_coverage_reports_na_features() -> None:
     cov = feature_coverage(df)
     assert cov["session"] == 1.0          # siempre poblada
     assert cov["rsi_entry"] == 0.0        # nunca poblada hoy
+
+
+def test_vwap_roundtrip_and_nan_for_old_trades() -> None:
+    # v3.12.0: vwap_dist_pct / vwap_week_dist_pct viajan del entry al dataset;
+    # trades sin captura (viejos / forex sin volumen) quedan NaN, no 0.
+    import pandas as pd
+
+    repo = _repo()
+    _seed_alert(repo, 1, ["breakout"])
+    _seed_alert(repo, 2, ["breakout"])
+    _seed_trade(repo, 1, 100.0, 110.0, 95.0, vwap_dist=0.42, vwap_week_dist=-1.3)
+    _seed_trade(repo, 2, 100.0, 110.0, 95.0)  # sin captura VWAP
+    df = build_ml_dataset(repo.db_path, export_csv=False)
+    assert "vwap_dist_pct" in df.columns and "vwap_week_dist_pct" in df.columns
+    by_alert = df.set_index("alert_id")
+    assert by_alert.loc[1, "vwap_dist_pct"] == 0.42
+    assert by_alert.loc[1, "vwap_week_dist_pct"] == -1.3
+    assert pd.isna(by_alert.loc[2, "vwap_dist_pct"])
+    assert pd.isna(by_alert.loc[2, "vwap_week_dist_pct"])
+
+
+def test_build_live_features_includes_vwap() -> None:
+    from app.learning.ml_dataset_builder import build_live_features
+
+    row = build_live_features({"opened_at": utc_now_iso(), "vwap_dist_pct": 0.5,
+                               "vwap_week_dist_pct": -0.2})
+    assert row["vwap_dist_pct"] == 0.5
+    assert row["vwap_week_dist_pct"] == -0.2
+    # sin captura -> None (XGBoost maneja NaN; jamas inventar 0)
+    row_old = build_live_features({"opened_at": utc_now_iso()})
+    assert row_old["vwap_dist_pct"] is None
+
+
+def test_hurst_and_footprint_roundtrip() -> None:
+    # v3.12.0: hurst_entry/clv_entry (numericas) y candle_strength (categorica)
+    # viajan del entry al dataset; sin captura -> NaN / "unknown".
+    import pandas as pd
+
+    repo = _repo()
+    _seed_alert(repo, 1, ["breakout"])
+    _seed_alert(repo, 2, ["breakout"])
+    _seed_trade(repo, 1, 100.0, 110.0, 95.0,
+                hurst=0.58, clv=0.85, strength="strong_bull")
+    _seed_trade(repo, 2, 100.0, 110.0, 95.0)  # sin captura
+    df = build_ml_dataset(repo.db_path, export_csv=False).set_index("alert_id")
+    assert abs(float(df.loc[1, "hurst_entry"]) - 0.58) < 1e-6
+    assert abs(float(df.loc[1, "clv_entry"]) - 0.85) < 1e-6
+    assert df.loc[1, "candle_strength"] == "strong_bull"
+    assert pd.isna(df.loc[2, "hurst_entry"])
+    assert pd.isna(df.loc[2, "clv_entry"])
+    assert df.loc[2, "candle_strength"] == "unknown"

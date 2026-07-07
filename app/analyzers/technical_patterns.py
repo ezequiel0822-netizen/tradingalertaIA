@@ -1,6 +1,10 @@
 from dataclasses import dataclass
 from typing import Any
 
+from app.indicators.candles import footprint_features
+from app.indicators.hurst import hurst_features
+from app.indicators.vwap import vwap_features
+
 
 @dataclass
 class TechnicalPattern:
@@ -17,6 +21,20 @@ class TechnicalPattern:
     resistance: float | None = None
     volatility_label: str = "unknown"
     sparkline: str = ""
+    # v3.12.0 — VWAP (informativo: NO entra al score; el gate vivo no cambia).
+    # session = reset diario por bar-time; week = anclado al lunes UTC.
+    # None/"unknown" cuando no hay volumen real (Yahoo forex) — soft-fail.
+    vwap: float | None = None
+    vwap_dist_pct: float | None = None
+    vwap_position: str = "unknown"
+    vwap_week_dist_pct: float | None = None
+    # v3.12.0 — Hurst (regimen estadistico) y footprint lite. Igual que el VWAP:
+    # informativos + features de research, JAMAS entran al score del pattern.
+    hurst: float | None = None
+    hurst_regime: str = "insufficient_data"
+    candle_strength: str = "neutral"
+    candle_clv: float | None = None
+    candle_patterns: str = ""
 
 
 def analyze_ohlcv(candles: list[dict[str, float]]) -> TechnicalPattern:
@@ -52,6 +70,11 @@ def analyze_ohlcv(candles: list[dict[str, float]]) -> TechnicalPattern:
     support = min(lows[-20:]) if lows else None
     resistance = max(highs[-20:]) if highs else None
     upper_band, lower_band, band_width = _bollinger(closes, 20)
+    # v3.12.0 — VWAP informativo (soft-fail sin volumen; jamas toca el score).
+    vwap_feats = vwap_features(candles)
+    # v3.12.0 — Hurst sobre los closes del feed + footprint de la ultima vela.
+    hurst_feats = hurst_features(closes)
+    fp = footprint_features(candles)
 
     trend = "neutral"
     if sma_9 and sma_20 and sma_9 > sma_20 and current > sma_20:
@@ -154,6 +177,21 @@ def analyze_ohlcv(candles: list[dict[str, float]]) -> TechnicalPattern:
         resistance=round(resistance, 8) if resistance is not None else None,
         volatility_label=volatility_label,
         sparkline=_sparkline(closes),
+        vwap=round(vwap_feats["vwap_session"], 8)
+        if vwap_feats["vwap_session"] is not None
+        else None,
+        vwap_dist_pct=round(vwap_feats["vwap_session_dist_pct"], 2)
+        if vwap_feats["vwap_session_dist_pct"] is not None
+        else None,
+        vwap_position=vwap_feats["vwap_session_position"],
+        vwap_week_dist_pct=round(vwap_feats["vwap_week_dist_pct"], 2)
+        if vwap_feats["vwap_week_dist_pct"] is not None
+        else None,
+        hurst=hurst_feats["hurst_best"],
+        hurst_regime=str(hurst_feats["hurst_regime"]),
+        candle_strength=str(fp["candle_strength"]),
+        candle_clv=fp["candle_clv"],
+        candle_patterns=str(fp["candle_patterns"]),
     )
 
 

@@ -758,6 +758,24 @@ class TradingAlertJob:
             )
             if pattern.sparkline:
                 reasons.append(f"Visual: {pattern.sparkline}")
+            # v3.12.0 — VWAP informativo en la alerta (no toca rank_bonus).
+            # Texto sin needles del feature_extractor.
+            if pattern.vwap_dist_pct is not None:
+                side = "sobre" if pattern.vwap_dist_pct >= 0 else "bajo"
+                reasons.append(
+                    f"VWAP sesion: precio {abs(pattern.vwap_dist_pct):.2f}% {side} VWAP."
+                )
+            # v3.12.0 — footprint/Hurst: solo lo notable (vela dominante,
+            # secuencia detectada, o regimen no-aleatorio). Sin needles.
+            if pattern.candle_strength.startswith("strong") or pattern.candle_patterns:
+                seq = pattern.candle_patterns or "sin secuencia"
+                reasons.append(
+                    f"Velas: {pattern.candle_strength} | {seq}."
+                )
+            if pattern.hurst is not None and pattern.hurst_regime != "random":
+                reasons.append(
+                    f"Hurst {pattern.hurst:.2f} ({pattern.hurst_regime})."
+                )
             reasons.extend(pattern.reasons[:3])
 
         if snapshot.category == "stock" and self.settings.enable_news_intel:
@@ -1032,6 +1050,14 @@ class TradingAlertJob:
                 "atr_value": pattern.atr_pct,
                 "macd_value": pattern.macd,
                 "macd_signal_value": pattern.macd_signal,
+                # v3.12.0 — VWAP al entry (research/ML dataset; ML sigue OFF).
+                # None honesto si no hay volumen (forex Yahoo).
+                "vwap_dist_pct": pattern.vwap_dist_pct,
+                "vwap_week_dist_pct": pattern.vwap_week_dist_pct,
+                # v3.12.0 — Hurst + footprint lite al entry (mismo contrato).
+                "hurst_entry": pattern.hurst,
+                "clv_entry": pattern.candle_clv,
+                "candle_strength": pattern.candle_strength,
             }
             created = self.repository.create_paper_trade(trade)
             if created and self.settings.enable_trade_action_reports:
@@ -1392,6 +1418,54 @@ class TradingAlertJob:
             logger.exception("Regime gate fallo; soft-fail -> permitir")
             return True
 
+    def _vwap_gate(self, paper_trade: dict) -> bool:
+        """v3.12.0: True = permitir order_send. Baja a paper si el trade pelea
+        el VWAP SEMANAL del simbolo: long con precio claramente BAJO el VWAP /
+        short claramente SOBRE (umbral vwap_gate_min_dist_pct). Mismo molde que
+        el regime gate: downward-only, opt-in OFF, soft-fail, solo forex/gold.
+        VWAP del cache D1 de MT5 (tick_volume) — Yahoo-forex no trae volumen,
+        por eso NO se usan los campos vwap_* persistidos del trade aca.
+        Defensivo: NO crea edge; no pelear el lado de valor de la semana."""
+        if not getattr(self.settings, "enable_vwap_gate", False):
+            return True
+        if str(paper_trade.get("category") or "") not in ("forex", "gold"):
+            return True
+        try:
+            from app.brokers.mt5_symbol_map import yahoo_to_mt5
+            from app.indicators.vwap import weekly_vwap
+
+            raw = str(paper_trade.get("symbol") or "")
+            mt5_sym = yahoo_to_mt5(
+                raw, getattr(self.settings, "mt5_broker_profile", "icmarkets")
+            ) or raw.upper().replace("=X", "")
+            candles = self._d1_candles_for_regime(mt5_sym)  # guard de frescura incluido
+            if not candles:
+                return True  # sin cache D1 -> no gate (soft)
+            reading = weekly_vwap(candles)
+            if (
+                reading.vwap is None
+                or reading.distance_pct is None
+                or reading.bars_used < 2
+            ):
+                return True  # sin volumen / semana recien empezada -> soft-allow
+            threshold = float(
+                getattr(self.settings, "vwap_gate_min_dist_pct", 0.5) or 0.0
+            )
+            direction = str(paper_trade.get("direction") or "long")
+            fighting = (
+                direction == "long" and reading.distance_pct < -threshold
+            ) or (direction == "short" and reading.distance_pct > threshold)
+            if fighting:
+                logger.info(
+                    "VWAP gate: paper-only symbol=%s dir=%s dist_semanal=%.2f%%",
+                    raw, direction, reading.distance_pct,
+                )
+                return False
+            return True
+        except Exception:
+            logger.exception("VWAP gate fallo; soft-fail -> permitir")
+            return True
+
     def _d1_candles_for_regime(self, mt5_symbol: str) -> list[dict]:
         """Velas D1 del cache historico (mt5_historical_cache) para clasificar el
         regimen. Vacio si no hay -> el gate hace soft-fail (permite). El cache se
@@ -1510,6 +1584,11 @@ class TradingAlertJob:
         # longs sangran contra el regimen. Downward-only + soft-fail.
         if not self._regime_gate(paper_trade):
             return  # contra-regimen -> paper-only (sin order_send a MT5)
+
+        # v3.12.0: VWAP gate. Si el trade pelea el VWAP semanal (long claramente
+        # bajo / short claramente sobre), queda paper-only. Downward-only + soft-fail.
+        if not self._vwap_gate(paper_trade):
+            return  # pelea el VWAP semanal -> paper-only (sin order_send a MT5)
 
         from app.brokers.mt5_demo_trader import MT5DemoTrader
 

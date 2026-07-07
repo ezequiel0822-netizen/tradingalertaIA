@@ -50,6 +50,74 @@ class BasicTelegramAssistant:
             "(requiere Ollama corriendo + ENABLE_OLLAMA_INTEGRATION=true)."
         )
 
+    def _analysis_reasoner(self):
+        """v3.12.0 — reasoner para /claude_analyze: usa Claude como transporte
+        si esta habilitado y disponible (mejor calidad, con sus cost caps);
+        si no, cae al Ollama local del reasoner default. Solo texto."""
+        if getattr(self.settings, "enable_claude_integration", False):
+            try:
+                from app.intelligence.claude_processor import ClaudeProcessor
+                from app.intelligence.reasoner import TradingReasoner
+
+                cp = ClaudeProcessor(self.settings, self.repository)
+                if cp.is_available():
+                    return TradingReasoner(self.settings, processor=cp)
+            except Exception:
+                pass  # soft-fail al transporte local
+        return self._reasoner()
+
+    def claude_analyze_message(self, query: str) -> str:
+        """/claude_analyze SYMBOL — analisis tecnico NARRADO por LLM combinando
+        VWAP + footprint de velas + Hurst + noticias (v3.12.0). A DEMANDA
+        (jamas en el hot path del ciclo; en hardware chico tarda ~50s, como
+        /market). Analista secundario: texto, sin senales ni override."""
+        if not getattr(self.settings, "enable_llm_advisor", False):
+            return self._advisor_off_message()
+        symbol = query.strip().upper()
+        if not symbol:
+            return "Dime un simbolo. Ejemplo: /claude_analyze NVDA"
+
+        snapshot = StockCollector(self.settings)._fetch_symbol(symbol)
+        if not snapshot:
+            return f"No pude obtener data publica para {symbol}."
+        candles = snapshot.raw.get("candles") or []
+        pattern = analyze_ohlcv(candles)
+
+        news_label, news_score = "no_recent_news", 0
+        headlines = ""
+        try:
+            news_items = NewsCollector(self.settings).collect_for_symbol(symbol)
+            news_label, news_score, news_reasons = analyze_news(news_items)
+            headlines = " | ".join(news_reasons[:3])
+        except Exception:
+            pass  # sin noticias el analisis tecnico sigue valiendo
+
+        context = {
+            "symbol": symbol,
+            "label": pattern.label,
+            "trend": pattern.trend,
+            "rsi": pattern.rsi,
+            "atr_pct": pattern.atr_pct,
+            "vwap_dist_pct": pattern.vwap_dist_pct,
+            "vwap_position": pattern.vwap_position,
+            "vwap_week_dist_pct": pattern.vwap_week_dist_pct,
+            "candle_strength": pattern.candle_strength,
+            "candle_clv": pattern.candle_clv,
+            "candle_patterns": pattern.candle_patterns or None,
+            "hurst": pattern.hurst,
+            "hurst_regime": pattern.hurst_regime,
+            "news_label": news_label,
+            "news_score": news_score,
+            "headlines": headlines or None,
+        }
+        text = self._analysis_reasoner().analyze_symbol(context)
+        if not text:
+            return (
+                "No pude generar el analisis (el LLM no respondio o esta "
+                "apagado). El bot sigue funcionando igual."
+            )
+        return f"Analisis LLM de {symbol}:\n\n{text}\n\n{DISCLAIMER}"
+
     def market_message(self) -> str:
         """/market — evaluacion del mercado de hoy via LLM local (solo texto)."""
         if not getattr(self.settings, "enable_llm_advisor", False):
@@ -207,6 +275,13 @@ class BasicTelegramAssistant:
         if normalized.startswith("/patron ") or normalized.startswith("patron ") or normalized.startswith("grafico "):
             query = raw.split(" ", 1)[1]
             return self.pattern_message(query)
+
+        # v3.12.0 — analisis tecnico narrado por LLM (a demanda, solo texto).
+        if (normalized.startswith("/claude_analyze") or normalized.startswith("claude_analyze")
+                or normalized.startswith("/analisis_llm")):
+            parts = raw.split(" ", 1)
+            query = parts[1] if len(parts) > 1 else ""
+            return self.claude_analyze_message(query)
 
         if normalized.startswith("/pro ") or normalized.startswith("pro ") or normalized.startswith("/tesis "):
             query = raw.split(" ", 1)[1]
@@ -372,6 +447,7 @@ Comandos:
 /noticias SIMBOLO - titulares/eventos recientes
 /filings SIMBOLO - filings SEC recientes para acciones
 /patron SIMBOLO - patron tecnico basico para acciones
+/claude_analyze SIMBOLO - analisis tecnico narrado por LLM (VWAP+velas+Hurst+noticias)
 /pro SIMBOLO - lectura profesional: grafico, noticias, filings, riesgos
 /horizontes SIMBOLO - retornos por horizonte (1h/6h/24h/7d) y MFE/MAE
 /backtest [Nh] [filtros] - top reglas o test de una combinacion (ej: /backtest 24h ia_pro,score:80-90)
@@ -1124,6 +1200,21 @@ Ahora puedes usar /aprendizaje y /paper.
             f"Score patron: {pattern.score}",
             f"RSI: {pattern.rsi if pattern.rsi is not None else 'unknown'}",
         ]
+        # v3.12.0 — VWAP de sesion (si hay volumen real; forex Yahoo no tiene).
+        if pattern.vwap is not None and pattern.vwap_dist_pct is not None:
+            lines.append(
+                f"VWAP sesion: {pattern.vwap:g} | precio {pattern.vwap_dist_pct:+.2f}%"
+                f" ({pattern.vwap_position})"
+            )
+        if pattern.vwap_week_dist_pct is not None:
+            lines.append(f"VWAP semanal: precio {pattern.vwap_week_dist_pct:+.2f}%")
+        # v3.12.0 — footprint lite + Hurst en /patron.
+        lines.append(f"Vela: {pattern.candle_strength}"
+                     + (f" | clv {pattern.candle_clv:.2f}" if pattern.candle_clv is not None else ""))
+        if pattern.candle_patterns:
+            lines.append(f"Secuencias: {pattern.candle_patterns}")
+        if pattern.hurst is not None:
+            lines.append(f"Hurst: {pattern.hurst:.2f} ({pattern.hurst_regime})")
         lines.extend(f"- {reason}" for reason in pattern.reasons[:5])
         lines.append(DISCLAIMER)
         return "\n".join(lines)
@@ -1179,6 +1270,12 @@ Ahora puedes usar /aprendizaje y /paper.
                 f"Volumen rel. {pattern.relative_volume if pattern.relative_volume is not None else 'unknown'}x | "
                 f"ATR {pattern.atr_pct if pattern.atr_pct is not None else 'unknown'}%"
             )
+            # v3.12.0 — VWAP de sesion en /pro (si hay volumen real).
+            if pattern.vwap is not None and pattern.vwap_dist_pct is not None:
+                lines.append(
+                    f"VWAP {pattern.vwap:g} | precio {pattern.vwap_dist_pct:+.2f}%"
+                    f" ({pattern.vwap_position})"
+                )
         lines.append("Razones:")
         lines.extend(f"- {reason}" for reason in pro.reasons[:5])
         if news_reasons:
@@ -1189,6 +1286,11 @@ Ahora puedes usar /aprendizaje y /paper.
             lines.extend(f"- {reason}" for reason in filing_reasons[:3])
         lines.append("Riesgos:")
         lines.extend(f"- {risk}" for risk in pro.risks[:4])
+        # v3.12.0 — el checklist de IA Pro existia pero no se mostraba en
+        # ningun lado (output muerto desde su creacion); /pro es su lugar.
+        if pro.checklist:
+            lines.append("Checklist:")
+            lines.extend(f"- {item}" for item in pro.checklist[:4])
         lines.append(DISCLAIMER)
         return "\n".join(lines)
 

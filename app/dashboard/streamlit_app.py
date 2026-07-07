@@ -130,10 +130,13 @@ if not alerts.empty and "reasons" in alerts.columns:
     pro_count = int(reason_text.str.contains("IA Pro", case=False, regex=False).sum())
     pattern_count = int(reason_text.str.contains("Patron grafico", case=False, regex=False).sum())
     catalyst_count = int(reason_text.str.contains("Noticias/eventos", case=False, regex=False).sum())
-    intel_cols = st.columns(3)
+    # v3.12.0 — alertas con lectura VWAP (la linea viaja en reasons).
+    vwap_count = int(reason_text.str.contains("VWAP", case=False, regex=False).sum())
+    intel_cols = st.columns(4)
     intel_cols[0].metric("Lecturas IA Pro", pro_count)
     intel_cols[1].metric("Patrones detectados", pattern_count)
     intel_cols[2].metric("Catalizadores", catalyst_count)
+    intel_cols[3].metric("Con VWAP", vwap_count)
 
 learning_cols = st.columns(3)
 learning_cols[0].metric("Outcomes evaluados", len(outcomes))

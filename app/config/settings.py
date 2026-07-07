@@ -303,6 +303,14 @@ class Settings:
     # cache D1. Downward-only, opt-in OFF, soft-fail. Defensivo: no crea edge,
     # deja de pelear la tendencia (los longs sangraban en regimen bajista).
     enable_regime_gate: bool
+    # v3.12.0 — VWAP gate: baja a paper el trade que pelea el VWAP semanal del
+    # simbolo (long con precio claramente BAJO el VWAP / short claramente SOBRE),
+    # computado del cache D1 de MT5 (tick_volume; Yahoo-forex no trae volumen).
+    # Downward-only, opt-in OFF, soft-fail — mismo molde que el regime gate.
+    enable_vwap_gate: bool
+    # Distancia minima |%| al VWAP semanal para considerar que "pelea" (evita
+    # gatear ruido pegado al VWAP). Conservador: el gate dispara poco.
+    vwap_gate_min_dist_pct: float
     # Phase 4 v2.3.0 — MT5 validation + walk-forward + data quality + CSV
     mt5_broker_profile: str
     enable_walk_forward_backtest: bool
@@ -487,7 +495,7 @@ def load_settings() -> Settings:
         obsidian_vault_path = safe_obsidian
 
     return Settings(
-        app_version=os.getenv("APP_VERSION", "v3.11.0"),
+        app_version=os.getenv("APP_VERSION", "v3.12.0"),
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
         telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID"),
         dexscreener_base_url=os.getenv(
@@ -733,6 +741,9 @@ def load_settings() -> Settings:
         enable_usd_exposure_cap=_get_bool("ENABLE_USD_EXPOSURE_CAP", False),
         max_net_usd_exposure=_get_int("MAX_NET_USD_EXPOSURE", 3),
         enable_regime_gate=_get_bool("ENABLE_REGIME_GATE", False),
+        # v3.12.0 — VWAP gate (downward-only, opt-in OFF)
+        enable_vwap_gate=_get_bool("ENABLE_VWAP_GATE", False),
+        vwap_gate_min_dist_pct=_get_float("VWAP_GATE_MIN_DIST_PCT", 0.5),
         # Phase 4 v2.3.0
         mt5_broker_profile=os.getenv("MT5_BROKER_PROFILE", "icmarkets"),
         enable_walk_forward_backtest=_get_bool("ENABLE_WALK_FORWARD_BACKTEST", True),

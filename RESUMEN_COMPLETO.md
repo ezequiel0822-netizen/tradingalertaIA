@@ -51,12 +51,12 @@ En una frase: **observa los mercados, apuesta en simulado, ejecuta a demo solo l
 pasa todos los filtros, gestiona y mide cada posición con honestidad brutal, y aprende
 de los resultados — sin tocar jamás dinero real.**
 
-## 2. Estado EXACTO al 21-jun-2026
+## 2. Estado EXACTO al 21-jun-2026 *(⚠️ actualización 2026-07-06: versión **v3.12.0**, **801 tests** — ver §2.8; el resto de esta tabla sigue vigente)*
 
 | Qué | Estado |
 |---|---|
-| Versión | **v3.9.3** (main, pusheado) |
-| Tests | **697 verdes** |
+| Versión | **v3.9.3** (main, pusheado) → **v3.12.0 al 6-jul** (§2.8) |
+| Tests | **697 verdes** → **801 al 6-jul** |
 | Foco | **100% LA BOLSA** (acciones US + forex + oro). Memecoins CORTADAS (bot aparte), scalping APAGADO |
 | Bot | Corriendo en la Lenovo vía **`.\start_bot.ps1`**. Preflight: `python preflight.py` |
 | Balance demo | ~$88,6xx (plano — el dinero real casi no se movió) |
@@ -193,6 +193,19 @@ que 0.585 vs 0.607 es indistinguible; (d) el gap in-sample/OOS persiste (k-fold 
 justo para no perseguir un 0.607-sobre-178-trades-en-1-mes (misma forma del 0.627 que se desplomó a
 0.475). **Re-correr el MISMO script cuando el COT acumule MÁS MESES** (que las features varíen entre
 regímenes). Es el proyecto funcionando como fue diseñado: midió honesto y frenó antes de inyectar edge.
+
+## 2.8 Serie v3.10 → v3.12 (2-6 jul 2026): replayabilidad, fixes de auditoría, research batches y la foto técnica nueva
+
+**v3.10.0** — `forex_session_breakout` REPLAYABLE (bar-time como reloj, guard de frescura solo-vivo anti-A1). **v3.10.1** — cierre del batch de la auditoría total: A2 (scalping `alert_id=0` → ids sintéticos negativos), M1 (`mt5.shutdown` global → `is_connected()` re-valida), M2 (cooldown 429 Yahoo), M4 (dollar volumes desalineados), short trailing + mark-to-market por lado. **v3.11.0** — `gold_friday_hold` (regla congelada harness-only del viernes del oro).
+
+**Research (jul):** el gate §11 del viernes del oro **NO PASA** (+0.040R < +0.10R; el tilt es REAL — 86% años positivos — pero no tradeable: real ≠ rentable; familia B cerrada). Carry vía FRED **NO PASA** (el edge es el interés, pero neto de swap muere post-2008; familia cerrada). Equities: turn-of-month NO PASA; COT commercials NO PASA (familia COT cerrada por ambos lados); **E2 overnight PASA existencia** (SPY t=5.17 — 1er pase del proyecto — y sobrevive costos idealizados) **pero NO accionable acá** (US equities MOC/MOO, Sharpe 0.7, DD 40%, ejecución contestada). NADA se prendió vivo.
+
+**v3.12.0 (6-jul)** — la foto técnica se enriquece SIN tocar el score vivo (detalle en CHANGELOG):
+- Paquete **`app/indicators/`** (puros, bar-time, replayables): **VWAP** (sesión/semana/mes, hlc3, soft-fail sin volumen — Yahoo-forex da 0), **Hurst** (escalado de varianza, ventanas 100/200/500, etiquetado honesto, 3 regímenes), **footprint lite** (anatomía de vela, CLV, fuerza por ATR, secuencias 1-3 velas, anomalía de volumen).
+- Integración informativa: `TechnicalPattern` + IA Pro (score/confidence INTACTOS, con test) + alertas (textos sin needles del feature_extractor, test de regresión) + `/patron`/`/pro` + dashboard. El checklist de IA Pro (output muerto desde siempre) ahora se muestra en `/pro`.
+- Captura al entry → ML dataset (`vwap_dist_pct`, `vwap_week_dist_pct`, `hurst_entry`, `clv_entry`, `candle_strength`); **`ml_predictor` congelado, ML sigue OFF** (captura para research, como el COT).
+- **VWAP gate** (`ENABLE_VWAP_GATE=false`): downward-only, molde del regime gate, VWAP semanal del cache D1 MT5. Opt-in OFF.
+- **`/claude_analyze SYMBOL`** (alias `/analisis_llm`): análisis técnico narrado por LLM (VWAP+velas+Hurst+noticias), a demanda, transporte Claude u Ollama, gated por `ENABLE_LLM_ADVISOR`. Analista secundario: jamás señales.
 
 ## 3. La verdad de fondo (la filosofía del proyecto)
 

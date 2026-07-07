@@ -665,9 +665,11 @@ class Repository:
                     strategy_name, direction, time_horizon_hours,
                     size_notional, size_units, risk_pct, partial_closed,
                     account_balance_at_open, is_scalping,
-                    rsi_entry, atr_value, macd_value, macd_signal_value
+                    rsi_entry, atr_value, macd_value, macd_signal_value,
+                    vwap_dist_pct, vwap_week_dist_pct,
+                    hurst_entry, clv_entry, candle_strength
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     trade["alert_id"],
@@ -706,6 +708,11 @@ class Repository:
                     trade.get("atr_value"),               # al entry (None si no hay)
                     trade.get("macd_value"),
                     trade.get("macd_signal_value"),
+                    trade.get("vwap_dist_pct"),           # v3.12.0 VWAP al entry
+                    trade.get("vwap_week_dist_pct"),      # (None si sin volumen)
+                    trade.get("hurst_entry"),             # v3.12.0 Hurst al entry
+                    trade.get("clv_entry"),               # v3.12.0 footprint lite
+                    trade.get("candle_strength"),
                 ),
             )
         return True

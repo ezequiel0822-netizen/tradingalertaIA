@@ -16,7 +16,7 @@ REFOCUS v3.7.0: 100% LA BOLSA (acciones US + forex + oro). Las MEMECOINS se cort
 (ENABLE_MEMECOIN_ENGINE=false; el user tiene un bot aparte para memecoins) y el SCALPING
 se apagó. Decide con un strategy router (swing), hace paper trades y manda órdenes a MT5
 demo (MetaQuotes-Demo, solo forex/oro ejecutan; acciones son paper). Real-money BLOQUEADO
-por diseño (HARDCODED de verdad desde v3.9.3). Estado: v3.9.3, 697 tests verdes. Demo ~$88.6k (plano).
+por diseño (HARDCODED de verdad desde v3.9.3). Estado: v3.12.0, 801 tests verdes. Demo ~$88.6k (plano).
 
 ANTES DE TOCAR NADA leé (en el repo, en este orden): RESUMEN_COMPLETO.md (todo en uno),
 PROXIMOS_PASOS.md, CONTEXTO_MAESTRO_v3.8.0.md (arquitectura vigente + addendum v3.9.0 al final),
@@ -31,7 +31,7 @@ REGLAS INAMOVIBLES (no romper nunca):
 - El LLM y el ML son SUBTRACTIVOS: solo pueden vetar / bajar-a-paper, JAMÁS forzar una orden.
 - Todo lo nuevo (Ollama, asesor, ensemble veto, resumen diario) es opt-in OFF + soft-fail:
   si está apagado, el bot corre idéntico a antes.
-- Nunca leer/mostrar el .env real ni secrets. Mantener pytest verde (692). Al tocar
+- Nunca leer/mostrar el .env real ni secrets. Mantener pytest verde (801). Al tocar
   Settings, sincronizar tests/test_score._settings() Y tests/test_alert_rules._settings().
 - Versionado: patch para fixes, minor SOLO para features reales, sin saltar números.
 - Real-money: el user ya lo pidió 3+ veces; la respuesta es GO_LIVE_RUNBOOK.md +
@@ -100,6 +100,20 @@ QUÉ SE CONSTRUYÓ (serie v3, todo pusheado):
   USDCAD/BOC) + gap_check revivido + ENABLE_REAL_TRADING hardcodeado de verdad (se leia del env; la
   barrera real es _is_demo_account) + dashboard mode=ro + LogRedactor compartido + scripts/cot_backfill.py.
 - COT backfill HECHO: 5 años de historia (2340 filas, 9 mercados, 2021-2026) -> habilita COT index a futuro.
+- v3.10.0: forex_session_breakout REPLAYABLE (bar-time como reloj + guard de frescura anti-A1).
+- v3.10.1: batch fixes auditoria total: A2 (scalping alert_id=0 -> ids negativos), M1 (mt5.shutdown
+  global -> is_connected() re-valida), M2 (cooldown 429 Yahoo), M4 (dollar volumes), short trailing.
+- v3.11.0: gold_friday_hold (regla congelada HARNESS-ONLY; el gate §11 dio NO PASA: tilt real,
+  +0.040R < +0.10R -> real ≠ rentable; familia B cerrada).
+- Research jul-2026 (todo NO-accionable, nada vivo): carry FRED cerrado (edge=interes, swap lo come),
+  turn-of-month NO PASA, COT commercials NO PASA (familia COT cerrada), E2 OVERNIGHT pasa existencia
+  (t~5, 1er pase del proyecto) pero NO accionable aca (US equities MOC/MOO, Sharpe 0.7, DD 40%).
+- v3.12.0 (6-jul): paquete app/indicators/ (puros, replayables): VWAP (sesion/semana/mes, soft-fail
+  sin volumen — Yahoo-forex da 0; el VWAP forex sale del cache D1 MT5), Hurst (escalado de varianza,
+  ventanas 100/200/500, 3 regimenes) y footprint lite (anatomia velas, CLV, fuerza ATR, secuencias).
+  Integrado INFORMATIVO (score/gates vivos intactos) + captura al entry -> ML dataset (ML sigue OFF)
+  + VWAP gate downward-only (ENABLE_VWAP_GATE=false) + /claude_analyze (LLM a demanda, analista
+  secundario; transporte Claude u Ollama).
 - EXPERIMENTO DE COT CORRIDO (21-jun, scripts/cot_ml_experiment.py, research-only, sin bump): features de
   COT + re-test temporal del ML. Veredicto SIN SEÑAL accionable (test primario OOS 0.533<0.55; corte FX/oro
   n=178 0.585->0.607 pero dentro del ruido en ~1 mes, COT semanal = ~4-5 lecturas distintas). ENABLE_ML_
@@ -138,7 +152,7 @@ construir Fase D / más modelos sobre los features actuales: ya se probó 2 vece
 PRIMERA TAREA AL RETOMAR:
 1. python preflight.py (chequea todo: config, secretos, MT5, refocus). Debe decir LISTO.
 2. correr: .\start_bot.ps1 (pide contraseña si STARTUP_PASSWORD_SHA256 está en .env).
-3. verificar en Telegram: /health (debe decir v3.9.3) + /readiness + /exposicion + /scalping_status (inactivo).
+3. verificar en Telegram: /health (debe decir v3.12.0) + /readiness + /exposicion + /scalping_status (inactivo).
    /market tarda ~50s en hardware chico — es normal, no es un bug.
 4. si OK, dejar correr. (Ollama opcional: ollama pull llama3.2:3b / llama3.1.)
 ```
