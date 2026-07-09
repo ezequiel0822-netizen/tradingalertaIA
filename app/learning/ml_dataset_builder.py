@@ -15,6 +15,11 @@ NOTA HONESTA SOBRE FEATURES (schema v2.11.0):
                                  abrir el swing trade (columnas paper_trades.rsi_entry/
                                  atr_value). Trades viejos (<v2.11.0) y scalping quedan
                                  NaN -> el cambio NO es retroactivo.
+  - vwap_dist_pct,         -> SI desde v3.12.0: distancia % al VWAP de sesion y al
+    vwap_week_dist_pct        VWAP semanal, capturadas al entry (mismo patron). NaN
+                                 para trades viejos y forex sin volumen (Yahoo da 0;
+                                 el VWAP honesto es None). Captura para research: el
+                                 ML sigue OFF (ml_predictor NO se toca).
   - macd_state             -> REAL desde v2.11.0 si hay macd_value/macd_signal_value
                                  persistidos (bullish si macd>signal, etc.); si no,
                                  PROXY categorico desde el alert (trades viejos).
@@ -39,6 +44,14 @@ REQUIRED_COLUMNS = [
     "rsi_entry",
     "macd_state",
     "atr_value",
+    # v3.12.0 — VWAP al entry (paper_trades.vwap_dist_pct / vwap_week_dist_pct).
+    # NaN para trades viejos (<v3.12.0) y para forex sin volumen (Yahoo da 0).
+    "vwap_dist_pct",
+    "vwap_week_dist_pct",
+    # v3.12.0 — Hurst + footprint lite al entry. candle_strength es categorica.
+    "hurst_entry",
+    "clv_entry",
+    "candle_strength",
     "vix_level",
     "dxy_level",
     "session",
@@ -234,6 +247,11 @@ def build_ml_dataset(
             ),
             "rsi_entry": _num_or_na(t.get("rsi_entry")),
             "atr_value": _num_or_na(t.get("atr_value")),
+            "vwap_dist_pct": _num_or_na(t.get("vwap_dist_pct")),
+            "vwap_week_dist_pct": _num_or_na(t.get("vwap_week_dist_pct")),
+            "hurst_entry": _num_or_na(t.get("hurst_entry")),
+            "clv_entry": _num_or_na(t.get("clv_entry")),
+            "candle_strength": str(t.get("candle_strength") or "unknown"),
             # macro (se completan abajo con merge_asof)
             "vix_level": pd.NA,
             "dxy_level": pd.NA,
@@ -312,6 +330,11 @@ def build_live_features(
         "day_of_week": opened.weekday(),
         "rsi_entry": paper_trade.get("rsi_entry"),
         "atr_value": paper_trade.get("atr_value"),
+        "vwap_dist_pct": paper_trade.get("vwap_dist_pct"),
+        "vwap_week_dist_pct": paper_trade.get("vwap_week_dist_pct"),
+        "hurst_entry": paper_trade.get("hurst_entry"),
+        "clv_entry": paper_trade.get("clv_entry"),
+        "candle_strength": str(paper_trade.get("candle_strength") or "unknown"),
         "session": _session_label(opened.hour),
         "strategy_name": str(paper_trade.get("strategy_name") or "unknown"),
         "category": str(paper_trade.get("category") or "unknown"),

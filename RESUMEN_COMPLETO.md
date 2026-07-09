@@ -51,12 +51,12 @@ En una frase: **observa los mercados, apuesta en simulado, ejecuta a demo solo l
 pasa todos los filtros, gestiona y mide cada posición con honestidad brutal, y aprende
 de los resultados — sin tocar jamás dinero real.**
 
-## 2. Estado EXACTO al 06-jul-2026
+## 2. Estado EXACTO al 08-jul-2026
 
 | Qué | Estado |
 |---|---|
-| Versión | **v3.11.0** (main, pusheado) |
-| Tests | **721 verdes** |
+| Versión | **v3.12.0** (main; §2.9 = qué trajo) |
+| Tests | **801 verdes** |
 | Foco | **100% LA BOLSA** (acciones US + forex + oro). Memecoins CORTADAS (bot aparte), scalping APAGADO |
 | Bot | Corriendo en la Lenovo vía **`.\start_bot.ps1`**. Preflight: `python preflight.py` |
 | Balance demo | ~$88,6xx (plano — el dinero real casi no se movió) |
@@ -229,6 +229,15 @@ señales reales que aparecieron o no sobreviven costos, o están en un mercado q
 opera. El valor del proyecto es la infraestructura + la disciplina de descartar rápido y no
 autoengañarse — no una estrategia rentable. Más IA/modelos NO ayudan (el mercado precia la info
 pública). Data nueva bajada: tasas FRED (`research_rates.db`), índices SPY/QQQ/IWM.
+
+## 2.9 v3.12.0 (6-jul-2026) — VWAP + Hurst + footprint lite: la foto técnica se enriquece SIN tocar el score vivo
+
+Detalle completo en CHANGELOG. Todo informativo + captura para research; ningún gate activo cambia:
+- Paquete **`app/indicators/`** (puros, bar-time, replayables): **VWAP** (sesión/semana/mes, hlc3, soft-fail sin volumen — Yahoo-forex da 0), **Hurst** (escalado de varianza, ventanas 100/200/500, etiquetado honesto, 3 regímenes), **footprint lite** (anatomía de vela, CLV, fuerza por ATR, secuencias 1-3 velas, anomalía de volumen).
+- Integración informativa: `TechnicalPattern` + IA Pro (score/confidence INTACTOS, con test) + alertas (textos sin needles del feature_extractor, test de regresión) + `/patron`/`/pro` + dashboard. El checklist de IA Pro (output muerto desde siempre) ahora se muestra en `/pro`.
+- Captura al entry → ML dataset (`vwap_dist_pct`, `vwap_week_dist_pct`, `hurst_entry`, `clv_entry`, `candle_strength`); **`ml_predictor` congelado, ML sigue OFF** (captura para research, como el COT).
+- **VWAP gate** (`ENABLE_VWAP_GATE=false`): downward-only, molde del regime gate, VWAP semanal del cache D1 MT5. Opt-in OFF.
+- **`/claude_analyze SYMBOL`** (alias `/analisis_llm`): análisis técnico narrado por LLM (VWAP+velas+Hurst+noticias), a demanda, transporte Claude u Ollama, gated por `ENABLE_LLM_ADVISOR`. Analista secundario: jamás señales.
 
 ## 3. La verdad de fondo (la filosofía del proyecto)
 

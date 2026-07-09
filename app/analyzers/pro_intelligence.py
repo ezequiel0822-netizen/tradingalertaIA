@@ -44,6 +44,26 @@ def analyze_professional_setup(
             checklist.append(
                 f"Zona tecnica: soporte {pattern.support:g}, resistencia {pattern.resistance:g}."
             )
+        # v3.12.0 — VWAP informativo: contexto de valor intradia, SIN tocar
+        # score/confidence (el gate vivo no cambia). Texto sin needles del
+        # feature_extractor (nada de "volumen relativo"/"liquidez"/"unknown").
+        # Guard doble: ambos campos, por si un caller arma el pattern a mano.
+        if pattern.vwap_dist_pct is not None and pattern.vwap is not None:
+            side = "sobre" if pattern.vwap_dist_pct >= 0 else "bajo"
+            checklist.append(
+                f"VWAP sesion: precio {abs(pattern.vwap_dist_pct):.2f}% {side} VWAP"
+                f" ({pattern.vwap:g})."
+            )
+        # v3.12.0 — Hurst y footprint lite: mismo contrato (informativo, sin
+        # score) y mismos cuidados de needles.
+        if pattern.hurst is not None:
+            checklist.append(
+                f"Hurst {pattern.hurst:.2f}: regimen {pattern.hurst_regime}."
+            )
+        if pattern.candle_strength.startswith("strong"):
+            checklist.append(f"Vela dominante: {pattern.candle_strength}.")
+        if pattern.candle_patterns:
+            checklist.append(f"Secuencia de velas: {pattern.candle_patterns}.")
 
     if news_score:
         score += news_score
@@ -185,6 +205,9 @@ def _setup(
     pieces = [snapshot.category]
     if pattern:
         pieces.append(pattern.label)
+        # v3.12.0 — posicion vs VWAP de sesion como contexto del setup.
+        if pattern.vwap_position in {"above", "below"}:
+            pieces.append(f"vwap_{pattern.vwap_position}")
     if news_label not in {"no_recent_news", "neutral_news"}:
         pieces.append(news_label)
     if filing_label not in {"no_recent_filings", "filing_watch"}:

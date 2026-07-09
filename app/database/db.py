@@ -582,6 +582,19 @@ def _init_db_unsafe(db_path: Path) -> None:
         _ensure_column(connection, "paper_trades", "atr_value", "REAL")
         _ensure_column(connection, "paper_trades", "macd_value", "REAL")
         _ensure_column(connection, "paper_trades", "macd_signal_value", "REAL")
+        # v3.12.0 — VWAP al ENTRY (mismo patron v2.11.0: captura para research/
+        # ML dataset; el ML sigue OFF). Distancia % al VWAP de sesion y al VWAP
+        # semanal anclado. NULL para trades viejos y para forex sin volumen
+        # (Yahoo da volumen 0 en forex -> el VWAP honesto es None, no 0).
+        _ensure_column(connection, "paper_trades", "vwap_dist_pct", "REAL")
+        _ensure_column(connection, "paper_trades", "vwap_week_dist_pct", "REAL")
+        # v3.12.0 — Hurst y footprint lite al ENTRY (research/ML; ML sigue OFF).
+        # hurst_entry: H de la ventana mas larga disponible; clv_entry: close
+        # location value de la vela de entrada; candle_strength: fuerza
+        # direccional normalizada por ATR (categorica).
+        _ensure_column(connection, "paper_trades", "hurst_entry", "REAL")
+        _ensure_column(connection, "paper_trades", "clv_entry", "REAL")
+        _ensure_column(connection, "paper_trades", "candle_strength", "TEXT")
 
 
 def _ensure_column(

@@ -163,6 +163,8 @@ def _settings() -> Settings:
         enable_usd_exposure_cap=False,
         max_net_usd_exposure=3,
         enable_regime_gate=False,
+        enable_vwap_gate=False,
+        vwap_gate_min_dist_pct=0.5,
         mt5_broker_profile="icmarkets",
         enable_walk_forward_backtest=True,
         walk_forward_train_days=14,

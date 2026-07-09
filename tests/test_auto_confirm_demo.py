@@ -88,6 +88,8 @@ class _StubJob:
     # v3.8.0: regime gate off por default -> retorna True (allow) sin tocar el repo.
     _regime_gate = TradingAlertJob._regime_gate
     _d1_candles_for_regime = TradingAlertJob._d1_candles_for_regime
+    # v3.12.0: vwap gate off por default -> retorna True (allow) sin tocar el repo.
+    _vwap_gate = TradingAlertJob._vwap_gate
 
 
 def test_enable_auto_confirm_demo_default_false(monkeypatch) -> None:

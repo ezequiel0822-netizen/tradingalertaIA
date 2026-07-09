@@ -155,6 +155,15 @@ class ClaudeProcessor:
         self._calls_this_cycle += 1
         return text
 
+    def generate(
+        self, system: str, user: str, max_tokens: int | None = None
+    ) -> str | None:
+        """v3.12.0 — interfaz generica de asesoria: misma firma que
+        OllamaProcessor.generate, para poder usar Claude como transporte del
+        TradingReasoner (p.ej. /claude_analyze). Hereda throttle + cache +
+        cost caps de _call; read-only como todo lo demas."""
+        return self._call(system, user, max_tokens=max_tokens)
+
     def summarize_news(
         self, news_items: list[dict], symbol: str
     ) -> str | None:

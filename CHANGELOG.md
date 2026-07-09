@@ -1,5 +1,18 @@
 # Changelog
 
+## Trading Alert AI v3.12.0
+
+**VWAP + Hurst + footprint lite: la foto técnica se enriquece SIN tocar el score vivo ni crear edge artificial.** Paquete nuevo `app/indicators/` (indicadores puros: sin I/O, sin reloj de pared, bar-time como reloj → replayables en el harness por construcción, lección A1/v3.10.0). Todo informativo + captura para research; ML sigue OFF; ningún gate activo cambia de comportamiento.
+
+- **`app/indicators/vwap.py`**: VWAP intradía (reset diario por bar-time UTC) + anclados semana/mes; hlc3 (convención TradingView); soporta `timestamp` (Yahoo) y `time` (cache MT5). **Soft-fail honesto sin volumen** (Yahoo da volumen 0 en forex → VWAP `None`, jamás inventado; el VWAP forex real sale del cache D1 de MT5 con tick_volume).
+- **`app/indicators/hurst.py`**: Hurst por ESCALADO DE VARIANZA (menos sesgo que R/S en ventanas cortas; ruido blanco → 0.5 en esperanza), ventanas 100/200/500 con etiquetado honesto (ventana incompleta → `None`, jamás un H de otra ventana), 3 regímenes con thresholds conservadores (0.45/0.55). NO toca el regime gate vivo ni el router: cualquier uso en gate requiere harness + flag propio.
+- **`app/indicators/candles.py` (footprint lite)**: anatomía de vela (body/wick ratios, CLV), fuerza direccional normalizada por ATR (`strong_bull`…`strong_bear`), secuencias 1-3 velas con escala ATR anti-ruido (hammer/shooting_star/doji/engulfing/inside_bar/three_soldiers/crows), anomalía de volumen.
+- **Integración**: `TechnicalPattern` gana campos vwap/hurst/candle (defaults; **score intacto, test lo garantiza**); IA Pro los muestra en checklist/setup (score/confidence idénticos, test); alertas Telegram con líneas VWAP/velas/Hurst **sin needles del feature_extractor** (test de regresión: one-hots idénticos con/sin las líneas nuevas); `/patron` y `/pro` enriquecidos; dashboard con métrica "Con VWAP". De paso: el checklist de IA Pro se construía y NUNCA se mostraba (output muerto desde su creación) → ahora sale en `/pro`.
+- **Captura al entry (patrón v2.11.0)**: columnas nuevas `paper_trades.vwap_dist_pct/vwap_week_dist_pct/hurst_entry/clv_entry/candle_strength` (`_ensure_column`, no retroactivo) → `build_ml_dataset`/`build_live_features`. `ml_predictor` NO se toca (whitelist ignora las claves nuevas; modelo congelado para comparabilidad con AUC 0.475/0.533).
+- **VWAP gate (`ENABLE_VWAP_GATE=false`, opt-in OFF)**: baja a paper el trade que pelea el VWAP semanal (long claramente bajo / short claramente sobre, umbral `VWAP_GATE_MIN_DIST_PCT=0.5`). Mismo molde que el regime gate: downward-only, soft-fail, solo forex/gold, computa del cache D1 MT5 (reusa el guard de frescura M1). Defensivo: NO crea edge.
+- **Capa LLM**: `reasoner.analyze_symbol` (prompt técnico especializado, prohíbe señales) + comando **`/claude_analyze SYMBOL`** (alias `/analisis_llm`): análisis narrado combinando VWAP+velas+Hurst+noticias, a demanda (~50s en hardware chico, como `/market`), transporte Claude si `ENABLE_CLAUDE_INTEGRATION` (con sus cost caps) o Ollama local; gated por `ENABLE_LLM_ADVISOR`. Analista secundario SIEMPRE: texto, jamás override.
+- Tests: `test_vwap` (22) + `test_vwap_gate` (12, incl. canario anti-look-ahead del harness) + `test_hurst` (15) + `test_candle_metrics` (21) + `test_claude_analyze` (7) + dataset/stub syncs. 721 → **801 verdes**. app_version → v3.12.0.
+
 ## Research — Tanda equities + COT smart-money (2026-07-05): E2 overnight es REAL (1er pase de existencia)
 
 Data: SPY/QQQ/IWM D1 vía el loader Yahoo del proyecto (`scripts/equity_backfill.py`; Stooq quedó tras un challenge JS). Pre-registro `research/HIPOTESIS_2026-07-05_batch.md` (k=3, Bonferroni t≥2.40), commiteado ANTES de correr.

@@ -172,6 +172,40 @@ class TradingReasoner:
         )
         return self._generate(system, user, max_tokens=200)
 
+    def analyze_symbol(self, context: dict[str, Any]) -> str | None:
+        """v3.12.0 — Analisis tecnico NARRADO de un simbolo (insumo de
+        /claude_analyze). Combina la foto tecnica nueva (VWAP, footprint de
+        velas, regimen Hurst) con las noticias. ANALISTA SECUNDARIO por
+        contrato: solo texto explicativo; jamas senales ejecutables, jamas
+        override del strategy router."""
+        system = (
+            "Eres un analista tecnico prudente y honesto. Te dan la foto tecnica "
+            "de un simbolo (tendencia, VWAP, anatomia de velas, regimen "
+            "estadistico Hurst, noticias). Escribes 4-6 oraciones en espanol: "
+            "que dice la estructura, donde esta el precio respecto del valor "
+            "(VWAP), que muestran las velas, y que riesgos o contradicciones "
+            "ves. Se esceptico: si las senales se contradicen, dilo claro. "
+            "NO des senales de compra/venta ni niveles de entrada/SL/TP."
+        )
+        user = (
+            "Foto tecnica:\n"
+            f"- Simbolo: {_g(context, 'symbol')}\n"
+            f"- Lectura del grafico: {_g(context, 'label')} "
+            f"(tendencia {_g(context, 'trend')})\n"
+            f"- RSI: {_g(context, 'rsi')} | ATR%: {_g(context, 'atr_pct')}\n"
+            f"- VWAP sesion: precio {_g(context, 'vwap_dist_pct')}% "
+            f"({_g(context, 'vwap_position')})\n"
+            f"- VWAP semanal: precio {_g(context, 'vwap_week_dist_pct')}%\n"
+            f"- Vela actual: {_g(context, 'candle_strength')} "
+            f"(clv {_g(context, 'candle_clv')})\n"
+            f"- Secuencias de velas: {_g(context, 'candle_patterns', 'ninguna')}\n"
+            f"- Hurst: {_g(context, 'hurst')} (regimen {_g(context, 'hurst_regime')})\n"
+            f"- Noticias: {_g(context, 'news_label')} (score {_g(context, 'news_score')})\n"
+            f"- Titulares: {_g(context, 'headlines', 'sin titulares recientes')}\n\n"
+            "Analisis honesto de la foto (sin senales):"
+        )
+        return self._generate(system, user, max_tokens=400)
+
     def daily_summary(self, stats: dict[str, Any]) -> str | None:
         """Lectura del dia + UNA leccion para manana (texto). NO da senales."""
         system = (
