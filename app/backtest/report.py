@@ -122,6 +122,9 @@ def _stress_r_nets(trades: list[dict], settings: Settings) -> list[float]:
         _, r_net = net_r(
             float(t["r_gross"]), float(t["entry_price"]), float(t["sl_initial"]),
             str(t["category"]), settings, stress=True,
+            # H-M1: sin esto el estres ignoraria el financiamiento de 'index'.
+            bars_held=int(t.get("bars_held") or 0),
+            direction=str(t.get("direction") or "long"),
         )
         out.append(r_net)
     return out

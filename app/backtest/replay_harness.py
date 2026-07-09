@@ -281,7 +281,10 @@ class ReplayHarness:
         except ValueError:
             return None  # geometria invalida (p.ej. sl del lado equivocado) -> skip soft
 
-        cost_r, r_net = net_r(res.r_gross, entry_price, float(sig.stop), category, self.settings)
+        cost_r, r_net = net_r(
+            res.r_gross, entry_price, float(sig.stop), category, self.settings,
+            bars_held=res.bars_held, direction=sig.direction,
+        )
         edt = _epoch_dt(entry_bar.get("time"))
         return {
             "config_id": 0,

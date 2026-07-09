@@ -1,5 +1,14 @@
 # Changelog
 
+## Research — H-M1 trend multi-asset D1 vía CFD (2026-07-09): NO PASA, familia cerrada — se agotó el espacio de hipótesis del vehículo
+
+La última familia ABIERTA dentro del alcance del bot (MAPA §8, "instrumentos descorrelacionados", diferida desde v3.6.0). Protocolo completo: evaluación previa documentada (survey read-only MetaQuotes: 27 índices, 13 viables por spread; sin energía; swaps del demo irreales/deshabilitados) + pre-registro `research/HIPOTESIS_2026-07-09_multiasset.md` commiteado ANTES de correr (k=1, `trend_following_d1` CONGELADA de v3.6.0, predicción declarada: probable NO PASA).
+
+- **Data**: 13 índices/plata vía Yahoo D1 (^GSPC desde 1970, ^N225 1970, ^FTSE 1984… 124k barras) — el gate MT5-only falló (6/14 con ≥10 años) y se cambió la fuente ANTES del pre-registro. Gotcha operativo: Yahoo 429 con el UA del loader; el UA Mozilla del `equity_backfill` (5-jul) funcionó a la primera.
+- **Cost model nuevo (harness-only, 7 tests)**: categoría `index` = roundtrip 0.08% + **financiamiento CFD por día de holding** (central 5%/1% anual long/short; estrés 7%/2% — el costo que el demo esconde y que mató al carry). `net_r()` recibe `bars_held`/`direction`; categorías existentes bit-a-bit iguales.
+- **Veredicto §11 (run 7, n=1521): NO PASA.** Expectancy +0.125R y PF 1.16 pasan POR POCO (stress +0.013R ≈ cero), pero: **consistencia temporal 50% años+ (<60%)** y **maxDD 165.6R (vs 25R máx)** — indefendible. La descomposición confirma la predicción del research: **todo el R viene de longs (+0.210R) mientras los shorts pierden (−0.110R)** = cosecha de drift (Huang et al. 2020), no edge de trend; y el decay post-2013 es exactamente el del SG Trend Index (11 de 14 años 2013-2026 negativos — el avg lo carga la era pre-2000).
+- **Conclusión de nivel proyecto**: con esto, TODAS las familias alcanzables por este vehículo (CFDs retail sobre MT5, D1/H1, OHLCV+COT+tasas) tienen veredicto con evidencia: **10 familias probadas, 0 tradeables**. Las señales REALES encontradas (overnight equities t≈5, trend multi-asset pre-2010, carry bruto, viernes del oro) viven en vehículos/épocas que este bot no opera. El valor del proyecto queda donde estaba: infraestructura + disciplina de medición honesta. Sin bump de versión (research).
+
 ## Trading Alert AI v3.12.0
 
 **VWAP + Hurst + footprint lite: la foto técnica se enriquece SIN tocar el score vivo ni crear edge artificial.** Paquete nuevo `app/indicators/` (indicadores puros: sin I/O, sin reloj de pared, bar-time como reloj → replayables en el harness por construcción, lección A1/v3.10.0). Todo informativo + captura para research; ML sigue OFF; ningún gate activo cambia de comportamiento.

@@ -1,0 +1,11 @@
+{
+  "mode": "A",
+  "timeframe": "D1",
+  "category": "index",
+  "symbols": [
+    "^GSPC", "^DJI", "^NDX", "^GDAXI", "^FTSE", "^N225", "^SSMI",
+    "^AEX", "^FCHI", "^STOXX50E", "^AXJO", "^HSI", "SI=F"
+  ],
+  "strategies": ["trend_following_d1"],
+  "notes": "H-M1 (research/HIPOTESIS_2026-07-09_multiasset.md, commiteado ANTES de correr). trend_following_d1 CONGELADA sobre 13 indices Yahoo (decadas) + plata, category=index fuerza roundtrip 0.08% + FINANCIAMIENTO CFD por dia de holding (central 5%/1% anual L/S; estres 7%/2% — el costo que el demo esconde). k=1: un tiro, sin variantes. Regla descalificadora: si pasa §11 pero >80% del R viene de longs de indices y shorts+plata <=0 -> beta apalancada con peaje = NO PASA. Prediccion declarada: probable NO PASA en central. Data via stock_historical_loader (Yahoo D1, anti-429); indices cash no tienen survivorship a nivel indice pero SI drift composicional (declarado)."
+}

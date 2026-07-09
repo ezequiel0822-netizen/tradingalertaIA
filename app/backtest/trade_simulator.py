@@ -197,6 +197,21 @@ def _result(exit_utc, exit_price, reason, bars_held, r_gross, mfe_r, mae_r, trai
     )
 
 
+# -- categoria 'index' (H-M1, pre-registro research/HIPOTESIS_2026-07-09_multiasset.md) --
+# Roundtrip spread+slippage % para indices CFD (survey MetaQuotes 2026-07-09:
+# spreads medianos 1-3 bps + colchon pesimista). Constante harness-only: la
+# categoria 'index' NO existe en el ciclo vivo ni en settings.
+INDEX_ROUNDTRIP_PCT = 0.08
+# Financiamiento CFD anual (% sobre nocional) por LADO y escenario. El demo
+# esconde este costo (swaps deshabilitados/irrisorios); numeros del research
+# 2026-07-09 con fuentes (benchmark + markup - dividendos). El escenario de
+# stress trae su PROPIO nivel: el multiplicador x1.5 NO se aplica encima.
+INDEX_FINANCING_ANNUAL_PCT = {
+    False: {"long": 5.0, "short": 1.0},  # CENTRAL (decide el §11)
+    True: {"long": 7.0, "short": 2.0},   # ESTRES
+}
+
+
 def net_r(
     r_gross: float,
     entry_price: float,
@@ -205,6 +220,8 @@ def net_r(
     settings: Settings,
     *,
     stress: bool = False,
+    bars_held: int = 0,
+    direction: str = "long",
 ) -> tuple[float, float]:
     """Aplica costos (B8/§7) y devuelve (cost_r, r_net). Reusa el cost map REAL de
     training_engine para que /expectancy y el backtest hablen el mismo idioma:
@@ -214,16 +231,30 @@ def net_r(
 
     `stress=True` usa BACKTEST_STRESS_COST_MULTIPLIER (×1.5) en vez del ×1.25:
     un edge que no sobrevive costos pesimistas no es edge.
+
+    v3.12 H-M1 — categoria 'index': roundtrip constante (INDEX_ROUNDTRIP_PCT) +
+    FINANCIAMIENTO por dia de holding (annual% × bars_held/252; los swaps CFD
+    cobran los 7 dias via triple-swap, por eso bars D1 / 252 equivale a
+    dias_calendario/365). Para las demas categorias bars_held/direction son
+    inertes: comportamiento identico al historico.
     """
     multiplier = float(
         settings.backtest_stress_cost_multiplier
         if stress
         else settings.backtest_cost_multiplier
     )
-    cost_map = _cost_map_from_settings(settings)
-    cost_pct = float(cost_map.get(category, 0.0)) * multiplier
+    if category == "index":
+        cost_pct = INDEX_ROUNDTRIP_PCT * multiplier
+    else:
+        cost_map = _cost_map_from_settings(settings)
+        cost_pct = float(cost_map.get(category, 0.0)) * multiplier
     risk_pct = (
         abs(entry_price - sl_initial) / entry_price * 100.0 if entry_price else 0.0
     )
-    cost_r = cost_pct / risk_pct if risk_pct > 0 else 0.0
+    financing_pct = 0.0
+    if category == "index" and bars_held > 0:
+        side = "short" if str(direction) == "short" else "long"
+        annual = INDEX_FINANCING_ANNUAL_PCT[bool(stress)][side]
+        financing_pct = annual * (bars_held / 252.0)
+    cost_r = (cost_pct + financing_pct) / risk_pct if risk_pct > 0 else 0.0
     return round(cost_r, 6), round(r_gross - cost_r, 6)

@@ -1,5 +1,15 @@
 # Pre-registro H-M1 — Trend following D1 multi-asset (índices + plata), neto de financiamiento CFD
 
+> **VEREDICTO (corrido 2026-07-09, run 7, n=1521, 56 años de data): NO PASA — familia CERRADA.**
+> Falla §11 en consistencia temporal (50% años positivos < 60%) y drawdown
+> (165.6R vs máx 25R). La expectancy +0.125R pasó por poco PERO la descomposición
+> confirmó la predicción del research: longs +0.210R (n=1118) / shorts −0.110R
+> (n=403) — es cosecha de drift, no edge de trend — y el decay post-2013 es
+> brutal (11 de 14 años 2013-2026 negativos). El premium que la literatura
+> documenta con 50+ futuros no sobrevive en 13 índices CFD correlacionados.
+> Detalle: exports/backtest_7/report.md (gitignored) + CHANGELOG research.
+> Per pre-registro: sin re-cortes, sin segundo tiro. k=1 gastado.
+
 > **Commiteado ANTES de correr** (protocolo del proyecto). k=1: UNA hipótesis, UNA
 > estrategia CONGELADA, UN tiro. Si NO PASA, la familia "instrumentos
 > descorrelacionados vía CFD retail" queda CERRADA sin re-cortes, como las otras 9.
