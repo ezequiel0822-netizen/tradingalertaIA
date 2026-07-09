@@ -23,6 +23,22 @@
 > → ML dataset (ML sigue OFF), VWAP gate downward-only (`ENABLE_VWAP_GATE=false`) y
 > `/claude_analyze` (LLM a demanda, analista secundario). Detalle: CHANGELOG.md y
 > RESUMEN_COMPLETO §2.8 (auditoría+edge) y §2.9 (v3.12.0). Lo de abajo sigue siendo la base histórica.
+>
+> **⚠️ 9-jul-2026 — H-M1 (trend multi-asset D1 vía CFD): NO PASA, familia CERRADA.**
+> Era la ÚLTIMA familia abierta del MAPA §8. Con ella: **10 familias probadas con
+> pre-registro → 0 tradeables. El espacio de hipótesis de ESTE VEHÍCULO (CFD retail/
+> MT5/D1) está AGOTADO con evidencia.** 808 tests. Detalle: CHANGELOG (research) +
+> `research/HIPOTESIS_2026-07-09_multiasset.md`. NO abrir hipótesis nuevas sobre
+> este vehículo: no queda ninguna sin veredicto.
+>
+> **📅 PRÓXIMO CHECKPOINT (el ÚNICO trabajo pendiente): ~15-sep-2026 — re-run COT.**
+> Comando: `python scripts/cot_ml_experiment.py` (el MISMO script, sin tocar).
+> Para entonces: ~4 meses de trades con features (vs ~1 mes del run de junio) y
+> ~16 lecturas semanales de COT por mercado (vs ~4-5) + las features nuevas de
+> v3.12.0 (vwap/hurst/velas) acumuladas al entry. Barra pre-registrada (sin mover):
+> corte FX/oro TimeSeriesSplit OOS ≥ 0.55 robusto Y Δ del COT ≥ +0.03. Si no la
+> cruza: ML sigue OFF y se repite el ciclo con más meses. Mientras tanto: DEJAR
+> CORRER (no tocar flags, no agregar features, no re-abrir familias).
 
 - **v3.9.3**, **697 tests verdes** (main, pusheado). v3.9.0 = **COT collector** (CFTC semanal,
   opt-in OFF, **YA VIVO** + backfill 5yr hecho): posicionamiento institucional, primer input

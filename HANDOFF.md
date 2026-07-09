@@ -117,6 +117,12 @@ QUÉ SE CONSTRUYÓ (serie v3, todo pusheado):
   Integrado INFORMATIVO (score/gates vivos intactos) + captura al entry -> ML dataset (ML sigue OFF)
   + VWAP gate downward-only (ENABLE_VWAP_GATE=false) + /claude_analyze (LLM a demanda, analista
   secundario; transporte Claude u Ollama).
+- H-M1 (9-jul): trend multi-asset D1 via CFD (13 indices Yahoo 56yr + plata, financiamiento CFD
+  modelado 5%/1% L/S): NO PASA (50% anios+, maxDD 166R; longs +0.21R/shorts -0.11R = drift, no edge).
+  Era la ULTIMA familia abierta -> 10 familias con pre-registro, 0 tradeables: el espacio de
+  hipotesis de ESTE vehiculo (CFD retail/MT5/D1) esta AGOTADO con evidencia. NO abrir mas.
+  PROXIMO CHECKPOINT (unico pendiente): ~15-sep-2026 re-run scripts/cot_ml_experiment.py
+  (barra pre-registrada: FX/oro OOS>=0.55 y delta COT>=+0.03). Mientras: DEJAR CORRER.
 - EXPERIMENTO DE COT CORRIDO (21-jun, scripts/cot_ml_experiment.py, research-only, sin bump): features de
   COT + re-test temporal del ML. Veredicto SIN SEÑAL accionable (test primario OOS 0.533<0.55; corte FX/oro
   n=178 0.585->0.607 pero dentro del ruido en ~1 mes, COT semanal = ~4-5 lecturas distintas). ENABLE_ML_
