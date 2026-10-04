@@ -40,6 +40,16 @@
 > **H-MS1 microestructura L1 (BTCUSDT perp) corrida y CERRADA**: señal real (AUC 0.576)
 > pero +0.42 bps brutos contra ~8 bps de costo. Detalle en CHANGELOG.
 >
+> **⚠️ 4-oct-2026 — checkpoint COT reprogramado al 7-dic + corrección de leakage.** Bot
+> re-encendido el 4-oct (demo MT5 nueva). COT rellenado hasta el reporte del 2026-09-29.
+> Checkpoint (familia B12, horizonte días-semanas) reprogramado al **2026-12-07 09:00**.
+> **Leakage encontrado y corregido ANTES de ver resultados:** `cot_ml_experiment.py` da por
+> disponible el reporte del martes desde el viernes 00:00 UTC (lag 3 días), pero la CFTC lo
+> publica el viernes 15:30 NY (~19:30-20:30 UTC): trades de viernes antes de esa hora usaban
+> un reporte no publicado. El run oficial usa `--cot-lag-days 4` (sábado 00:00 UTC); lag 3
+> solo para comparar con junio. Residual: semanas con feriado federal (publicación el lunes).
+> El 4-oct se corrió una VISTA PREVIA no-decisoria a pedido del user (CHANGELOG).
+>
 > **📅 PRÓXIMO CHECKPOINT (el ÚNICO trabajo pendiente): ~15-sep-2026 — re-run COT.**
 > Comando: `python scripts/cot_ml_experiment.py` (el MISMO script, sin tocar).
 > Para entonces: ~4 meses de trades con features (vs ~1 mes del run de junio) y
