@@ -1,5 +1,13 @@
 # Changelog
 
+## Research — COT: vista previa NO decisoria (2026-10-04) + leakage de release corregido
+
+A pedido del user se corrió `scripts/cot_ml_experiment.py` como VISTA PREVIA explícitamente no decisoria (el checkpoint oficial, familia B12, quedó reprogramado al 2026-12-07). Datos: 970 trades cerrados (606 feature-complete, 300 FX/oro con COT), 2026-05-20 → 08-12; COT hasta 2026-09-29.
+
+- **Leakage encontrado y corregido ANTES de ver la vista previa** (commit 3c93f62): el script da por disponible el reporte del martes desde el viernes 00:00 UTC (`--cot-lag-days 3`), pero la CFTC publica el viernes 15:30 NY (~19:30-20:30 UTC). Los trades de viernes antes de esa hora usaban un reporte no publicado (~15% de los trades, hasta ~20 h de adelanto). El run oficial usa lag 4. Residual declarado: semanas con feriado federal (publicación el lunes).
+- **Vista previa**: test primario +COT 0.514 (lag 3) / **0.509 (lag 4)** contra baseline 0.515 → Δ −0.001 / −0.006. Corte FX/oro: 0.463 sin COT → 0.527 (lag 3) / **0.484 (lag 4)**. Nada cerca de la barra (0.55 y Δ ≥ +0.03). El leve indicio de junio (0.607, lag 3, ~1 mes) no se sostiene con más datos, y quitar la fuga baja el corte FX/oro en 0.043: parte del indicio de junio pudo venir del leakage. No decide nada; el veredicto es el del 7-dic con lag 4.
+- Verificado (pregunta E2 de la spec v2 del user): el COT NO se propaga como valor guardado por trade — se une por fecha (as-of) desde `cot_snapshots` al correr, así que los 416 trades nuevos no están contaminados por propagación; el único problema era la hora de publicación.
+
 ## Research — H-MS1 microestructura L1 en BTCUSDT perp (2026-10-03): la señal existe pero no paga — familia cerrada
 
 Nace de auditar una especificación externa de "sistema de mercado en tiempo real" (L2/OFI/CVD/DeepLOB/Hawkes, dashboard de 0-30 s). Antes de construir nada en vivo se probó offline, con pre-registro (`research/HIPOTESIS_2026-10-03_microestructura.md`, commit 270888b) y scripts congelados antes de correr (2512199). Familia NUEVA y fuera del vehículo del bot: es la primera con información que las velas no tienen (order book y lado agresor).
