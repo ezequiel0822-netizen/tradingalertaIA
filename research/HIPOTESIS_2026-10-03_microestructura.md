@@ -166,3 +166,38 @@ timeouts) en holdout ≥ 0.52 para H=30 s con HistGB → "la señal existe".
 - Un PASA acá sería necesario, no suficiente: mercados de 2023 ≠ hoy.
 
 Firmado (protocolo): k=1 familia, 6 combinaciones en el test decisivo, un tiro.
+
+## Addendum 2026-10-04 — completar la Fase 0 según la spec v5.0 (diagnósticos; NO cambian el gate)
+
+Commiteado ANTES de correr. La spec `REAL_TIME_MARKET_AI_CLAUDE_AUDIT_MASTER.md` (v5.0,
+recibida 2026-10-04) define su Fase 0 igual que H-MS1, pero exige además manifest de
+datos, verificación de afirmaciones previas (HISTORICAL_CLAIM), test automático de
+leakage, experimento separado de OFI contemporáneo vs predictivo, calibración separada
+del test y funding en el costo. El gate económico de H-MS1 (NO PASA) es definitivo y
+este addendum agrega solo DIAGNÓSTICOS que no pueden cambiarlo ni re-abrir la familia:
+
+1. **Manifest**: por día filas, rango, contigüidad, updates del libro, trades, segundos
+   sin update, hueco máximo, segundos sin estado, spread mediano, sha256 del parquet
+   derivado y sha256 OFICIAL del zip fuente (archivos `.CHECKSUM` de Binance). Los zips
+   se borraron tras procesarse (integridad por CRC al descargar): su sha256 NO se
+   re-verifica, se registra. `data_manifest_hash` = sha256 del CSV.
+2. **Claims (sección 59 de la v5)**: commits citados (git), 92 días completos,
+   updates/trades del 2023-08-01, spread mediano, huecos; reproducción del AUC y de la
+   ganancia bruta del modelo final (tercera corrida independiente).
+3. **Leakage**: (a) canary de truncamiento — features en t recalculadas SOLO con datos
+   ≤ t, para 200 t al azar del holdout (semilla 0), deben coincidir con las del dataset
+   completo; (b) tau ≥ 1 en todo label válido (el label empieza después del fin de la feature).
+4. **OFI contemporáneo vs predictivo**: R² de ret(t−w, t] ~ ofi_w y de ret(t, t+w] ~ ofi_w,
+   w ∈ {1, 5, 15, 30} s, muestreo cada w segundos, holdout. Reportados por separado.
+5. **Calibración**: HGB por horizonte entrenado con dev menos sus últimos 14 días (purga
+   H+300 s); isotónica por clase ajustada en esos 14 días (solo muestras cuyo label
+   termina antes del holdout); evaluación en holdout: Brier multiclase, log loss y ECE
+   top-label (10 bins), crudo vs calibrado.
+6. **Break-even**: en los trades del escenario primario (modelo final HGB, θ del
+   pre-registro), tasas de primer toque a favor / en contra / timeout, y la tasa de
+   acierto necesaria para cubrir 8 bps ignorando timeouts: p* = (1 + 8/b)/2.
+7. **Funding**: no se simula. Holding ≤ 300 s y el funding se cobra cada 8 h → costo
+   esperado ≈ tasa (~0.01%) × 300 s/8 h ≈ 0.001 bps: despreciable, y solo empeora el neto.
+
+Barreras escaladas por volatilidad (preferidas por la v5) serían un experimento NUEVO
+con su propio pre-registro; no se corren acá.
