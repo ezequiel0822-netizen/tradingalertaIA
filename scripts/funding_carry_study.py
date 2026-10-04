@@ -113,11 +113,20 @@ def download(out: Path) -> None:
                 if df is None:
                     missing.append(m)
                     continue
-                frames.append(df)
+                # Normalizar POR ARCHIVO y por posición: unos traen encabezado y otros
+                # no, y concatenarlos crudos desalinea columnas (NaN silenciosos).
+                if cols == "k":
+                    df = df.iloc[:, :6].copy()
+                    df.columns = ["open_time", "open", "high", "low", "close", "volume"]
+                else:
+                    df = pd.DataFrame({"calc_time": df.iloc[:, 0],
+                                       "funding_rate": df.iloc[:, -1]})
+                frames.append(df.apply(pd.to_numeric, errors="coerce"))
             data = pd.concat(frames, ignore_index=True)
+            bad = int(data.isna().any(axis=1).sum())
+            if bad:
+                raise ValueError(f"{sym} {kind}: {bad} filas con NaN tras normalizar")
             if cols == "k":
-                data = data.iloc[:, :6]
-                data.columns = ["open_time", "open", "high", "low", "close", "volume"]
                 ot = data["open_time"].astype("int64")
                 data["open_time"] = np.where(ot > 10**14, ot // 1000, ot)  # spot 2025+ en µs
             data.to_parquet(out / f"{sym}_{kind}.parquet", index=False)
