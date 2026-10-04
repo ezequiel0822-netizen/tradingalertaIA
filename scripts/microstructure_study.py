@@ -237,7 +237,9 @@ def main() -> int:
         block_edges = block_edges[:-1]
     block_edges.append(dev_end_excl)
     blocks = list(zip(block_edges[:-1], block_edges[1:]))
-    t_mid_hold = hold_start + (hold_end_excl - hold_start) // 2
+    # simulate() devuelve POSICIONES del array (no epoch): la mitad se compara en
+    # la misma unidad.
+    t_mid_hold = int(np.searchsorted(sec, hold_start + (hold_end_excl - hold_start) // 2))
     log(f"bloques dev={len(blocks)} | folds walk-forward={len(blocks) - MIN_TRAIN_WEEKS}")
 
     results: dict = {"missing_days": missing, "horizons": {}}
