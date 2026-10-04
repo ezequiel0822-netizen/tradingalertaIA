@@ -1,5 +1,19 @@
 # Pre-registro H-MS1 — Microestructura L1 (OFI / OBI / micro-price / CVD) en BTCUSDT perp: ¿predecible Y operable?
 
+> **VEREDICTO (corrido 2026-10-03, holdout 2023-10-11 → 10-31): existencia PASA, economía NO PASA — familia CERRADA.**
+> La señal es real y estable: AUC ↑vs↓ 0.576 a 30 s (HGB), 0.57-0.60 en los 7 folds.
+> Pero la ganancia bruta es como mucho **+0.42 bps por trade** (30 s, latencia 0) contra
+> ~8 bps de costo taker ida y vuelta: neto −7.58 bps/trade (n=39.190, t=−317), ambas
+> mitades negativas. Falla en las 6 combinaciones; también como maker (−3.6 bps) y con
+> latencia 1 s (que se come ~75% de la ventaja bruta). Caveat de diseño declarado
+> después: a 30/60 s la barrera de ganancia (4/6 bps) era menor que el costo, así que
+> el neto no podía ser positivo ahí; las lecturas justas son la ventaja bruta (20×
+> menor que el costo) y el horizonte de 300 s (barrera 14 bps), donde la ventaja bruta
+> es ~0. Conclusión: **predecible pero no operable para un retail**, tal como se predijo.
+> Bug de reporte (mitades comparaban posición con epoch) corregido en 38b25e1 y
+> re-corrido: resto de números idénticos. Reporte: exports/microstructure_study/
+> (gitignored). Sin re-cortes, sin segundo tiro.
+
 > **Commiteado ANTES de bajar un solo dato** (protocolo del proyecto). Familia
 > NUEVA y FUERA del vehículo del bot (cripto perp, horizonte de segundos/minutos,
 > data de order book). Nace de la auditoría de

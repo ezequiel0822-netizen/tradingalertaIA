@@ -1,5 +1,15 @@
 # Changelog
 
+## Research — H-MS1 microestructura L1 en BTCUSDT perp (2026-10-03): la señal existe pero no paga — familia cerrada
+
+Nace de auditar una especificación externa de "sistema de mercado en tiempo real" (L2/OFI/CVD/DeepLOB/Hawkes, dashboard de 0-30 s). Antes de construir nada en vivo se probó offline, con pre-registro (`research/HIPOTESIS_2026-10-03_microestructura.md`, commit 270888b) y scripts congelados antes de correr (2512199). Familia NUEVA y fuera del vehículo del bot: es la primera con información que las velas no tienen (order book y lado agresor).
+
+- **Data (gratis, verificada)**: data.binance.vision, BTCUSDT perp, bookTicker L1 + aggTrades, 2023-08-01 → 10-31 (92 días, 7.9 M de segundos; el bookTicker histórico solo existe may-nov 2023). `scripts/microstructure_backfill.py` agrega a grilla de 1 s (estado L1, OFI de Cont-Kukanov-Stoikov por evento, volumen agresor) y borra los zips: 220 MB en disco, ~25 min.
+- **Estudio** (`scripts/microstructure_study.py`): features L1, triple-barrier 30/60/300 s, LogReg + HistGB con hiperparámetros fijos, walk-forward semanal con purga, holdout intocable de 21 días, trading sin solapamiento al quote ejecutable con escenarios de fees y latencia.
+- **Veredicto: existencia PASA (AUC 0.576 a 30 s, estable 0.57-0.60 en folds), economía NO PASA en las 6 combinaciones.** Ganancia bruta máxima +0.42 bps/trade contra ~8 bps de costo taker ida y vuelta → neto −7.6 bps/trade (t=−317, ambas mitades negativas); como maker −3.6; 1 s de latencia se come ~75% de la ventaja bruta. Predecible pero no operable para un retail: exactamente la predicción declarada.
+- Caveat declarado post-hoc: a 30/60 s la barrera de ganancia (4/6 bps) era menor que el costo; las lecturas justas son la ventaja bruta (20× menor que el costo) y 300 s (barrera 14 bps, ventaja bruta ~0). Bug de reporte en las mitades del holdout corregido (38b25e1) y re-corrido sin cambios en el resto.
+- La auditoría completa de la especificación (arquitectura corregida MVP→V3, 50 respuestas, este resultado) quedó en un doc de Claude. Sin bump de versión (research).
+
 ## Research — H-M1 trend multi-asset D1 vía CFD (2026-07-09): NO PASA, familia cerrada — se agotó el espacio de hipótesis del vehículo
 
 La última familia ABIERTA dentro del alcance del bot (MAPA §8, "instrumentos descorrelacionados", diferida desde v3.6.0). Protocolo completo: evaluación previa documentada (survey read-only MetaQuotes: 27 índices, 13 viables por spread; sin energía; swaps del demo irreales/deshabilitados) + pre-registro `research/HIPOTESIS_2026-07-09_multiasset.md` commiteado ANTES de correr (k=1, `trend_following_d1` CONGELADA de v3.6.0, predicción declarada: probable NO PASA).

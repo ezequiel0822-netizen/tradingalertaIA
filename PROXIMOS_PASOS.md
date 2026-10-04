@@ -31,6 +31,15 @@
 > `research/HIPOTESIS_2026-07-09_multiasset.md`. NO abrir hipótesis nuevas sobre
 > este vehículo: no queda ninguna sin veredicto.
 >
+> **⚠️ 3-oct-2026 — estado del checkpoint COT y H-MS1.** El checkpoint del 15-sep NO corrió:
+> la app estaba cerrada, la tarea arrancó recién el 3-oct y se cortó al medir la data, sin
+> veredicto. Además el bot estuvo APAGADO del 12-ago al 3-oct: desde el run de junio hay solo
+> ~7 semanas nuevas (416 trades cerrados, 4 lecturas COT) → por debajo de la barra de ~3
+> meses del propio checkpoint. Decisión pendiente del user: prender el bot + rellenar COT
+> con `scripts/cot_backfill.py` + reprogramar el checkpoint ~2 meses (recomendado). Aparte:
+> **H-MS1 microestructura L1 (BTCUSDT perp) corrida y CERRADA**: señal real (AUC 0.576)
+> pero +0.42 bps brutos contra ~8 bps de costo. Detalle en CHANGELOG.
+>
 > **📅 PRÓXIMO CHECKPOINT (el ÚNICO trabajo pendiente): ~15-sep-2026 — re-run COT.**
 > Comando: `python scripts/cot_ml_experiment.py` (el MISMO script, sin tocar).
 > Para entonces: ~4 meses de trades con features (vs ~1 mes del run de junio) y
