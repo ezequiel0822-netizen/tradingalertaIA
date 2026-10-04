@@ -1,5 +1,15 @@
 # Changelog
 
+## Research — tanda cripto 2026-10-04b (H-FC2, H-XS1, H-POS1): las tres NO PASAN + evaluación de ramas del carry
+
+Pre-registro `research/HIPOTESIS_2026-10-04b_cripto_batch.md` (8e4a3f9) con k = 3 y t ≥ 2.50, descargador (3961dec) y estudio (f53b6f0) commiteados antes de correr. La verificación sintética encontró y corrigió un bug de asignación de capital en H-FC2 antes de usar datos reales. Universo point-in-time con deslistados (466 símbolos), 41.532/41.532 checksums OK. Ventana 2024-10 → 2026-09.
+
+- **H-FC2 carry en altcoins: NO PASA.** CAGR −12.0 %; exceso −16.3 %/año, t −2.69. Pocas altcoins líquidas pagan > 10 % y apenas lo superan; la rotación (210 entradas) cuesta más que el funding; una mecha liquidó una pata corta (−11.3 % del equity en una barra, 2025-07-11). Sin ese evento igual pierde ~11 %.
+- **H-XS1 momentum cruzado: NO PASA.** Exceso −12.9 %/año, t −0.74, maxDD −46 %: +19 % la primera mitad, −44 % la segunda (crash de momentum).
+- **H-POS1 posicionamiento contrario: NO PASA.** 148 trades, +0.32 % por trade, t 0.69: ruido.
+- **Ramas del carry** (agente de research, `research/EVALUACION_RAMAS_CARRY_2026-10-04.md`): funding entre CEX, basis trimestral, carry en DEX, Ethena y lending quedan ≈ tasa libre o debajo; solo short Hyperliquid / long Binance mantiene una prima, dudosa sobre capital. Ethena tiene 81 % del respaldo en cash: el carry se vació. La ventana 2024-10 → 2026-09 quedó vista por el agente → cualquier test de esas ramas debe ser hacia adelante.
+- Total: 15 familias probadas con pre-registro, 0 operables. Sin bump (research).
+
 ## Research — H-FC1 funding carry delta-neutral BTC/ETH (2026-10-04): NO PASA — prima real pero ya por debajo de la tasa libre
 
 Familia B3 del mapa del user, la más realista de las 20 para operar (estructural, baja rotación, latencia irrelevante, data gratis). Pre-registro `research/HIPOTESIS_2026-10-04_funding_carry.md` (062394e) y script (38a2da7) commiteados antes de correr; dos arreglos de carga sin ver resultados (encabezados mixtos; tasa libre desde el NY Fed porque FRED cortaba, idéntica a la DFF local).

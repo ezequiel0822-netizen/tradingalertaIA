@@ -1,5 +1,19 @@
 # Pre-registro — tanda cripto 2026-10-04b: H-FC2 (carry en altcoins), H-XS1 (momentum cruzado), H-POS1 (posicionamiento)
 
+> **VEREDICTO (corrido 2026-10-04, ventana 2024-10 → 2026-09): las TRES NO PASAN — familias cerradas.**
+> - **H-FC2 (carry en altcoins): NO PASA.** CAGR −12.0 % (total −22.6 %) vs tasa libre 4.04 % →
+>   exceso −16.3 %, t −2.69, maxDD −22.6 %; ambas mitades negativas. Pocas altcoins líquidas
+>   superan 10 % de funding (mediana 2.5 posiciones, no 5) y apenas lo superan (funding
+>   mediano al entrar 10.95 %, mientras se tienen 10.1 %); 210 entradas en 104 semanas: la
+>   rotación cuesta más que el funding. 1 liquidación por mecha (2025-07-11: −11.3 % del
+>   equity en una barra) y 3 deslistados. Post-hoc: aun sin la liquidación pierde ~11 %.
+> - **H-XS1 (momentum cruzado): NO PASA.** CAGR −11.3 %, exceso −12.9 %, t −0.74, maxDD −46 %.
+>   Primera mitad +19.1 % de exceso, segunda −44 %: crash de momentum. Rotación ~100 % semanal.
+> - **H-POS1 (posicionamiento contrario): NO PASA.** 148 trades (57 long / 91 short), exceso
+>   +0.32 % por trade con t 0.69 (ruido), 49 % ganadores; mitades −0.07 % / +0.76 %.
+> Data: 41.532 archivos, 41.532/41.532 checksums oficiales OK (manifest en
+> `trading_data/binance_batch/`, sha256 8de17c8deb925729e45946a26d98246c4c0860efc89afc7b5fe39b37ff59551d). 15 familias probadas con pre-registro, 0 operables.
+
 > **Commiteado ANTES de bajar los datos de esta tanda** (protocolo del proyecto). Tres
 > familias del mapa del user (B3-altcoins, B13, B11), **k = 3**, un tiro cada una.
 > Umbral uniforme y conservador: **t ≥ 2.50** (más estricto que Bonferroni k=3, 2.40,
