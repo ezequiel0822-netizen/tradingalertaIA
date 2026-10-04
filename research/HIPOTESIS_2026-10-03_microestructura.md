@@ -201,3 +201,27 @@ este addendum agrega solo DIAGNÓSTICOS que no pueden cambiarlo ni re-abrir la f
 
 Barreras escaladas por volatilidad (preferidas por la v5) serían un experimento NUEVO
 con su propio pre-registro; no se corren acá.
+
+### Resultado del addendum (corrido 2026-10-04)
+
+- **Manifest**: `research/H-MS1_data_manifest.csv`, `data_manifest_hash` =
+  `8bb1f09ac2bbf7e2069ce31084558c2765c55e0b58b618ff714ad82e6f666b69`. 92 días × 86.400 s,
+  contiguos; 184/184 checksums oficiales de los zips fuente registrados.
+- **Claims**: commits citados VERIFIED localmente (hashes completos en el manifest de
+  resultados) pero NO en origin/main (rama sin pushear). 2023-08-01 = 11.487.743 updates /
+  987.917 trades: VERIFIED. Spread mediano 0.037 bps: VERIFIED. **"Sin huecos": FALSO** para
+  el dataset completo (se había afirmado mirando solo el 2023-08-01): el bookTicker fuente
+  tiene 3 días con huecos — 2023-09-22 sin libro de 00:00 a 05:19 UTC (19.190 s; excluido
+  automáticamente por NaN), 2023-09-21 (6.328 s) y 2023-09-12 (1.190 s) con estado congelado
+  por forward-fill en dev (7.518 s = 0,12 % de dev). Holdout limpio (hueco máximo 4 s): el
+  veredicto no se ve afectado. Defecto del pipeline anotado: no invalidaba un libro sin
+  updates por más de N segundos (la v5, sección 22, lo exige).
+- **Leakage**: canary 200/200 idéntico (diferencia máxima 0.0); tau ≥ 1 en todo label.
+- **OFI**: R² contemporáneo 0.33–0.39 vs predictivo 0.0003–0.013 (w = 1–30 s).
+- **Calibración**: el HGB crudo ya está calibrado (ECE 1.3–1.4 %); la isotónica ajustada en
+  los 14 días previos lo EMPEORA en el holdout (ECE 2.1–4.1 %) por cambio de régimen.
+- **Reproducción**: AUC y ganancia bruta del modelo final idénticos al run pre-registrado (3ª corrida).
+- **Break-even**: a 300 s (único horizonte donde ganar era mecánicamente posible) el modelo
+  acierta el primer toque 50.3 % de las veces; para cubrir 8 bps haría falta 78.6 %. A 30 s
+  acierta 57.4 %, pero ahí ningún acierto alcanza (barrera < costo).
+- **Veredicto de Fase 0 según la v5 (sección 40): NO-GO. Roadmap detenido.**
