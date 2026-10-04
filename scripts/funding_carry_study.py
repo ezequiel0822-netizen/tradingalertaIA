@@ -26,6 +26,8 @@ import pandas as pd
 BASE = "https://data.binance.vision/data"
 UA = {"User-Agent": "Mozilla/5.0 (research)"}
 FRED_DFF = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DFF"
+NYFED_EFFR = ("https://markets.newyorkfed.org/api/rates/unsecured/effr/search.json"
+              "?startDate=2019-12-01&endDate=2026-10-03")
 SYMBOLS = ("BTCUSDT", "ETHUSDT")
 FIRST_MONTH = date(2020, 1, 1)
 LAST_MONTH = date(2026, 9, 1)
@@ -131,12 +133,23 @@ def download(out: Path) -> None:
                 data["open_time"] = np.where(ot > 10**14, ot // 1000, ot)  # spot 2025+ en µs
             data.to_parquet(out / f"{sym}_{kind}.parquet", index=False)
             log(f"{sym} {kind}: {len(data):,} filas, meses faltantes={missing}")
-    dff = pd.read_csv(io.StringIO(_get(FRED_DFF).decode()))
-    dff.to_csv(out / "DFF.csv", index=False)
-    log(f"DFF: {len(dff):,} filas hasta {dff.iloc[-1, 0]}")
     man = pd.DataFrame(manifest)
     man.to_csv(out / "manifest.csv", index=False)
     log(f"manifest: {len(man)} archivos, checksums OK {int(man['checksum_ok'].sum())}/{len(man)}")
+    # Tasa libre de riesgo: DFF de FRED = EFFR que publica la Fed de Nueva York. FRED
+    # cortaba la conexión (2026-10-04); el NY Fed es la fuente original y coincide
+    # exactamente con la DFF local en los 1.652 días comunes verificados.
+    raw = _get(FRED_DFF)
+    if raw is not None:
+        dff = pd.read_csv(io.StringIO(raw.decode()))
+        source = "FRED DFF"
+    else:
+        js = json.loads(_get(NYFED_EFFR).decode())["refRates"]
+        dff = pd.DataFrame({"date": [r["effectiveDate"] for r in js],
+                            "rate": [r["percentRate"] for r in js]}).sort_values("date")
+        source = "NY Fed EFFR (= DFF)"
+    dff.to_csv(out / "DFF.csv", index=False)
+    log(f"tasa libre de riesgo ({source}): {len(dff):,} filas hasta {dff.iloc[-1, 0]}")
 
 
 # ================================ ESTUDIO ========================================
