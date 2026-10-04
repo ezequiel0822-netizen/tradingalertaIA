@@ -1,5 +1,19 @@
 # Pre-registro H-FC1 — Funding carry delta-neutral en BTC y ETH (familia B3)
 
+> **VEREDICTO (corrido 2026-10-04): NO PASA — familia B3 cerrada para BTC/ETH en Binance.**
+> Ventana decisoria 2024-10 → 2026-09: las 4 combinaciones rinden MENOS que la tasa libre
+> de riesgo (EFFR media 4.04 %): BTC V0 CAGR +3.45 % (exceso −0.61 %, t −1.84), ETH V0
+> +3.04 % (−1.01 %, t −2.84), V1 peor (−2.2 % / −2.6 %). Riesgo bajísimo (maxDD ≤ 0.5 %,
+> 0 liquidaciones), pero la prima se comprimió: funding medio anualizado BTC 30.6 % (2021)
+> → 11.9 % (2024) → 5.1 % (2025) → 2.9 % (2026); 16-19 % de los períodos con funding negativo.
+> Diagnóstico POST-HOC de la limitación declarada (colateral y efectivo ocioso rindiendo la
+> tasa libre completa, `scripts/funding_carry_collateral_sensitivity.py`): exceso +0.3 a
+> +0.75 %, t máx 2.34 < 2.50 y segunda mitad negativa en las 4 → tampoco pasaría.
+> Contexto (no decide): 2020-2021 rindió 12-29 % anual; ETH tuvo 1 liquidación en 2020.
+> Prima REAL que la competencia arbitró: misma conclusión que el carry FX.
+> Data: 544 archivos, 544/544 checksums oficiales OK; manifest `research/H-FC1_data_manifest.csv`
+> (sha256 d0c49cb1332fc51fba533eb8c953b0f3ce0e585c7d65316ad8ef7a26b31430ce). Tasa libre: EFFR del NY Fed (= DFF de FRED, idéntica en 1.652 días).
+
 > **Commiteado ANTES de bajar un solo dato** (protocolo del proyecto). Familia NUEVA
 > (B3 del mapa de 20 familias del user, 2026-10-04) y FUERA del vehículo del bot: un
 > carry cripto exigiría cuenta spot + perpetuo en un exchange, no MT5. Research-only:

@@ -1,5 +1,15 @@
 # Changelog
 
+## Research — H-FC1 funding carry delta-neutral BTC/ETH (2026-10-04): NO PASA — prima real pero ya por debajo de la tasa libre
+
+Familia B3 del mapa del user, la más realista de las 20 para operar (estructural, baja rotación, latencia irrelevante, data gratis). Pre-registro `research/HIPOTESIS_2026-10-04_funding_carry.md` (062394e) y script (38a2da7) commiteados antes de correr; dos arreglos de carga sin ver resultados (encabezados mixtos; tasa libre desde el NY Fed porque FRED cortaba, idéntica a la DFF local).
+
+- **Data**: data.binance.vision, funding + velas de 8 h de spot y perpetuo de BTC y ETH, 2020-01 → 2026-09 (7.395 períodos c/u); 544/544 checksums oficiales OK.
+- **Estrategia**: long spot + short perpetuo (margen 0.5), rebalanceo ±20 %, chequeo de liquidación con máximo intra-vela, costos conservadores. V0 siempre adentro; V1 con filtro de funding de 7 días.
+- **Veredicto (ventana 2024-10 → 2026-09): NO PASA en las 4 combinaciones.** BTC V0 rinde +3.45 % anual contra 4.04 % de tasa libre (exceso −0.61 %); ETH V0 +3.04 %; V1 peor. Riesgo mínimo (maxDD ≤ 0.5 %, 0 liquidaciones). La prima se comprimió: funding BTC 30.6 % (2021) → 5.1 % (2025) → 2.9 % (2026).
+- **Post-hoc** (limitación declarada: el colateral no rinde): aun rindiendo la tasa libre completa, exceso ≤ +0.75 %, t ≤ 2.34 y segunda mitad negativa en las 4. No cambia nada.
+- Lectura: prima real (2020-2021: 12-29 % anual) que la competencia arbitró. Misma familia de conclusión que el carry FX. 12 familias probadas, 0 operables. Sin bump (research).
+
 ## Research — COT: vista previa NO decisoria (2026-10-04) + leakage de release corregido
 
 A pedido del user se corrió `scripts/cot_ml_experiment.py` como VISTA PREVIA explícitamente no decisoria (el checkpoint oficial, familia B12, quedó reprogramado al 2026-12-07). Datos: 970 trades cerrados (606 feature-complete, 300 FX/oro con COT), 2026-05-20 → 08-12; COT hasta 2026-09-29.
