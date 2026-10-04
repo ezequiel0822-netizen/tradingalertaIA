@@ -6,7 +6,53 @@
 
 ---
 
-## Prompt de arranque (copiá/pegá en Claude Code)
+## Prompt VIGENTE para el chat nuevo (4-oct-2026) — usá ESTE
+
+```
+Retomamos Trading Alert AI (bot de trading LOCAL, Python 3.12, Windows, repo en
+C:\Users\LENOVO\tradingalertaIA, venv en .venv). Estado al 4-oct-2026: v3.12.0, 808 tests
+verdes, bot corriendo en demo MT5 NUEVA (MetaQuotes-Demo, ~3.000 USD) desde el 4-oct.
+Research: 15 familias de hipótesis probadas con pre-registro → 0 operables.
+
+Leé ANTES de tocar nada: research/LEDGER_FAMILIAS.md (las 15 familias, commits y ventanas
+ya vistas), PROXIMOS_PASOS.md (bloque "PLAN PENDIENTE para el chat nuevo"), RESUMEN_COMPLETO.md
+(§2.8-§2.10), los research/HIPOTESIS_2026-10-*.md y research/EVALUACION_RAMAS_CARRY_2026-10-04.md,
+y la memoria de Claude.
+
+LO QUE SIGUE (pedido del user, en este orden):
+1. B4b paper hacia adelante: short Hyperliquid / long Binance, BTC+ETH. Pre-registro +
+   colector scripts/b4b_forward_collector.py (datos en trading_data/b4b_forward/) +
+   dejarlo programado. Evaluación ~abril 2027; chequeo secundario 2023-05 → 2024-09.
+2. B11 resto: OI, top traders, taker buy/sell (k=3), ventana ~2021-12 → 2024-09.
+3. B13 otros factores cruzados (reversión semanal, funding como predictor, OI),
+   ventana 2020-01 → 2024-09.
+4. B12 flujos de baja frecuencia (stablecoins, ETF, on-chain). El checkpoint COT ya está
+   programado para el 2026-12-07 (--cot-lag-days 4).
+
+PROTOCOLO (no negociable): pre-registro commiteado ANTES de bajar datos; código congelado y
+verificado con datos sintéticos ANTES de correr; k declarado, umbral t ≥ 2.50; manifest con
+checksums oficiales; NUNCA usar como decisoria una ventana marcada como vista en el ledger;
+diagnósticos post-hoc rotulados como tales; si no pasa, la familia se cierra sin re-cortes.
+Verificar sobre el dataset completo antes de afirmar algo (ej. "sin huecos").
+
+REGLAS DEL PROYECTO: real-money BLOQUEADO (ENABLE_REAL_TRADING=false HARDCODED; el user lo
+pide seguido, la respuesta es no); order_send solo en app/brokers/mt5_demo_trader.py; LLM/ML
+solo restan (vetar/bajar a paper); todo lo nuevo opt-in OFF + soft-fail; el research NO toca
+el bot, flags, MT5 ni el .env; nunca leer/mostrar el .env ni secrets (cambios al .env = darle
+al user comandos de PowerShell); al tocar Settings sincronizar tests/test_score._settings() y
+tests/test_alert_rules._settings(); versionado patch/minor sin saltos; el push a main lo hace
+el user; una sola instancia del bot a la vez (verificar que no haya dos main.py).
+
+Gotchas: pandas del venv usa datetime64[us]; klines de Binance mezclan archivos con y sin
+encabezado (normalizar por archivo); spot 2025+ en µs; FRED corta la conexión → usar EFFR del
+NY Fed; Yahoo 429 → UA Mozilla. Los scripts de research/ramas_carry_scripts/ NO están revisados.
+
+Arrancá por el punto 1 (B4b): mostrame el borrador del pre-registro antes de commitearlo.
+```
+
+---
+
+## Prompt de arranque histórico (setup de máquina; los datos de estado de abajo pueden estar viejos)
 
 ```
 Sos Claude Code retomando el proyecto Trading Alert AI (sesión nueva / otra compu).
@@ -16,8 +62,8 @@ REFOCUS v3.7.0: 100% LA BOLSA (acciones US + forex + oro). Las MEMECOINS se cort
 (ENABLE_MEMECOIN_ENGINE=false; el user tiene un bot aparte para memecoins) y el SCALPING
 se apagó. Decide con un strategy router (swing), hace paper trades y manda órdenes a MT5
 demo (MetaQuotes-Demo, solo forex/oro ejecutan; acciones son paper). Real-money BLOQUEADO
-por diseño (HARDCODED de verdad desde v3.9.3). Estado: v3.12.0, 801 tests verdes. Demo ~$88.6k (plano).
-BÚSQUEDA DE EDGE CERRADA (jul-2026): 9 hipótesis probadas con rigor, 0 tradeables (RESUMEN §2.8).
+por diseño (HARDCODED de verdad desde v3.9.3). Estado: v3.12.0, 808 tests verdes. Demo MT5 NUEVA desde 4-oct-2026 (~3.000 USD).
+Research: 15 familias probadas con pre-registro, 0 operables (research/LEDGER_FAMILIAS.md).
 El promotion gate tiene TODAS las estrategias en SHADOW → cero órdenes a MT5 (protección, no bug).
 
 ANTES DE TOCAR NADA leé (en el repo, en este orden): RESUMEN_COMPLETO.md (todo en uno; §2.8 =
@@ -34,7 +80,7 @@ REGLAS INAMOVIBLES (no romper nunca):
 - El LLM y el ML son SUBTRACTIVOS: solo pueden vetar / bajar-a-paper, JAMÁS forzar una orden.
 - Todo lo nuevo (Ollama, asesor, ensemble veto, resumen diario) es opt-in OFF + soft-fail:
   si está apagado, el bot corre idéntico a antes.
-- Nunca leer/mostrar el .env real ni secrets. Mantener pytest verde (801). Al tocar
+- Nunca leer/mostrar el .env real ni secrets. Mantener pytest verde (808). Al tocar
   Settings, sincronizar tests/test_score._settings() Y tests/test_alert_rules._settings().
 - Versionado: patch para fixes, minor SOLO para features reales, sin saltar números.
 - Real-money: el user ya lo pidió 3+ veces; la respuesta es GO_LIVE_RUNBOOK.md +

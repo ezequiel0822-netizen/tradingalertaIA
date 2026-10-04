@@ -239,6 +239,17 @@ Detalle completo en CHANGELOG. Todo informativo + captura para research; ningún
 - **VWAP gate** (`ENABLE_VWAP_GATE=false`): downward-only, molde del regime gate, VWAP semanal del cache D1 MT5. Opt-in OFF.
 - **`/claude_analyze SYMBOL`** (alias `/analisis_llm`): análisis técnico narrado por LLM (VWAP+velas+Hurst+noticias), a demanda, transporte Claude u Ollama, gated por `ENABLE_LLM_ADVISOR`. Analista secundario: jamás señales.
 
+## 2.10 Research fuera del vehículo (9-jul → 4-oct-2026): 15 familias, 0 operables
+
+Registro completo (fecha, datos, veredicto, commits, ventanas ya vistas): **`research/LEDGER_FAMILIAS.md`**.
+- **H-M1** (9-jul): trend multi-asset D1 vía CFD → NO PASA; agota el vehículo CFD/MT5/D1.
+- El bot estuvo **apagado 12-ago → 3-oct**; el checkpoint COT del 15-sep no corrió. Re-encendido el **4-oct** con una **demo MT5 nueva (~3.000 USD)** porque la vieja venció. COT rellenado; checkpoint reprogramado al **2026-12-07** con `--cot-lag-days 4` (se encontró y corrigió un leakage: con lag 3 se usaba el reporte del viernes antes de su publicación).
+- **H-MS1** (3/4-oct): microestructura L1 BTCUSDT perp, a partir de una spec externa (auditada; su v5.0 adoptó la auditoría). Señal real (AUC 0.576) pero +0.42 bps brutos vs ~8 bps de costo → NO-GO formal. Rebates de market making verificados: inalcanzables a escala retail.
+- **H-FC1** (4-oct): funding carry BTC/ETH → 3-3.5 %/año vs EFFR 4.04 % → NO PASA (prima arbitrada).
+- **Tanda cripto k=3** (4-oct): H-FC2 carry altcoins (−12 % CAGR), H-XS1 momentum cruzado (crash en la 2ª mitad), H-POS1 posicionamiento (t 0.69) → las tres NO PASAN.
+- **Ramas del carry** (agente, sin pre-registro): todo ≈ tasa libre; único candidato dudoso **B4b** short Hyperliquid / long Binance. Su ventana ya quedó vista → solo vale un test hacia adelante.
+- **Pendiente** (plan detallado en PROXIMOS_PASOS.md): B4b paper hacia adelante, B11 resto (OI/top traders/taker), B13 otros factores cruzados (ventana 2020 → 2024-09), B12 flujos de baja frecuencia + checkpoint COT del 7-dic.
+
 ## 3. La verdad de fondo (la filosofía del proyecto)
 
 1. **El cuello de botella es DATA, no código.** No hay edge probado: el único +R agregado
@@ -352,42 +363,45 @@ contraseña de Windows + BitLocker.
 ## 11. Prompt para arrancar un chat nuevo (copiá/pegá)
 
 ```
-Retomamos Trading Alert AI (bot de trading algorítmico LOCAL, Python 3.12, Windows).
-Estado: v3.11.0, main, 721 tests verdes, corriendo en la Lenovo vía .\start_bot.ps1.
-REFOCUS: 100% LA BOLSA (acciones+forex+oro); memecoins CORTADAS (bot aparte) y scalping
-APAGADO. Protecciones: calendar gate, cap USD, exit shadow; regime gate + COT collector VIVOS.
-BÚSQUEDA DE EDGE CERRADA (jul-2026): 9 hipótesis probadas con rigor, 0 tradeables (ver §2.8).
-El promotion gate tiene TODAS las estrategias en SHADOW → cero órdenes a MT5 (protección, no bug).
+Retomamos Trading Alert AI (bot de trading LOCAL, Python 3.12, Windows, repo en
+C:\Users\LENOVO\tradingalertaIA, venv en .venv). Estado al 4-oct-2026: v3.12.0, 808 tests
+verdes, bot corriendo en demo MT5 NUEVA (MetaQuotes-Demo, ~3.000 USD) desde el 4-oct.
+Research: 15 familias de hipótesis probadas con pre-registro → 0 operables.
 
-Leé en este orden ANTES de tocar nada: RESUMEN_COMPLETO.md (todo el proyecto en uno, §2.8 =
-auditoría + edge), PROXIMOS_PASOS.md (qué sigue + reglas), CONTEXTO_MAESTRO_v3.8.0.md
-(arquitectura + addendum v3.9.4→v3.11.0 al final), CHANGELOG.md, research/HIPOTESIS_*.md
-(los veredictos de edge), GO_LIVE_RUNBOOK.md, MAPA_DE_EDGE_Y_RUTA.md.
+Leé ANTES de tocar nada: research/LEDGER_FAMILIAS.md (las 15 familias, commits y ventanas
+ya vistas), PROXIMOS_PASOS.md (bloque "PLAN PENDIENTE para el chat nuevo"), RESUMEN_COMPLETO.md
+(§2.8-§2.10), los research/HIPOTESIS_2026-10-*.md y research/EVALUACION_RAMAS_CARRY_2026-10-04.md,
+y la memoria de Claude.
 
-Reglas inamovibles: real-money BLOQUEADO (ENABLE_REAL_TRADING=false HARDCODED) hasta
-que /readiness esté verde; order_send solo en mt5_demo_trader.py; LLM/ML SUBTRACTIVOS;
-los gates vivos (calendar/cap USD/regime) son DOWNWARD-ONLY (solo bajan a paper); todo
-opt-in OFF + soft-fail; mantener 721 tests verdes; sincronizar los _settings() de
-test_score y test_alert_rules al tocar Settings; versionado patch/minor sin saltos; el
-backtest escribe SOLO en backtest_*, no cuenta para /readiness ni Fase D. NO inventar edge
-artificial (curve-fitting). Hardware: GPU chica, nada de LLM en el hot path (~50s/gen).
+LO QUE SIGUE (pedido del user, en este orden):
+1. B4b paper hacia adelante: short Hyperliquid / long Binance, BTC+ETH. Pre-registro +
+   colector scripts/b4b_forward_collector.py (datos en trading_data/b4b_forward/) +
+   dejarlo programado. Evaluación ~abril 2027; chequeo secundario 2023-05 → 2024-09.
+2. B11 resto: OI, top traders, taker buy/sell (k=3), ventana ~2021-12 → 2024-09.
+3. B13 otros factores cruzados (reversión semanal, funding como predictor, OI),
+   ventana 2020-01 → 2024-09.
+4. B12 flujos de baja frecuencia (stablecoins, ETF, on-chain). El checkpoint COT ya está
+   programado para el 2026-12-07 (--cot-lag-days 4).
 
-La verdad de fondo: NO hay edge probado, confirmado 4 vías (backtest D1 artefacto USDCHF;
-diagnóstico vivo longs −0.57R/shorts +1.29R = régimen; ML AUC 0.533; CV temporal 0.475 OOS,
-peor que azar). El gate de data de Fase D se CRUZÓ (403/400) pero el ML es callejón sin salida
-sobre los features actuales — NO prender ENABLE_ML_PREDICTOR. El edge se DESCUBRE con info nueva
-(COT), no se inyecta. Dejar correr el libro + que el COT acumule.
+PROTOCOLO (no negociable): pre-registro commiteado ANTES de bajar datos; código congelado y
+verificado con datos sintéticos ANTES de correr; k declarado, umbral t ≥ 2.50; manifest con
+checksums oficiales; NUNCA usar como decisoria una ventana marcada como vista en el ledger;
+diagnósticos post-hoc rotulados como tales; si no pasa, la familia se cierra sin re-cortes.
+Verificar sobre el dataset completo antes de afirmar algo (ej. "sin huecos").
 
-La BÚSQUEDA DE EDGE está CERRADA (§2.8): 9 hipótesis con rigor (pre-registro/holdout/Bonferroni),
-0 tradeables para este bot. Reales-no-tradeables: viernes del oro, carry. Real-fuera-de-scope:
-overnight equities (~+7-10%/año pero US equities + MOC/MOO, no el universo MT5-forex del bot).
-NO re-abrir familias cerradas ni cherry-pickear (sería dredging). Nueva hipótesis = pre-registro nuevo.
+REGLAS DEL PROYECTO: real-money BLOQUEADO (ENABLE_REAL_TRADING=false HARDCODED; el user lo
+pide seguido, la respuesta es no); order_send solo en app/brokers/mt5_demo_trader.py; LLM/ML
+solo restan (vetar/bajar a paper); todo lo nuevo opt-in OFF + soft-fail; el research NO toca
+el bot, flags, MT5 ni el .env; nunca leer/mostrar el .env ni secrets (cambios al .env = darle
+al user comandos de PowerShell); al tocar Settings sincronizar tests/test_score._settings() y
+tests/test_alert_rules._settings(); versionado patch/minor sin saltos; el push a main lo hace
+el user; una sola instancia del bot a la vez (verificar que no haya dos main.py).
 
-Decime qué querés hacer: (A) revisar la data viva (/performance, /readiness, /exposicion); (B) CONSOLIDAR
-y dejar el bot corriendo en demo juntando data (el camino honesto — su valor es la infra + disciplina);
-(C) una hipótesis de edge NUEVA y específica, con pre-registro (no re-cortar lo ya cerrado); (D) otra cosa.
-NOTA: NO hay edge tradeable probado; NO ir a real-money; más IA/modelos NO ayuda (el mercado precia la
-info pública). Informe consolidado: exports/INFORME_PROYECTO_2026-07.xlsx.
+Gotchas: pandas del venv usa datetime64[us]; klines de Binance mezclan archivos con y sin
+encabezado (normalizar por archivo); spot 2025+ en µs; FRED corta la conexión → usar EFFR del
+NY Fed; Yahoo 429 → UA Mozilla. Los scripts de research/ramas_carry_scripts/ NO están revisados.
+
+Arrancá por el punto 1 (B4b): mostrame el borrador del pre-registro antes de commitearlo.
 ```
 
 ---

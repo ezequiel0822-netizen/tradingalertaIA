@@ -50,14 +50,74 @@
 > solo para comparar con junio. Residual: semanas con feriado federal (publicación el lunes).
 > El 4-oct se corrió una VISTA PREVIA no-decisoria a pedido del user (CHANGELOG).
 >
-> **📅 PRÓXIMO CHECKPOINT (el ÚNICO trabajo pendiente): ~15-sep-2026 — re-run COT.**
-> Comando: `python scripts/cot_ml_experiment.py` (el MISMO script, sin tocar).
-> Para entonces: ~4 meses de trades con features (vs ~1 mes del run de junio) y
-> ~16 lecturas semanales de COT por mercado (vs ~4-5) + las features nuevas de
-> v3.12.0 (vwap/hurst/velas) acumuladas al entry. Barra pre-registrada (sin mover):
-> corte FX/oro TimeSeriesSplit OOS ≥ 0.55 robusto Y Δ del COT ≥ +0.03. Si no la
-> cruza: ML sigue OFF y se repite el ciclo con más meses. Mientras tanto: DEJAR
-> CORRER (no tocar flags, no agregar features, no re-abrir familias).
+> **⚠️ 4-oct-2026 (cierre de sesión) — 15 familias con pre-registro, 0 operables.** Tras
+> H-MS1 se probó la tanda cripto: H-FC1 carry BTC/ETH, H-FC2 carry en altcoins, H-XS1
+> momentum cruzado, H-POS1 posicionamiento → las cuatro NO PASAN. Un agente evaluó las
+> ramas del carry: todo ≈ tasa libre; único candidato dudoso **B4b** (short Hyperliquid /
+> long Binance). **Registro único con todas las familias, commits y ventanas ya vistas:
+> `research/LEDGER_FAMILIAS.md`.** Main = origin/main en 13a3733 antes de este cierre.
+>
+> **📅 CHECKPOINT COT: 2026-12-07 09:00** (tarea programada `checkpoint-cot-reexperimento`).
+> Comando decisivo: `python scripts/cot_ml_experiment.py --cot-lag-days 4` (lag 3 solo como
+> comparación con junio). Barra pre-registrada (sin mover): corte FX/oro TimeSeriesSplit
+> OOS ≥ 0.55 robusto Y Δ del COT ≥ +0.03. Si no la cruza: ML sigue OFF.
+>
+> ### 🔜 PLAN PENDIENTE para el chat nuevo (pedido del user: "sigue B11/B12/B13 y el paper de la rama")
+>
+> Reglas para TODO lo de abajo: research-only (no toca el bot, ni flags, ni MT5, ni .env);
+> pre-registro commiteado ANTES de bajar datos; código congelado y verificado con datos
+> sintéticos ANTES de correr; k declarado y umbral t ≥ 2.50; manifest con checksums;
+> veredicto en el mismo archivo + fila en `research/LEDGER_FAMILIAS.md`. Si una ventana
+> está en "Ventanas ya vistas" del ledger, NO puede ser la decisoria.
+>
+> **1. B4b — paper hacia adelante, short Hyperliquid / long Binance (BTC + ETH).**
+> - Pre-registro `research/HIPOTESIS_<fecha>_B4b_forward.md`: patas perp-perp de igual
+>   nocional; apalancamiento por pata FIJO elegido antes (2x o 3x; retorno sobre capital ≈
+>   spread × L/2 con margen en ambos venues); costos taker de cada venue (verificar tabla
+>   oficial; si no se puede, marcar UNVERIFIED y usar ×2 como estrés); regla de rebalanceo
+>   de margen con demora y costo de puente USDC; chequeo de liquidación con máximo/mínimo
+>   horario; ADL no modelable → se declara. Benchmark: EFFR del NY Fed sobre capital.
+> - Ventana DECISORIA: desde el commit del pre-registro hasta ≥ 6 meses (~abril 2027).
+>   Chequeo secundario NO visto: Hyperliquid 2023-05 → 2024-09 con la misma regla
+>   (declarar antes si es requisito o solo confirmatorio; recomendado: requisito).
+> - Datos: Hyperliquid `POST https://api.hyperliquid.xyz/info` con
+>   `{"type":"fundingHistory","coin":"BTC","startTime":<ms>}` (paginado, horario) y
+>   `{"type":"candleSnapshot",...}` para precios (según docs solo devuelve las ~5000 velas
+>   más recientes → VERIFICAR y, si es así, bajar al menos mensual); Binance funding de
+>   data.binance.vision (mensual) o `GET https://fapi.binance.com/fapi/v1/fundingRate`.
+> - Colector: script nuevo `scripts/b4b_forward_collector.py`, idempotente, guarda en
+>   `trading_data/b4b_forward/` (fuera de git) con checksum por corrida. Cadencia semanal;
+>   dejarlo programado (Programador de tareas de Windows con comando para el user, o tarea
+>   programada de Claude si la app queda abierta). El funding histórico es inmutable, así
+>   que perder una corrida no rompe el test; las velas sí pueden perderse.
+> - Expectativa declarada por el agente: BTC no pasa, ETH marginal. Riesgos no
+>   modelables: contraparte DEX, ADL (10-oct-2025: ~35k cierres), puente, USDC vs USDT.
+>
+> **2. B11 resto — señales de posicionamiento no probadas (k = 3).** Columnas del `metrics`
+> diario de Binance que H-POS1 NO probó: cambio de open interest, ratio long/short de
+> top traders (cuentas y/o posiciones: elegir UNA a priori) y ratio taker buy/sell.
+> Ventana decisoria NO vista: desde el inicio del `metrics` (~2021-12, verificar) hasta
+> 2024-09. Misma mecánica que H-POS1 (z-score 90 d, umbral ±1.5, 3 días, BTC+ETH).
+>
+> **3. B13 otros factores cruzados (k = 2-3).** Reversión semanal (1 semana), funding como
+> predictor de retorno (crowding: funding alto → retorno futuro bajo) y factor de OI.
+> Ventana decisoria 2020-01 → 2024-09 (extender la descarga de alts hacia atrás con
+> universo point-in-time, como `scripts/crypto_batch_download.py`). La ventana 2024-10 →
+> 2026-09 está CONTAMINADA para señales de retornos cruzados (se vio el crash del momentum).
+>
+> **4. B12 flujos de baja frecuencia.** (a) Checkpoint COT del 7-dic (ya programado).
+> (b) Supply de stablecoins (DefiLlama, API gratis), flujos de ETF de BTC/ETH (fuente gratis
+> a verificar) y on-chain gratis (CoinMetrics community) como predictores semanales de
+> BTC/ETH. Advertir antes: pocas observaciones independientes (~250 semanas) → poca
+> potencia; un PASA así de chico se trata como exploración, no como edge.
+>
+> Orden recomendado: 1 (arranca el reloj del forward cuanto antes) → 2 → 3 → 4b.
+> Los scripts del agente de ramas (`research/ramas_carry_scripts/`) NO están revisados:
+> si se reutilizan, revisarlos primero.
+>
+> Mientras tanto el bot: DEJAR CORRER (v3.12.0, demo MT5 nueva ~3.000 USD desde 4-oct;
+> no tocar flags, no agregar features, no re-abrir familias; verificar que no haya dos
+> `main.py` corriendo).
 
 - **v3.9.3**, **697 tests verdes** (main, pusheado). v3.9.0 = **COT collector** (CFTC semanal,
   opt-in OFF, **YA VIVO** + backfill 5yr hecho): posicionamiento institucional, primer input
