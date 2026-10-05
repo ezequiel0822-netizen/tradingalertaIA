@@ -57,6 +57,11 @@
 > long Binance). **Registro único con todas las familias, commits y ventanas ya vistas:
 > `research/LEDGER_FAMILIAS.md`.** Main = origin/main en 13a3733 antes de este cierre.
 >
+> **📨 5-oct-2026 — v3.13.2 (838 tests): alertas forex/oro sin restos de memecoins.** Llegaban como
+> "TOP MEMECOINS" con "caída est. 90 %" (estimador de memecoins aplicado a forex) y salían TODOS los
+> snapshots forex (should_send devolvía True siempre). Ahora: título por mercado, movimiento observado,
+> envío solo con movimiento notable; /status /cupos /help /top /config sin memecoins si el motor está apagado.
+>
 > **🧪 5-oct-2026 — v3.13.1 + H-NN1 (829 tests, 25 familias).** Auditoría de tests desde cero: sin
 > duplicados, sin dependencia de orden ni de red; 4 tests vacíos arreglados; bug del cierre parcial
 > que aflojaba el trailing (paper de acciones) arreglado; `.test_dbs` se vacía al terminar. Decisión

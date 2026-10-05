@@ -1,5 +1,16 @@
 # Changelog
 
+## v3.13.2 (2026-10-05) — alertas de forex/oro sin restos de memecoins
+
+Reporte del user con captura: "Trading Alert AI v3.13.1 / TOP MEMECOINS" con EURUSD y USDCAD, "Caída est.: 90.01%", confianza 25, score 21, cuando las memecoins están apagadas desde v3.7.0. Eran tres bugs encadenados más textos viejos:
+
+- **Estimador** (`move_estimator`): forex/oro caían en el estimador de MEMECOINS (sin "liquidez de pool" → caída estimada 90 %, confianza 25). Nuevo `_estimate_fx_move`: no inventa subidas/caídas (el bot no tiene edge en forex/oro); reporta el movimiento OBSERVADO 1h/24h y marca "notable" con |Δ1h| ≥ 0.5 % o |Δ24h| ≥ 1.5 % (oro 1.0 / 2.5 %).
+- **Decisión de envío** (`alert_decision_engine`): con `ENABLE_FOREX_ALERTS`/`ENABLE_GOLD_ALERTS`, devolvía True para TODO snapshot forex/oro (el comentario decía que el strategy router filtraba antes; no era cierto) → cada par en cada ciclo iba a Telegram hasta agotar el cupo. Ahora solo con movimiento notable. Los avisos de apertura/cierre de trades no cambian.
+- **Formato** (`alert_formatter`): título por mercado (TOP BOLSA / TOP FOREX / TOP ORO / TOP MEMECOINS); en forex/oro "Mov. 1h | 24h", precio de forex con 5 decimales y SIN score/confianza (salían de fórmulas de memecoins: liquidez de pool, boost, contrato). Eliminado `format_telegram_alert` (código muerto, nadie lo llamaba).
+- **Comandos de Telegram**: `/status` y `/cupos` muestran solo los mercados con alertas activas (memecoins solo con `ENABLE_MEMECOIN_ENGINE=true`) y una línea de órdenes real (MT5 DEMO auto/manual, agente IA, real-money bloqueado) en vez de "read-only, sin compras ni órdenes"; `/help` sin `/top_memecoins` con el motor apagado y sin "requieren confirmación manual"; `/top` = bolsa + una línea honesta "forex/oro: sin ranking"; `/analiza` de un par sin estimación ni score; `/descartes` de forex dice "sin movimiento notable" (antes lo comparaba con la subida mínima de memecoins, 500 %); `/config` y `/health` sin memecoins con el motor apagado.
+- Sin efecto en trading: las estrategias usan su propio puntaje técnico (`pattern.score`), no el score de memecoins.
+- Tests: +9 (`tests/test_fx_alerts_v3132.py`, reproducen la captura). **838 tests verdes.**
+
 ## Research — H-NN1 redes neuronales vs boosting en microestructura (2026-10-05): no integrar
 
 Pregunta del user: "¿qué opinás de integrar redes neuronales?". Se probó donde más chance tienen (millones de filas de order book), offline y con pre-registro (8853632) y código congelado (5e90204, selftest 8/8). Train: los 92 días de H-MS1; prueba decisiva 2023-05-17 → 07-31 (76 días nunca bajados) y chequeo causal 2023-11-01 → 11-10; 86/86 días con checksum oficial verificado por zip. `MLPClassifier` de scikit-learn (sin PyTorch, venv del bot intacto).

@@ -1,6 +1,14 @@
 from app.config.settings import Settings
 from app.database.models import EstimateResult, SecuritySummary, TokenSnapshot
 
+# v3.13.2 — umbrales de "movimiento notable" (|variación %|) para forex y oro: un
+# par mayor rara vez se mueve 0.5 % en una hora o 1.5 % en un día; el oro es ~2x más
+# volátil. Solo deciden si la observación merece una alerta; NO son una predicción.
+FX_NOTABLE_MOVE_PCT = {
+    "forex": {"1h": 0.5, "24h": 1.5},
+    "gold": {"1h": 1.0, "24h": 2.5},
+}
+
 
 def estimate_move(
     snapshot: TokenSnapshot,
@@ -10,6 +18,8 @@ def estimate_move(
 ) -> EstimateResult:
     if snapshot.category == "stock":
         return _estimate_stock_move(snapshot, score, settings)
+    if snapshot.category in FX_NOTABLE_MOVE_PCT:
+        return _estimate_fx_move(snapshot)
 
     liquidity = snapshot.liquidity_usd or 0
     volume_5m = snapshot.volume_5m or 0
@@ -224,6 +234,48 @@ def _estimate_stock_move(
         label="high-conviction-stock" if eligible else "stock-watch-only",
         reasons=reasons[:8] or ["Sin momentum suficiente para alerta de bolsa."],
         eligible_for_gain_alert=eligible,
+    )
+
+
+def _estimate_fx_move(snapshot: TokenSnapshot) -> EstimateResult:
+    """v3.13.2: forex/oro. Antes caían en el estimador de MEMECOINS: sin "liquidez de
+    pool" le asignaba caída estimada 90 % y confianza 25 a EURUSD. El bot no tiene un
+    modelo con edge para forex/oro (24 familias probadas), así que NO inventa subidas
+    ni caídas: reporta el movimiento OBSERVADO y marca elegible para alerta solo un
+    movimiento notable para ese mercado. La confianza mide completitud de datos."""
+    thresholds = FX_NOTABLE_MOVE_PCT[snapshot.category]
+    change_1h = snapshot.price_change_1h
+    change_24h = snapshot.price_change_24h
+    notable = (change_1h is not None and abs(change_1h) >= thresholds["1h"]) or (
+        change_24h is not None and abs(change_24h) >= thresholds["24h"]
+    )
+    reasons: list[str] = []
+    if notable:
+        market = "el oro" if snapshot.category == "gold" else "un par de divisas"
+        reasons.append(f"Movimiento notable para {market}.")
+    if change_1h is not None:
+        reasons.append(f"Movimiento 1h: {change_1h:+.2f}%")
+    if change_24h is not None:
+        reasons.append(f"Movimiento 24h: {change_24h:+.2f}%")
+    if not notable:
+        reasons.append(
+            "Sin movimiento notable. El bot no estima subidas/caídas en forex/oro "
+            "(no tiene un modelo con edge)."
+        )
+    confidence = 35
+    if snapshot.price is not None:
+        confidence += 10
+    if change_1h is not None:
+        confidence += 15
+    if change_24h is not None:
+        confidence += 15
+    return EstimateResult(
+        estimated_gain_pct=0.0,
+        estimated_loss_pct=0.0,
+        confidence=confidence,
+        label="fx-movimiento-notable" if notable else "fx-observacion",
+        reasons=reasons,
+        eligible_for_gain_alert=notable,
     )
 
 

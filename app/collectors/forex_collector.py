@@ -1,7 +1,8 @@
 """Collector de forex y oro via Yahoo Finance (HTTP).
 
 Acumula snapshots OHLCV para `price_snapshots` y `alert_outcome_horizons`.
-NO genera alertas Telegram en Fase 2 (la exclusion vive en alert_decision_engine).
+Alertas a Telegram: solo con ENABLE_FOREX_ALERTS / ENABLE_GOLD_ALERTS y un movimiento
+notable (v3.13.2, alert_decision_engine + move_estimator._estimate_fx_move).
 
 Provisional hasta que se conecte una fuente MT5 directa en Fase 4.
 """

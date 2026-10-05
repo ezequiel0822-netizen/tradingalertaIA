@@ -430,18 +430,56 @@ class BasicTelegramAssistant:
 
         return (
             "No entendi ese mensaje. Prueba con /help, /status, /top, "
-            "/top_memecoins, /top_stocks, /alertas o /analiza NVDA."
+            "/top_stocks, /alertas o /analiza NVDA."
         )
 
+    # ------------------------------------------------------------------ #
+    # v3.13.2 — mercados activos (las memecoins están apagadas desde v3.7.0:
+    # los textos ya no las muestran salvo que ENABLE_MEMECOIN_ENGINE=true)
+    # ------------------------------------------------------------------ #
+    MARKET_LABELS = {"stock": "Bolsa", "forex": "Forex", "gold": "Oro", "memecoin": "Memecoins"}
+
+    def _memecoins_on(self) -> bool:
+        return bool(getattr(self.settings, "enable_memecoin_engine", True))
+
+    def _alert_markets(self) -> list[tuple[str, int, int]]:
+        """(categoria, cupo por ventana, cupo por ciclo) de las alertas ACTIVAS."""
+        s = self.settings
+        out: list[tuple[str, int, int]] = []
+        if getattr(s, "enable_stock_telegram", True):
+            out.append(("stock", s.stock_max_alerts_per_24h, s.stock_max_alerts_per_run))
+        if getattr(s, "enable_forex_alerts", False):
+            out.append(("forex", s.max_forex_alerts_per_24h, s.max_forex_alerts_per_run))
+        if getattr(s, "enable_gold_alerts", False):
+            out.append(("gold", s.max_gold_alerts_per_24h, s.max_gold_alerts_per_run))
+        if self._memecoins_on():
+            out.append(("memecoin", s.memecoin_max_alerts_per_24h, s.memecoin_max_alerts_per_run))
+        return out
+
+    def _top_markets(self) -> list[str]:
+        markets = ["stock"]
+        if self._memecoins_on():
+            markets.append("memecoin")
+        return markets
+
+    def _orders_line(self) -> str:
+        if not getattr(self.settings, "enable_mt5_demo_trading", False):
+            return "Ordenes: apagadas (solo paper trades)"
+        mode = "auto" if getattr(self.settings, "enable_auto_confirm_demo", False) else "confirmacion manual"
+        agent = "encendido" if getattr(self.settings, "enable_ai_agent", False) else "apagado"
+        return f"Ordenes: solo MT5 DEMO ({mode}) | Agente IA: {agent}"
+
     def help_message(self) -> str:
+        memecoin_line = (
+            "/top_memecoins - mejores memecoins guardadas\n" if self._memecoins_on() else ""
+        )
         return f"""Trading Alert AI {self.settings.app_version} - asistente basico
 
 Comandos:
 /status - estado del sistema y cupos
-/cupos - alertas restantes por categoria
-/top - mejores memecoins y acciones
-/top_memecoins - mejores memecoins guardadas
-/top_stocks - mejores acciones guardadas
+/cupos - alertas restantes por mercado
+/top - mejores acciones guardadas (forex/oro: sin ranking)
+{memecoin_line}/top_stocks - mejores acciones guardadas
 /alertas - ultimas alertas guardadas
 /descartes - mejores candidatos no enviados
 /aprendizaje - lecciones que la IA aprendio del historial
@@ -471,51 +509,48 @@ Comandos:
 /reanudar - reactiva alertas automaticas
 /config - ver configuracion sin secretos
 
-Ordenes demo MT5 requieren confirmacion manual. Real-money trading sigue bloqueado."""
+{self._orders_line()}. Real-money trading sigue bloqueado."""
+
+    def _cupo_lines(self) -> list[tuple[str, int, int, int, int]]:
+        """(etiqueta, enviadas, cupo, restantes, cupo por ciclo) por mercado activo."""
+        window = self.settings.alert_cap_window_hours
+        out = []
+        for category, cap, per_run in self._alert_markets():
+            sent = self.repository.sent_alert_count(category, window)
+            out.append((self.MARKET_LABELS[category], sent, cap, max(cap - sent, 0), per_run))
+        return out
 
     def status_message(self) -> str:
         paused = self.repository.alerts_paused()
-        memecoin_sent = self.repository.sent_alert_count(
-            "memecoin", self.settings.alert_cap_window_hours
-        )
-        stock_sent = self.repository.sent_alert_count(
-            "stock", self.settings.alert_cap_window_hours
-        )
-        memecoin_left = max(self.settings.memecoin_max_alerts_per_24h - memecoin_sent, 0)
-        stock_left = max(self.settings.stock_max_alerts_per_24h - stock_sent, 0)
-
-        return f"""Estado Trading Alert AI {self.settings.app_version}
-
-Alertas automaticas: {"pausadas" if paused else "activas"}
-Ventana de cupos: {self.settings.alert_cap_window_hours}h
-Memecoins enviadas: {memecoin_sent}/{self.settings.memecoin_max_alerts_per_24h}
-Memecoins restantes: {memecoin_left}
-Bolsa enviadas: {stock_sent}/{self.settings.stock_max_alerts_per_24h}
-Bolsa restantes: {stock_left}
-
-Modo: read-only, sin compras ni ordenes."""
+        lines = [
+            f"Estado Trading Alert AI {self.settings.app_version}",
+            "",
+            f"Alertas automaticas: {'pausadas' if paused else 'activas'}",
+            f"Ventana de cupos: {self.settings.alert_cap_window_hours}h",
+        ]
+        cupos = self._cupo_lines()
+        if not cupos:
+            lines.append("Sin mercados con alertas a Telegram activas.")
+        for label, sent, cap, left, _ in cupos:
+            lines.append(f"{label}: {sent}/{cap} enviadas, {left} restantes")
+        lines += ["", f"{self._orders_line()}. Real-money: bloqueado."]
+        return "\n".join(lines)
 
     def cupos_message(self) -> str:
-        memecoin_sent = self.repository.sent_alert_count(
-            "memecoin", self.settings.alert_cap_window_hours
-        )
-        stock_sent = self.repository.sent_alert_count(
-            "stock", self.settings.alert_cap_window_hours
-        )
-        memecoin_left = max(self.settings.memecoin_max_alerts_per_24h - memecoin_sent, 0)
-        stock_left = max(self.settings.stock_max_alerts_per_24h - stock_sent, 0)
-        return f"""Cupos restantes ({self.settings.alert_cap_window_hours}h)
-
-Memecoins: {memecoin_left} restantes ({memecoin_sent}/{self.settings.memecoin_max_alerts_per_24h} usados)
-Bolsa: {stock_left} restantes ({stock_sent}/{self.settings.stock_max_alerts_per_24h} usados)
-
-Por ciclo:
-Memecoins: max {self.settings.memecoin_max_alerts_per_run}
-Bolsa: max {self.settings.stock_max_alerts_per_run}"""
+        cupos = self._cupo_lines()
+        lines = [f"Cupos restantes ({self.settings.alert_cap_window_hours}h)", ""]
+        if not cupos:
+            lines.append("Sin mercados con alertas a Telegram activas.")
+            return "\n".join(lines)
+        for label, sent, cap, left, _ in cupos:
+            lines.append(f"{label}: {left} restantes ({sent}/{cap} usados)")
+        lines += ["", "Por ciclo:"]
+        lines += [f"{label}: max {per_run}" for label, _, _, _, per_run in cupos]
+        return "\n".join(lines)
 
     def top_message(self, category: str, limit: int = 5) -> str:
         rows = self.repository.top_tokens(category, limit)
-        title = "Memecoins" if category == "memecoin" else "Bolsa"
+        title = self.MARKET_LABELS.get(category, category)
         if not rows:
             return f"Todavia no hay datos para {title}. Ejecuta el monitor un rato mas."
 
@@ -526,7 +561,15 @@ Bolsa: max {self.settings.stock_max_alerts_per_run}"""
         return "\n".join(lines)
 
     def combined_top_message(self) -> str:
-        return self.top_message("memecoin", 3) + "\n\n" + self.top_message("stock", 3)
+        parts = [self.top_message(category, 3) for category in self._top_markets()]
+        # v3.13.2: forex/oro no se rankean: el score/estimación que había eran fórmulas
+        # de memecoins sin sentido para un par, y el bot no tiene edge para ordenarlos.
+        parts.append(
+            "Forex/oro: sin ranking (el bot no tiene un modelo con edge para ordenarlos). "
+            "Lo que si hace: /posiciones (paper), /agente (agente IA en demo), "
+            "/patron SIMBOLO (lectura tecnica)."
+        )
+        return "\n\n".join(parts)
 
     def recent_alerts_message(self, limit: int = 5) -> str:
         rows = self.repository.recent_alerts_by_category(limit=limit)
@@ -583,6 +626,17 @@ Bolsa: max {self.settings.stock_max_alerts_per_run}"""
         loss = self._fmt_pct(row.get("latest_estimated_loss_pct"))
         confidence = row.get("latest_estimate_confidence") or "unknown"
 
+        if category in {"forex", "gold"}:
+            # v3.13.2: sin subida/caída "estimada" (antes salía la del estimador de
+            # memecoins: caída 90 % para EURUSD). El bot no tiene edge en forex/oro.
+            return f"""Analisis basico: {symbol} / {name}
+
+Categoria: {category}
+Precio: {self._fmt_money(price)}
+Estimacion: el bot no estima subidas/caidas en forex/oro (no tiene un modelo con edge).
+Para el detalle tecnico: /patron {symbol} o /claude_analyze {symbol}
+{DISCLAIMER}"""
+
         return f"""Analisis basico: {symbol} / {name}
 
 Categoria: {category}
@@ -607,15 +661,30 @@ IA Pro: {"activa" if self.settings.enable_pro_intelligence else "apagada"}
 SEC filings: {"activo" if self.settings.enable_sec_filings_intel else "apagado"}
 Learning engine: {"activo" if self.settings.enable_learning_engine else "apagado"}
 Paper trading simulado: {"activo" if self.settings.enable_paper_trading else "apagado"}
-MT5 demo trading: {"activo" if self.settings.enable_mt5_demo_trading else "apagado"} (confirmacion manual)
+{self._orders_line()}
 Real trading: {"bloqueado" if not self.settings.enable_real_trading else "NO IMPLEMENTADO"}
-Memecoin min subida: {self.settings.min_estimated_gain_pct}%
 Stock min subida: {self.settings.min_stock_estimated_gain_pct}%
-Cupo memecoins: {self.settings.memecoin_max_alerts_per_24h}/{self.settings.alert_cap_window_hours}h
-Cupo bolsa: {self.settings.stock_max_alerts_per_24h}/{self.settings.alert_cap_window_hours}h
-Stocks: {", ".join(symbol.upper() for symbol in self.settings.stock_symbols[:20])}
-Chains: {", ".join(self.settings.chains_to_monitor)}
-"""
+{self._config_alert_lines()}Stocks: {", ".join(symbol.upper() for symbol in self.settings.stock_symbols[:20])}
+Forex/oro: {", ".join(symbol.upper() for symbol in getattr(self.settings, "forex_symbols", [])[:20])}
+{self._config_memecoin_lines()}"""
+
+    def _config_alert_lines(self) -> str:
+        window = self.settings.alert_cap_window_hours
+        lines = [f"Cupo {self.MARKET_LABELS[c].lower()}: {cap}/{window}h"
+                 for c, cap, _ in self._alert_markets()]
+        if not getattr(self.settings, "enable_forex_alerts", False):
+            lines.append("Alertas forex: apagadas")
+        if not getattr(self.settings, "enable_gold_alerts", False):
+            lines.append("Alertas oro: apagadas")
+        return "".join(line + "\n" for line in lines)
+
+    def _config_memecoin_lines(self) -> str:
+        if not self._memecoins_on():
+            return "Memecoins: motor apagado (ENABLE_MEMECOIN_ENGINE=false)\n"
+        return (
+            f"Memecoin min subida: {self.settings.min_estimated_gain_pct}%\n"
+            f"Chains: {', '.join(self.settings.chains_to_monitor)}\n"
+        )
 
     def news_message(self, query: str) -> str:
         symbol = query.strip().upper()
@@ -1341,6 +1410,11 @@ Ahora puedes usar /aprendizaje y /paper.
 
     def _discard_reason(self, row: dict) -> str:
         category = row.get("category") or "memecoin"
+        if category in {"forex", "gold"}:
+            # v3.13.2: antes comparaba contra la subida mínima de MEMECOINS (500 %).
+            if "Movimiento notable" in str(row.get("estimate_summary") or ""):
+                return "cupo lleno, duplicado o fuera del top"
+            return "sin movimiento notable"
         gain = self._as_float(row.get("estimated_gain_pct")) or 0
         confidence = int(row.get("estimate_confidence") or 0)
         threshold = self._threshold_for(category)
@@ -1599,7 +1673,8 @@ Ahora puedes usar /aprendizaje y /paper.
             [
                 "",
                 f"Riesgo agregado: {risk_used:.2f}%",
-                f"  cap default: {self.settings.max_total_risk_pct:.1f}% (stocks/memecoin)",
+                f"  cap default: {self.settings.max_total_risk_pct:.1f}% "
+                f"({'stocks/memecoin' if self._memecoins_on() else 'stocks'})",
                 f"  cap demo: {self.settings.demo_max_total_risk_pct:.1f}% (forex/gold con demo trading)",
                 f"Balance demo: {balance:,.2f} USD",
                 f"P&L hoy: {daily_pnl:+.2f}%",

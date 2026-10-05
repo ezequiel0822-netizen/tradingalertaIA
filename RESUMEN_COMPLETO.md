@@ -56,7 +56,7 @@ de los resultados — sin tocar jamás dinero real.**
 
 | Qué | Estado |
 |---|---|
-| Versión | **v3.13.1** (§2.11 = agente IA + auditoría de tests; §2.9 = v3.12.0) |
+| Versión | **v3.13.2** (§2.11 = agente IA, auditoría de tests y alertas forex/oro; §2.9 = v3.12.0) |
 | Tests | **801 verdes** |
 | Foco | **100% LA BOLSA** (acciones US + forex + oro). Memecoins CORTADAS (bot aparte), scalping APAGADO |
 | Bot | Corriendo en la Lenovo vía **`.\start_bot.ps1`**. Preflight: `python preflight.py` |
@@ -277,6 +277,11 @@ orden, 0 con red; 4 tests que no probaban nada, arreglados (uno no podía fallar
 real en `lifecycle_manager` (el cierre parcial en TP1 aflojaba un trailing stop) arreglado;
 `.test_dbs` ya no crece (~400 MB). Cobertura de `app/` 76 %. Pendiente de decisión del user:
 `realized_pnl_today` no suma la mitad cobrada en TP1 (kill-switch algo más sensible). 829 tests.
+
+**v3.13.2 (5-oct) — alertas forex/oro**: llegaban como "TOP MEMECOINS" con "caída est. 90 %" porque
+forex/oro usaban el estimador y el score de memecoins, y `should_send_alert` dejaba pasar TODO snapshot
+forex/oro. Ahora: estimador propio (movimiento observado, sin inventar subidas/caídas), envío solo con
+movimiento notable, título por mercado y comandos de Telegram sin memecoins con el motor apagado. 838 tests.
 
 ## 3. La verdad de fondo (la filosofía del proyecto)
 

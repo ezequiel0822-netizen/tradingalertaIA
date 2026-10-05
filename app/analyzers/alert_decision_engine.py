@@ -45,11 +45,13 @@ def should_send_alert(
         return False
     if category == "gold" and not settings.enable_gold_alerts:
         return False
-    # Para forex/gold: solo permite si learning_gate ya pasó (delega al router caller).
-    # El strategy_router + learning_gate ya filtran ANTES de should_send.
-    # Aqui solo damos green light si la category esta habilitada.
+    # v3.13.2: antes devolvía True para TODO snapshot forex/oro (el comentario decía
+    # que el strategy router filtraba antes; no era cierto) -> cada par en cada ciclo
+    # iba a Telegram con score ~21 hasta agotar el cupo. Ahora solo con movimiento
+    # notable (lo decide move_estimator._estimate_fx_move). Las aperturas/cierres de
+    # trades tienen su propio aviso y no dependen de esto.
     if category in {"forex", "gold"}:
-        return True
+        return estimate.eligible_for_gain_alert
     # Memecoins quedan como lab de aprendizaje desde Fase 2.5: alimentan
     # strategy_lessons y outcomes por horizonte pero NO van a Telegram salvo
     # que el usuario active explicitamente el flag.
