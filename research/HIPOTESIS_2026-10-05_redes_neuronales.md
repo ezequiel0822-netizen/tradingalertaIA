@@ -1,5 +1,26 @@
 # Pre-registro H-NN1 — ¿Una red neuronal le gana al boosting en microestructura L1 de BTCUSDT, y cambia la economía?
 
+> **VEREDICTO (corrido 2026-10-05, 47 min): NO integrar redes neuronales.**
+> - **A — ¿la red modela mejor? NO, las dos son SIGNIFICATIVAMENTE PEORES que el HGB a
+>   30 s** (prueba decisiva 2023-05-17 → 07-31, 76 días): MLP-23 ΔAUC −0.005 (t −5.2);
+>   MLP-SEQ ΔAUC −0.018 (t −16.0). AUC test 30 s: HGB 0.595, MLP-23 0.590, MLP-SEQ 0.575.
+>   Igual en 60 s (0.566 / 0.564 / 0.551). A 300 s MLP-23 +0.002 (t 0.53, ruido).
+> - **B — ¿cambia la economía? NO en las 6 combinaciones.** Ventaja bruta −0.03 a +0.52
+>   bps (redes) contra ~8 bps de costo taker: neto −7.5 a −8.0 bps por trade, t de −77 a
+>   −481. También negativo en noviembre (causal) y con latencia 1 s.
+> - **Réplica fuera de muestra de H-MS1 (informativa):** el HGB de H-MS1, en datos nunca
+>   vistos, da AUC 0.595 (may-jul) y 0.576 (nov) a 30 s y +0.62 bps brutos: la señal de
+>   microestructura es REAL y ESTABLE; su tamaño es ~13 veces menor que el costo.
+> - Diagnóstico POST-HOC (no decide): agregar 150 entradas crudas de historia empeora a la
+>   red (más ruido que señal; features con colas pesadas como OFI/CVD le cuestan más a una
+>   red estandarizada que a un árbol, que es invariante a la escala). Más capacidad no
+>   rescata una señal de 0.5 bps.
+> Datos: 86/86 días nuevos con checksum oficial verificado por zip (manifests
+> `research/H-NN1_manifest_2023-05-17_2023-07-31.csv` sha256 3e539381…32939725 y
+> `research/H-NN1_manifest_2023-11-01_2023-11-10.csv` sha256 05d4fcf4…64c9a3a3); resultado
+> `research/H-NN1_result.json` (sha256 a04931ef…41ed36f957). Commits: 8853632
+> (pre-registro) → 5e90204 (código, selftest 8/8) → este.
+
 > **Commiteado ANTES de bajar un solo dato de la ventana de prueba** (protocolo del
 > proyecto). Experimento de APRENDIZAJE, offline: responde la pregunta del user
 > "¿conviene integrar redes neuronales?" donde más chance tienen (millones de filas de

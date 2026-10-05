@@ -1,8 +1,8 @@
 # Registro de familias de hipótesis — Trading Alert AI
 
 > Un solo lugar con TODO lo probado, su veredicto y dónde está la evidencia.
-> Actualizado: 2026-10-05 (B4b + tandas B11, B13 y B12).
-> **Saldo: 24 familias probadas con pre-registro → 0 operables.**
+> Actualizado: 2026-10-05 (B4b + tandas B11, B13, B12 y H-NN1).
+> **Saldo: 25 familias probadas con pre-registro → 0 operables.**
 >
 > Regla de uso: una familia cerrada NO se re-abre ni se re-corta. Una variante es una
 > hipótesis NUEVA con su propio pre-registro, y si usa una ventana ya vista se declara
@@ -36,6 +36,7 @@
 | 22 | 2026-10-05 | H-STB1 crecimiento del supply de stablecoins → long BTC/ETH (semanal) | DefiLlama + precios B13, EFFR | NO PASA: pendiente t_NW 1.90 < 2.50; regla +10.8 %/año con 1ª mitad negativa | 1e5af5b, 7c5f321, veredicto | `HIPOTESIS_2026-10-05_B12_flujos.md` |
 | 23 | 2026-10-05 | H-EXF1 flujo neto a exchanges (CoinMetrics) → short | CoinMetrics Community (no point-in-time) | NO PASA: t_NW −0.45 | idem | idem |
 | 24 | 2026-10-05 | H-MVRV1 MVRV extremo → reversión a 4 semanas | CoinMetrics Community | NO PASA: pendiente con signo opuesto (t +0.98); regla −19.7 %/año | idem | idem |
+| 25 | 2026-10-05 | H-NN1 redes neuronales (MLP-23 y MLP-SEQ con 30 s de historia) vs HGB en microestructura L1 BTCUSDT | bookTicker + aggTrades 2023-05-17 → 07-31 y 11-01 → 11-10 (86/86 días, checksum oficial por zip); train = los 92 días de H-MS1 | NO PASA: las redes son PEORES que el HGB (ΔAUC 30 s −0.005 t −5.2 / −0.018 t −16) y la economía pierde ~−7.5 bps/trade en las 6 combinaciones. Réplica de H-MS1 fuera de muestra: AUC HGB 0.595 / 0.576 (señal real y estable, 13× menor que el costo). No integrar redes | 8853632, 5e90204, veredicto | `HIPOTESIS_2026-10-05_redes_neuronales.md` |
 
 ## Lectura transversal (2026-10-05, 24 familias)
 
@@ -43,6 +44,9 @@
   (t 2.34/2.46 en 2023-24), H-FND1 (t 2.26, +67 % en 2020 → −30 % en 2024) y H-FC1 (prima
   real, ya debajo de la tasa libre). Las tres cuentan la misma historia: existieron cuando
   el apalancamiento minorista era caro y se arbitraron (ETF, basis trade, Ethena).
+- **Más modelo no rescata poca señal** (H-NN1): en el único lugar con señal real
+  (microestructura, millones de filas) las redes neuronales salieron PEORES que el
+  boosting y ninguna se acerca al costo.
 - Las **señales direccionales** sobre información pública (posicionamiento, OI, flujo
   taker, top traders, stablecoins, flujos on-chain, MVRV, COT, estacionalidad, trend,
   microestructura neta de costos) no mostraron nada: |t| ≤ 1.9.
@@ -63,7 +67,10 @@ B5, DEX, Ethena, lending) por un agente, commit 62f8905,
   de ramas (incluye Hyperliquid, Bybit, OKX, trimestrales). Cualquier señal cripto sobre
   esa ventana es IN-SAMPLE. En particular, cualquier señal de retornos cruzados (reversión,
   momentum corto) ya está contaminada: se vio que el momentum crasheó en la 2ª mitad.
-- **BTCUSDT microestructura 2023-05 → 2023-11** (bookTicker) y aggTrades usados en H-MS1.
+- **BTCUSDT microestructura (bookTicker + aggTrades):** H-MS1 usó 2023-08-01 → 10-31 (corregido
+  el 2026-10-05: la fila decía 2023-05 → 2023-11, que era la disponibilidad de la fuente);
+  H-NN1 usó 2023-05-17 → 07-31 y 2023-11-01 → 11-10. Con eso, TODO el bookTicker histórico
+  que existe (2023-05-16 → 11-11) quedó visto.
 - **Perps USDT 2020-01 → 2024-09, señales cruzadas** (B13, 2026-10-05): reversión semanal y
   funding como predictor; se vio además que el momentum semanal le ganó a la reversión en
   2020-21 → esa ventana YA NO es limpia para señales de retornos/funding cruzados.
