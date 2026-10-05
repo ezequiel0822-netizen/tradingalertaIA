@@ -1,8 +1,8 @@
 # Registro de familias de hipótesis — Trading Alert AI
 
 > Un solo lugar con TODO lo probado, su veredicto y dónde está la evidencia.
-> Actualizado: 2026-10-05 (B4b cerrada en su chequeo secundario).
-> **Saldo: 16 familias probadas con pre-registro → 0 operables.**
+> Actualizado: 2026-10-05 (B4b + tanda B11).
+> **Saldo: 19 familias probadas con pre-registro → 0 operables.**
 >
 > Regla de uso: una familia cerrada NO se re-abre ni se re-corta. Una variante es una
 > hipótesis NUEVA con su propio pre-registro, y si usa una ventana ya vista se declara
@@ -28,6 +28,9 @@
 | 14 | 2026-10-04 | H-XS1 momentum cruzado 21 d dollar-neutral (perps) | idem | NO PASA: −12.9 % de exceso; +19 % 1ª mitad, −44 % 2ª (crash) | idem | idem |
 | 15 | 2026-10-04 | H-POS1 posicionamiento minorista contrario (`count_long_short_ratio`, BTC/ETH) | `metrics` diario Binance | NO PASA: t 0.69, n 148 | idem | idem |
 | 16 | 2026-10-05 | B4b short perp Hyperliquid / long perp Binance, BTC+ETH, 3x por pata (k=2; secundaria requisito + forward) | HL funding horario API + Binance funding/klines 1 h (68/68 checksums), EFFR | NO PASA en la secundaria 2023-06-13 → 2024-10-01: solo falla la t Newey-West (BTC 2.34, ETH 2.46 < 2.50); exceso +9.1 %/año, DD ≤ 2.8 %, 0 liquidaciones. Near-miss; además el spread ya se comprimió (~10.5 pp en 2023-24 → ~2-4 pp hoy). Forward NO se corre, colector NO se programa | 8febc1a, d9c27a9, 52b7473 (adenda: HL pagaba cada 8 h hasta 2023-06-08), veredicto | `HIPOTESIS_2026-10-04_B4b_forward.md` |
+| 17 | 2026-10-05 | H-OI1 cambio de open interest extremo → contraria al día (BTC/ETH perps, z 90 d, 3 días) | `metrics` 5 min + klines 1d + funding Binance (2.700/2.700 checksums) | NO PASA: −4.1 %/año, t_NW −0.29, n 164 (corregida por bug OI = 0; original −0.31) | e80f809, dd9e59d, 4ff468d, veredicto | `HIPOTESIS_2026-10-05_B11_posicionamiento.md` |
+| 18 | 2026-10-05 | H-TT1/H-TT1b top traders por posición → SEGUIR | idem (la fuente no trae top traders en casi todo 2022 → H-TT1 INVÁLIDA; H-TT1b en 2022-12-15 → 2024-10-01) | NO PASA: −20.3 %/año, t_NW −1.23, n 135 | idem | idem |
+| 19 | 2026-10-05 | H-TK1 flujo taker extremo (vela 1d) → contraria | idem | NO PASA: −25.0 %/año, t_NW −1.29, n 244 | idem | idem |
 
 Evaluación previa SIN pre-registro (no cuenta como familia): ramas del carry (B4a, B4b,
 B5, DEX, Ethena, lending) por un agente, commit 62f8905,
@@ -41,6 +44,8 @@ B5, DEX, Ethena, lending) por un agente, commit 62f8905,
   esa ventana es IN-SAMPLE. En particular, cualquier señal de retornos cruzados (reversión,
   momentum corto) ya está contaminada: se vio que el momentum crasheó en la 2ª mitad.
 - **BTCUSDT microestructura 2023-05 → 2023-11** (bookTicker) y aggTrades usados en H-MS1.
+- **`metrics` de Binance BTC/ETH 2020-09 → 2024-09** (B11, 2026-10-05): OI, top traders por
+  posición y flujo taker de la vela 1d ya usados como señales direccionales a 3 días.
 - **Cripto BTC/ETH 2023-05 → 2024-09** (B4b, 2026-10-05): funding de Hyperliquid (horario desde
   2023-06-08), funding y velas 1 h de los perps de Binance. Ya NO es ventana limpia para
   señales de funding/carry/spread entre venues de BTC/ETH. (El funding de Binance 2020-2024
@@ -48,17 +53,16 @@ B5, DEX, Ethena, lending) por un agente, commit 62f8905,
 - **Forex/oro/índices D1** del cache propio: estacionalidad, carry, trend y COT ya vistos
   en las tandas de julio.
 - Ventanas NO vistas útiles: cripto **2020-01 → 2024-09** para señales que NO sean de
-  funding/spread de BTC/ETH (retornos cruzados de alts, OI, top traders, taker), `metrics` de
-  Binance desde ~2021-12 hasta 2024-09, y todo lo que pase **después** de la fecha de cada
-  pre-registro (test hacia adelante). Hyperliquid 2023-05 → 2024-09 YA se usó (B4b).
+  funding/spread ni de posicionamiento de BTC/ETH (p. ej. retornos cruzados de alts), y todo
+  lo que pase **después** de la fecha de cada pre-registro (test hacia adelante).
+  Hyperliquid 2023-05 → 2024-09 y `metrics` BTC/ETH 2020-09 → 2024-09 YA se usaron.
 
 ## Pendiente (orden sugerido; detalle en PROXIMOS_PASOS.md)
 
 1. ~~B4b paper hacia adelante~~ → **CERRADA 2026-10-05** (NO PASA la secundaria por t NW;
    el forward no se corre; colector `scripts/b4b_forward_collector.py` queda en el repo sin
    programar).
-2. **B11 resto** (OI, top traders, taker buy/sell): pre-registro nuevo, k = 3, ventana
-   2021-12 → 2024-09 (no vista).
+2. ~~B11 resto~~ → **CERRADA 2026-10-05** (H-OI1, H-TT1b, H-TK1 NO PASAN).
 3. **B13 otros factores cruzados** (reversión semanal, funding como predictor, OI):
    pre-registro nuevo, ventana 2020-01 → 2024-09.
 4. **B12 flujos de baja frecuencia**: checkpoint COT 2026-12-07 (ya programado, lag 4);

@@ -1,5 +1,22 @@
 # Pre-registro B11 — posicionamiento en perps de Binance: OI, top traders y flujo taker (k = 3)
 
+> **VEREDICTO (corrido 2026-10-05): las TRES NO PASAN — familias 17-19 cerradas.**
+> - **H-OI1 (cambio de OI, contraria al día): NO PASA.** Corregida (adenda 1b): exceso
+>   −4.1 %/año, t_NW −0.29, n 164 (79 BTC / 85 ETH); mitades −22.4 % / +14.2 %; costos × 2
+>   −8.2 %. Original con el bug de OI = 0: −4.6 %, t_NW −0.31, n 166 — misma conclusión.
+> - **H-TT1 (top traders, ventana original): INVÁLIDA** — la fuente oficial trae la columna
+>   vacía en casi todo 2022 (cobertura 69 %); ninguna estadística calculada.
+> - **H-TT1b (top traders por posición, SEGUIR; 2022-12-15 → 2024-10-01): NO PASA.** Exceso
+>   −20.3 %/año, t_NW −1.23, n 135; mitades −8.4 % / −32.3 %.
+> - **H-TK1 (flujo taker, contraria): NO PASA.** Exceso −25.0 %/año, t_NW −1.29, n 244;
+>   ambas mitades negativas.
+> Que dos señales pierdan NO convierte a la dirección opuesta en hallazgo: t −1.2/−1.3 es
+> ruido en cualquier dirección, y probarla sería un pre-registro nuevo (y dredging).
+> Data: 2.700/2.700 checksums oficiales OK; manifest en `trading_data/b11_positioning/`
+> (sha256 fc23234e…1c6751); resultados en `research/B11_result.json`,
+> `research/B11_tt1b_result.json` y `research/B11_result_ORIGINAL_pre_fix.json`.
+> Commits: e80f809 (pre-registro) → dd9e59d (código, 21/21) → 4ff468d (adenda 1, 23/23) → este.
+
 > **Commiteado ANTES de bajar los datos de esta tanda** (protocolo del proyecto).
 > Familias 17-19 del ledger. k = 3, un tiro cada una, umbral **t ≥ 2.50**.
 > Research-only: no toca el bot, ni flags, ni MT5, ni el .env. Un PASA habilita solo

@@ -1,0 +1,115 @@
+{
+  "prereg": "research/HIPOTESIS_2026-10-05_B11_posicionamiento.md @ e80f809",
+  "window": "2021-12-01 -> 2024-10-01",
+  "generated_utc": "2026-10-05 06:09:38.636831+00:00",
+  "results": {
+    "H-OI1": {
+      "excess_ann": -0.04132049227749201,
+      "t_nw": -0.28698480102326535,
+      "n_trades": 164,
+      "excess_h1_ann": -0.22383204580008997,
+      "excess_h2_ann": 0.14154408165810903,
+      "excess_x2_ann": -0.08180551643208137,
+      "per_trade_mean_excess": -0.0017378702663068753,
+      "t_per_trade_H-POS1": -0.3609328169785466,
+      "days": 1035,
+      "days_in_market_frac": 0.38357487922705313,
+      "checks": {
+        "1_exceso>0": false,
+        "2_t_NW>=2.50": false,
+        "3_n>=30": true,
+        "4_mitades>0": false,
+        "5_costos_x2>0": false,
+        "6_datos_validos": true
+      },
+      "pasa": false,
+      "coverage": {
+        "BTCUSDT": 1.0,
+        "ETHUSDT": 0.9990338164251208
+      },
+      "symbols": [
+        "BTCUSDT",
+        "ETHUSDT"
+      ],
+      "by_symbol": {
+        "BTCUSDT": {
+          "n": 79,
+          "longs": 36,
+          "shorts": 43
+        },
+        "ETHUSDT": {
+          "n": 85,
+          "longs": 41,
+          "shorts": 44
+        }
+      }
+    },
+    "H-TT1": {
+      "excess_ann": 0.0,
+      "t_nw": null,
+      "n_trades": 0,
+      "excess_h1_ann": 0.0,
+      "excess_h2_ann": 0.0,
+      "excess_x2_ann": 0.0,
+      "per_trade_mean_excess": null,
+      "t_per_trade_H-POS1": null,
+      "days": 1035,
+      "days_in_market_frac": 0.0,
+      "checks": {
+        "1_exceso>0": false,
+        "2_t_NW>=2.50": false,
+        "3_n>=30": false,
+        "4_mitades>0": false,
+        "5_costos_x2>0": false,
+        "6_datos_validos": false
+      },
+      "pasa": false,
+      "coverage": {
+        "BTCUSDT": 0.6908212560386473,
+        "ETHUSDT": 0.6908212560386473
+      },
+      "symbols": []
+    },
+    "H-TK1": {
+      "excess_ann": -0.24951775982338228,
+      "t_nw": -1.2939266554809234,
+      "n_trades": 244,
+      "excess_h1_ann": -0.21038930083604143,
+      "excess_h2_ann": -0.28872190248381274,
+      "excess_x2_ann": -0.309751576248503,
+      "per_trade_mean_excess": -0.005624863915722607,
+      "t_per_trade_H-POS1": -1.4117246583028915,
+      "days": 1035,
+      "days_in_market_frac": 0.5140096618357488,
+      "checks": {
+        "1_exceso>0": false,
+        "2_t_NW>=2.50": false,
+        "3_n>=30": true,
+        "4_mitades>0": false,
+        "5_costos_x2>0": false,
+        "6_datos_validos": true
+      },
+      "pasa": false,
+      "coverage": {
+        "BTCUSDT": 1.0,
+        "ETHUSDT": 1.0
+      },
+      "symbols": [
+        "BTCUSDT",
+        "ETHUSDT"
+      ],
+      "by_symbol": {
+        "BTCUSDT": {
+          "n": 123,
+          "longs": 56,
+          "shorts": 67
+        },
+        "ETHUSDT": {
+          "n": 121,
+          "longs": 55,
+          "shorts": 66
+        }
+      }
+    }
+  }
+}

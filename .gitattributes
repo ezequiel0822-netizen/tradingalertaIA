@@ -3,3 +3,4 @@
 
 # Archivos con sha256 citado en un veredicto: bytes exactos, sin normalizar finales de línea
 research/B4b_secondary_* -text
+research/B11_*.json -text

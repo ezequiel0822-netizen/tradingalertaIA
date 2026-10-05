@@ -1,0 +1,48 @@
+{
+  "prereg": "research/HIPOTESIS_2026-10-05_B11_posicionamiento.md @ e80f809 (adenda 1c)",
+  "window": "2022-12-15 -> 2024-10-01",
+  "generated_utc": "2026-10-05 06:09:41.423340+00:00",
+  "results": {
+    "H-TT1b": {
+      "excess_ann": -0.20335927287137973,
+      "t_nw": -1.2333614049528117,
+      "n_trades": 135,
+      "excess_h1_ann": -0.08369897537730737,
+      "excess_h2_ann": -0.3230195703654521,
+      "excess_x2_ann": -0.2559393033591846,
+      "per_trade_mean_excess": -0.0056879268331808605,
+      "t_per_trade_H-POS1": -1.4994915120624408,
+      "days": 656,
+      "days_in_market_frac": 0.4740853658536585,
+      "checks": {
+        "1_exceso>0": false,
+        "2_t_NW>=2.50": false,
+        "3_n>=30": true,
+        "4_mitades>0": false,
+        "5_costos_x2>0": false,
+        "6_datos_validos": true
+      },
+      "pasa": false,
+      "coverage": {
+        "BTCUSDT": 1.0,
+        "ETHUSDT": 1.0
+      },
+      "symbols": [
+        "BTCUSDT",
+        "ETHUSDT"
+      ],
+      "by_symbol": {
+        "BTCUSDT": {
+          "n": 64,
+          "longs": 40,
+          "shorts": 24
+        },
+        "ETHUSDT": {
+          "n": 71,
+          "longs": 50,
+          "shorts": 21
+        }
+      }
+    }
+  }
+}
