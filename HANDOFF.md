@@ -10,7 +10,7 @@
 
 ```
 Retomamos Trading Alert AI (bot de trading LOCAL, Python 3.12, Windows, repo en
-C:/Users/LENOVO/tradingalertaIA, venv en .venv). Estado al 5-oct-2026: v3.12.0, 808 tests
+C:/Users/LENOVO/tradingalertaIA, venv en .venv). Estado al 5-oct-2026: v3.13.0, 827 tests
 verdes. Demo MT5 NUEVA (MetaQuotes-Demo, ~3.000 USD). OJO: al 5-oct el bot estaba APAGADO
 (DB cerrada el 4-oct 13:44): verificar que no haya ningún main.py y pedirle al user que lo
 arranque con start_bot.ps1 (pide contraseña; no lo arranques vos).
@@ -25,6 +25,11 @@ abierto. B4b NO PASÓ su chequeo secundario (solo por la t Newey-West: 2.34/2.46
 el forward NO se corre y su colector NO se programa. Lo único cerca del umbral en 24
 familias fueron primas de funding/carry que existieron y se arbitraron; las señales
 direccionales sobre información pública no mostraron nada.
+
+AGENTE IA (v3.13.0): app/ai_agent/ decide ejecutar o no operar cada candidato forex/gold en
+MT5 demo y aprende de todos (Thompson sampling); opt-in ENABLE_AI_AGENT, magic 250501,
+límites duros, comando /agente; evaluación pre-registrada en
+research/AGENTE_IA_PREREGISTRO_2026-10-05.md (NO cambiar sus parámetros: reinicia la evaluación).
 
 LO QUE SIGUE: (1) checkpoint COT ya programado para el 2026-12-07 09:00 (tarea
 checkpoint-cot-reexperimento, --cot-lag-days 4); (2) preguntarle al user qué quiere: NO
@@ -41,7 +46,8 @@ afirmar algo (ej. "sin huecos").
 
 REGLAS DEL PROYECTO: real-money BLOQUEADO (ENABLE_REAL_TRADING=false HARDCODED; el user lo
 pide seguido, la respuesta es no); order_send solo en app/brokers/mt5_demo_trader.py; LLM/ML
-solo restan (vetar/bajar a paper); todo lo nuevo opt-in OFF + soft-fail; el research NO toca
+solo restan (vetar/bajar a paper) SALVO el agente IA en demo (excepción acotada,
+v3.13.0); todo lo nuevo opt-in OFF + soft-fail; el research NO toca
 el bot, flags, MT5 ni el .env; nunca leer/mostrar el .env ni secrets (cambios al .env = darle
 al user comandos de PowerShell); al tocar Settings sincronizar tests/test_score._settings() y
 tests/test_alert_rules._settings(); versionado patch/minor sin saltos; el push a main lo hace

@@ -2158,3 +2158,73 @@ class Repository:
             "first_epoch": row["first_epoch"],
             "last_epoch": row["last_epoch"],
         }
+
+    # ------------------------------------------------------------------ #
+    # v3.13.0 — agente IA en sandbox demo (ai_agent_decisions)
+    # ------------------------------------------------------------------ #
+    _AI_DECISION_UPDATABLE = {
+        "executed", "block_reason", "demo_request_id", "reward_r", "rewarded_at",
+    }
+
+    def create_ai_agent_decision(self, decision: dict[str, Any]) -> int | None:
+        """Inserta la decisión del agente para un paper trade. Idempotente: si ya
+        hay una para ese paper_trade_id (UNIQUE), no duplica y devuelve None."""
+        with get_connection(self.db_path) as connection:
+            cursor = connection.execute(
+                """
+                INSERT OR IGNORE INTO ai_agent_decisions (
+                    paper_trade_id, created_at, symbol, category, strategy_name,
+                    direction, features_json, mean_r, std_r, sampled_r, intended,
+                    executed, block_reason, demo_request_id, model_n
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    int(decision["paper_trade_id"]),
+                    decision["created_at"],
+                    decision.get("symbol"),
+                    decision.get("category"),
+                    decision.get("strategy_name"),
+                    decision.get("direction"),
+                    decision["features_json"],
+                    decision.get("mean_r"),
+                    decision.get("std_r"),
+                    decision.get("sampled_r"),
+                    decision["intended"],
+                    int(bool(decision.get("executed"))),
+                    decision.get("block_reason"),
+                    decision.get("demo_request_id"),
+                    decision.get("model_n"),
+                ),
+            )
+        return int(cursor.lastrowid) if cursor.rowcount else None
+
+    def update_ai_agent_decision(self, decision_id: int, updates: dict[str, Any]) -> None:
+        fields = [k for k in updates if k in self._AI_DECISION_UPDATABLE]
+        if not fields:
+            return
+        assignments = ", ".join(f"{f} = ?" for f in fields)
+        with get_connection(self.db_path) as connection:
+            connection.execute(
+                f"UPDATE ai_agent_decisions SET {assignments} WHERE id = ?",
+                [updates[f] for f in fields] + [int(decision_id)],
+            )
+
+    def fetch_ai_agent_decisions(
+        self, pending_reward_only: bool = False, limit: int = 5000
+    ) -> list[dict[str, Any]]:
+        """Decisiones con el estado/fechas de su paper trade (para aprender y medir)."""
+        where = "WHERE d.rewarded_at IS NULL" if pending_reward_only else ""
+        with get_connection(self.db_path) as connection:
+            rows = connection.execute(
+                f"""
+                SELECT d.*, p.status AS trade_status, p.closed_at AS trade_closed_at
+                FROM ai_agent_decisions d
+                LEFT JOIN paper_trades p ON p.id = d.paper_trade_id
+                {where}
+                ORDER BY d.id DESC
+                LIMIT ?
+                """,
+                (int(limit),),
+            ).fetchall()
+        return [dict(r) for r in rows]

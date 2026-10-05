@@ -230,6 +230,9 @@ class BasicTelegramAssistant:
         if normalized in {"/exposicion", "exposicion", "/exposure", "exposure", "/usd"}:
             return self.exposure_message()
 
+        if normalized in {"/agente", "agente", "/agent", "/ia", "agente ia"}:
+            return self.ai_agent_message()
+
         if normalized in {"/edge", "edge", "/edges", "/borde", "bolsillos"}:
             return self.edge_message()
 
@@ -416,6 +419,7 @@ class BasicTelegramAssistant:
                         "/strategies", "/estrategias", "/demo_candidates",
                         "/demo_prepare", "/confirm_demo_trade", "/demo_positions",
                         "/demo_close_all", "/cerrar_demo", "/demo_halt",
+                        "/agente",
                     }
                     if cmd in known_prefixes:
                         # Re-ejecutar como comando real (recursion controlada por longitud)
@@ -462,6 +466,7 @@ Comandos:
 /demo_positions - posiciones demo abiertas en MT5
 /demo_close_all - cierra todas las posiciones demo abiertas en MT5
 /demo_halt - bloquea nuevas ordenes demo
+/agente - agente IA en sandbox demo: que decide, que aprendio y como le va
 /pausar - pausa alertas automaticas
 /reanudar - reactiva alertas automaticas
 /config - ver configuracion sin secretos
@@ -670,6 +675,19 @@ Chains: {", ".join(self.settings.chains_to_monitor)}
         lines.append("")
         lines.append(DISCLAIMER)
         return "\n".join(lines)
+
+    def ai_agent_message(self) -> str:
+        """v3.13.0: /agente — estado del agente IA en sandbox demo: decisiones, lo que
+        aprendio, su medicion contra 'no operar' y 'ejecutar todo'. Read-only."""
+        try:
+            from app.ai_agent.agent import AiAgent
+
+            text = AiAgent(self.settings, self.repository).status_text(
+                self.settings.app_version
+            )
+        except Exception:
+            return "No pude leer el estado del agente IA (error de repositorio)."
+        return text + "\n\n" + DISCLAIMER
 
     def exposure_message(self) -> str:
         """v3.5.0: /exposicion — exposicion neta USD de las posiciones forex abiertas

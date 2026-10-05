@@ -311,6 +311,26 @@ class Settings:
     # Distancia minima |%| al VWAP semanal para considerar que "pelea" (evita
     # gatear ruido pegado al VWAP). Conservador: el gate dispara poco.
     vwap_gate_min_dist_pct: float
+    # v3.13.0 — Agente IA en sandbox demo (app/ai_agent/). Opt-in OFF. Si esta ON,
+    # para cada candidato forex/gold decide EJECUTAR en MT5 demo o NO OPERAR con un
+    # modelo que aprende online (Thompson sampling) de los R realizados de TODOS los
+    # candidatos. Reemplaza los filtros de edge (promotion/ML/LLM/regimen/VWAP) SOLO
+    # para sus decisiones; mantiene los de riesgo (calendario, cap USD, halt). Magic
+    # propio en MT5. Real-money sigue bloqueado por codigo.
+    enable_ai_agent: bool
+    # Riesgo maximo por trade del agente (% del equity); el lote se achica hasta
+    # caber (nunca supera DEMO_RISK_PER_TRADE_PCT).
+    ai_agent_risk_pct: float
+    ai_agent_max_open: int
+    ai_agent_max_trades_per_day: int
+    # Stop diario: si los trades del agente cerrados hoy suman <= -N R, no ejecuta
+    # mas hasta el dia UTC siguiente (sigue decidiendo y aprendiendo en sombra).
+    ai_agent_daily_stop_r: float
+    # Ejecuta si el puntaje muestreado supera este R (cubre costos).
+    ai_agent_min_edge_r: float
+    ai_agent_prior_var: float
+    ai_agent_noise_var: float
+    ai_agent_seed: int
     # Phase 4 v2.3.0 — MT5 validation + walk-forward + data quality + CSV
     mt5_broker_profile: str
     enable_walk_forward_backtest: bool
@@ -495,7 +515,7 @@ def load_settings() -> Settings:
         obsidian_vault_path = safe_obsidian
 
     return Settings(
-        app_version=os.getenv("APP_VERSION", "v3.12.0"),
+        app_version=os.getenv("APP_VERSION", "v3.13.0"),
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
         telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID"),
         dexscreener_base_url=os.getenv(
@@ -744,6 +764,15 @@ def load_settings() -> Settings:
         # v3.12.0 — VWAP gate (downward-only, opt-in OFF)
         enable_vwap_gate=_get_bool("ENABLE_VWAP_GATE", False),
         vwap_gate_min_dist_pct=_get_float("VWAP_GATE_MIN_DIST_PCT", 0.5),
+        enable_ai_agent=_get_bool("ENABLE_AI_AGENT", False),
+        ai_agent_risk_pct=_get_float("AI_AGENT_RISK_PCT", 0.5),
+        ai_agent_max_open=_get_int("AI_AGENT_MAX_OPEN", 3),
+        ai_agent_max_trades_per_day=_get_int("AI_AGENT_MAX_TRADES_PER_DAY", 6),
+        ai_agent_daily_stop_r=_get_float("AI_AGENT_DAILY_STOP_R", 3.0),
+        ai_agent_min_edge_r=_get_float("AI_AGENT_MIN_EDGE_R", 0.05),
+        ai_agent_prior_var=_get_float("AI_AGENT_PRIOR_VAR", 0.25),
+        ai_agent_noise_var=_get_float("AI_AGENT_NOISE_VAR", 1.0),
+        ai_agent_seed=_get_int("AI_AGENT_SEED", 20261005),
         # Phase 4 v2.3.0
         mt5_broker_profile=os.getenv("MT5_BROKER_PROFILE", "icmarkets"),
         enable_walk_forward_backtest=_get_bool("ENABLE_WALK_FORWARD_BACKTEST", True),

@@ -256,6 +256,19 @@ Registro completo (fecha, datos, veredicto, commits, ventanas ya vistas): **`res
   - **Lectura transversal:** lo único cerca del umbral fueron primas de funding/carry que existieron y se arbitraron; las señales direccionales sobre información pública no muestran nada. Detalle: `research/LEDGER_FAMILIAS.md`.
 - **Sigue en pie:** checkpoint COT del **2026-12-07 09:00** (`--cot-lag-days 4`). El bot estaba APAGADO al 5-oct (DB cerrada el 4-oct 13:44): re-arrancar con `.\start_bot.ps1`.
 
+## 2.11 v3.13.0 (5-oct-2026) — Agente IA en sandbox demo
+
+El user pidió una IA que opere sola y aprenda practicando. Se construyó en DEMO: `app/ai_agent/`
+(regresión bayesiana + Thompson sampling sobre 16 features) decide para cada candidato forex/gold
+si EJECUTAR en MT5 demo o NO OPERAR, y aprende de TODOS los candidatos con el R realizado de su
+paper trade. Reemplaza los filtros de edge (promotion/ML/LLM/régimen/VWAP) solo para sus
+decisiones; mantiene los de riesgo (calendario, cap USD, halt) y suma límites propios (≤0.5 % por
+trade con lote achicado, ≤3 abiertas, ≤6/día, stop diario −3R). Magic MT5 250501, `/agente`,
+opt-in OFF, soft-fail, real-money bloqueado. **Excepción explícita a la regla "la IA solo
+resta"**, acotada a la demo. Evaluación pre-registrada antes de encenderlo
+(`research/AGENTE_IA_PREREGISTRO_2026-10-05.md`); predicción honesta: aprende a casi no operar.
+Fix latente de paso: `draft.volume = x` sobre dataclass frozen en la rama ML (OFF).
+
 ## 3. La verdad de fondo (la filosofía del proyecto)
 
 1. **El cuello de botella es DATA, no código.** No hay edge probado: el único +R agregado

@@ -543,6 +543,36 @@ def _init_db_unsafe(db_path: Path) -> None:
                 ON demo_trade_requests(paper_trade_id, created_at);
             CREATE INDEX IF NOT EXISTS idx_demo_orders_request
                 ON demo_orders(demo_request_id);
+
+            -- v3.13.0 — agente IA en sandbox demo: una fila por candidato forex/gold
+            -- consultado. intended = lo que el agente quiso (execute/skip);
+            -- executed = si de verdad salió a MT5 demo; reward_r = R realizado del
+            -- paper trade (aprende de TODOS los candidatos, ejecutados o no).
+            CREATE TABLE IF NOT EXISTS ai_agent_decisions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                paper_trade_id INTEGER NOT NULL UNIQUE,
+                created_at TEXT NOT NULL,
+                symbol TEXT,
+                category TEXT,
+                strategy_name TEXT,
+                direction TEXT,
+                features_json TEXT NOT NULL,
+                mean_r REAL,
+                std_r REAL,
+                sampled_r REAL,
+                intended TEXT NOT NULL,
+                executed INTEGER NOT NULL DEFAULT 0,
+                block_reason TEXT,
+                demo_request_id INTEGER,
+                model_n INTEGER,
+                reward_r REAL,
+                rewarded_at TEXT,
+                FOREIGN KEY(paper_trade_id) REFERENCES paper_trades(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_ai_agent_decisions_reward
+                ON ai_agent_decisions(rewarded_at);
+            CREATE INDEX IF NOT EXISTS idx_ai_agent_decisions_created
+                ON ai_agent_decisions(created_at);
             """
         )
         _ensure_column(connection, "tokens", "latest_estimated_gain_pct", "REAL")

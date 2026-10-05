@@ -57,6 +57,15 @@
 > long Binance). **Registro único con todas las familias, commits y ventanas ya vistas:
 > `research/LEDGER_FAMILIAS.md`.** Main = origin/main en 13a3733 antes de este cierre.
 >
+> **🤖 5-oct-2026 — v3.13.0: Agente IA en sandbox demo (827 tests).** Pedido del user: una IA
+> que opere sola y aprenda practicando. `app/ai_agent/` (Thompson sampling sobre 16 features)
+> decide EJECUTAR o NO OPERAR cada candidato forex/gold y aprende de todos con el R del paper
+> trade. Opt-in OFF (`ENABLE_AI_AGENT`), magic MT5 propio 250501, límites duros (≤0.5 %/trade,
+> ≤3 abiertas, ≤6/día, stop −3R/día), mantiene calendario/cap USD/halt. Comando `/agente`.
+> Arranque en caliente opcional: `scripts/ai_agent_warmstart.py --apply`. Evaluación
+> pre-registrada: `research/AGENTE_IA_PREREGISTRO_2026-10-05.md` (desde 2027-01-04 con ≥150
+> decisiones; predicción: probable NO PASA). Real-money sigue bloqueado.
+>
 > **⚠️ 5-oct-2026 — plan B4b/B11/B13/B12 EJECUTADO COMPLETO: 24 familias con pre-registro, 0
 > operables.** Cada tanda: pre-registro commiteado antes de bajar datos → código congelado y
 > verificado con datos sintéticos → un tiro → veredicto + fila en el ledger.

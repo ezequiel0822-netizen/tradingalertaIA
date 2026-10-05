@@ -519,6 +519,9 @@ class TradingAlertJob:
         # v3.4.0 (exit shadow): registra el camino de R de los abiertos (read/registro).
         self._maybe_record_exit_shadow()
 
+        # v3.13.0: el agente IA aprende de los candidatos ya cerrados (opt-in, soft-fail).
+        self._maybe_ai_agent_learn()
+
         if self.settings.enable_price_snapshots:
             last_purge = self.repository.get_state("snapshots_last_purge")
             cutoff = minutes_ago(24 * 60)
@@ -1502,7 +1505,15 @@ class TradingAlertJob:
         Phase 5.5 v2.5.4: si enable_auto_confirm_demo=True, la request se
         ejecuta automáticamente vía _auto_execute_demo_request en lugar de
         esperar /confirm_demo_trade por Telegram. Real-money sigue bloqueado.
+
+        v3.13.0: con ENABLE_AI_AGENT=true, los candidatos forex/gold los decide el
+        agente IA (_ai_agent_path) en lugar de la cadena de filtros de edge.
         """
+        if getattr(self.settings, "enable_ai_agent", False) and str(
+            paper_trade.get("category") or ""
+        ).lower() in {"forex", "gold"}:
+            self._ai_agent_path(paper_trade)
+            return
         if not self.settings.enable_mt5_demo_trading:
             return
         if not self.settings.demo_order_require_confirmation:
@@ -1619,7 +1630,11 @@ class TradingAlertJob:
                 logger.info(
                     "ML low confidence: reduzco lot %.2f -> %.2f", draft.volume, halved
                 )
-                draft.volume = halved
+                # v3.13.0 fix: DemoOrderDraft es frozen -> `draft.volume = x` lanzaba
+                # FrozenInstanceError (latente: el ML esta OFF).
+                from dataclasses import replace as _dc_replace
+
+                draft = _dc_replace(draft, volume=halved)
         request_id = self.repository.create_demo_trade_request(
             {
                 "paper_trade_id": paper_trade["id"],
@@ -1663,13 +1678,20 @@ class TradingAlertJob:
             logger.exception("Demo order request notification failed")
 
     def _auto_execute_demo_request(
-        self, trader, request_id: int, open_positions: int
+        self,
+        trader,
+        request_id: int,
+        open_positions: int,
+        magic: int | None = None,
+        comment: str | None = None,
+        label: str = "Auto-orden demo",
     ) -> None:
         """Phase 5.5 v2.5.4: ejecuta send_prepared_request sin pasar por Telegram.
 
         Solo se invoca cuando enable_auto_confirm_demo=True. Validaciones
         demo-only y mandatory SL siguen aplicando dentro de mt5_demo_trader.
         Real-money trading sigue bloqueado por enable_real_trading=False.
+        v3.13.0: el agente IA lo usa con su magic/comentario/etiqueta propios.
         """
         request = self.repository.fetch_demo_trade_request(request_id)
         if not request:
@@ -1678,7 +1700,12 @@ class TradingAlertJob:
             )
             return
         try:
-            result = trader.send_prepared_request(request, open_positions)
+            if magic is None and comment is None:
+                result = trader.send_prepared_request(request, open_positions)
+            else:
+                result = trader.send_prepared_request(
+                    request, open_positions, magic=magic, comment=comment
+                )
         except Exception:
             logger.exception(
                 "Auto-confirm send_prepared_request raised for #%s", request_id
@@ -1736,7 +1763,7 @@ class TradingAlertJob:
             volume_str = f"{float(request['volume']):g}"
             if result.ok:
                 self.notifier.send_message(
-                    f"Auto-orden demo enviada #{request_id}\n"
+                    f"{label} enviada #{request_id}\n"
                     f"{str(request['direction']).upper()} {request['symbol']} "
                     f"{volume_str} lot\n"
                     f"Order: {result.order_ticket or '?'} | "
@@ -1746,7 +1773,7 @@ class TradingAlertJob:
                 )
             else:
                 self.notifier.send_message(
-                    f"Auto-orden demo FALLIDA #{request_id}\n"
+                    f"{label} FALLIDA #{request_id}\n"
                     f"{str(request['direction']).upper()} {request['symbol']}\n"
                     f"Motivo: {result.reason}\n"
                     f"Detalle: {result.result_summary or 'sin detalle'}"
@@ -1755,6 +1782,169 @@ class TradingAlertJob:
             logger.exception(
                 "Auto-confirm Telegram notification failed for #%s", request_id
             )
+
+    # ------------------------------------------------------------------ #
+    # v3.13.0 — Agente IA en sandbox demo
+    # ------------------------------------------------------------------ #
+    def _ai_agent_path(self, paper_trade: dict) -> None:
+        """Decide EJECUTAR o NO OPERAR un candidato forex/gold y, si ejecuta y
+        ningún límite lo frena, manda la orden a MT5 demo con magic propio.
+        Registra SIEMPRE la decisión (aprende de todos los candidatos). Soft-fail:
+        cualquier error = sin orden, el bot sigue."""
+        try:
+            from app.ai_agent.agent import AiAgent
+            from app.ai_agent.features import build_features
+
+            if paper_trade.get("id") is None:
+                return
+            agent = AiAgent(self.settings, self.repository)
+            regime, vwap_week = self._ai_agent_context(paper_trade)
+            x = build_features(paper_trade, regime, vwap_week)
+            model = agent.load_model()
+            mean, sd, sampled, intended = agent.decide(model, x, int(paper_trade["id"]))
+            block = None
+            if intended == "execute":
+                block = self._ai_agent_block_reason(agent, paper_trade)
+            decision_id = self.repository.create_ai_agent_decision(
+                {
+                    "paper_trade_id": int(paper_trade["id"]),
+                    "created_at": utc_now().isoformat(),
+                    "symbol": paper_trade.get("symbol"),
+                    "category": paper_trade.get("category"),
+                    "strategy_name": paper_trade.get("strategy_name"),
+                    "direction": paper_trade.get("direction"),
+                    "features_json": json.dumps(x),
+                    "mean_r": mean,
+                    "std_r": sd,
+                    "sampled_r": sampled,
+                    "intended": intended,
+                    "executed": False,
+                    "block_reason": block,
+                    "model_n": model.n,
+                }
+            )
+            logger.info(
+                "Agente IA: %s %s %s -> %s (R esperado %+.2f ± %.2f, muestra %+.2f)%s",
+                paper_trade.get("strategy_name"), paper_trade.get("symbol"),
+                paper_trade.get("direction"), intended, mean, sd, sampled,
+                f" BLOQUEADO: {block}" if block else "",
+            )
+            if decision_id is None or intended != "execute" or block:
+                return
+            try:
+                request_id, ok, reason = self._ai_agent_execute(paper_trade)
+            except Exception as exc:
+                logger.exception("Agente IA: la ejecución falló; sin orden")
+                request_id, ok, reason = None, False, f"error: {type(exc).__name__}"
+            self.repository.update_ai_agent_decision(
+                decision_id,
+                {"executed": int(ok), "demo_request_id": request_id,
+                 "block_reason": None if ok else reason},
+            )
+        except Exception:
+            logger.exception("Agente IA fallo; soft-fail (sin orden)")
+
+    def _ai_agent_context(self, paper_trade: dict) -> tuple[str | None, float | None]:
+        """(régimen D1 'up'/'down'/'flat', distancia % al VWAP semanal) del cache D1
+        de MT5, igual que los gates. (None, None) si no hay data. Soft-fail."""
+        try:
+            from app.brokers.mt5_symbol_map import yahoo_to_mt5
+            from app.indicators.vwap import weekly_vwap
+            from app.intelligence.regime_filter import (
+                SMA_TREND_PERIOD,
+                TREND_SLOPE_LOOKBACK,
+                classify,
+            )
+
+            raw = str(paper_trade.get("symbol") or "")
+            mt5_sym = yahoo_to_mt5(
+                raw, getattr(self.settings, "mt5_broker_profile", "icmarkets")
+            ) or raw.upper().replace("=X", "")
+            candles = self._d1_candles_for_regime(mt5_sym)
+            regime = None
+            if len(candles) >= SMA_TREND_PERIOD + TREND_SLOPE_LOOKBACK:
+                regime = classify(candles).regime_trend
+            vwap = None
+            if candles:
+                reading = weekly_vwap(candles)
+                if reading.distance_pct is not None and reading.bars_used >= 2:
+                    vwap = float(reading.distance_pct)
+            return regime, vwap
+        except Exception:
+            logger.exception("Agente IA: contexto D1 fallo; sigue sin régimen/VWAP")
+            return None, None
+
+    def _ai_agent_block_reason(self, agent, paper_trade: dict) -> str | None:
+        """Límites que frenan una ejecución del agente (riesgo, no edge)."""
+        if not self.settings.enable_mt5_demo_trading:
+            return "ENABLE_MT5_DEMO_TRADING=false (decide en sombra)"
+        if self.repository.get_state("demo_trading_halted", "false") == "true":
+            return "demo trading en halt"
+        own = agent.guardrail_block()
+        if own:
+            return own
+        if not self._calendar_gate(paper_trade):
+            return "evento económico de alto impacto cerca"
+        if not self._usd_exposure_gate(paper_trade):
+            return "cap de exposición USD"
+        return None
+
+    def _ai_agent_execute(self, paper_trade: dict) -> tuple[int | None, bool, str | None]:
+        """Prepara (lote achicado al riesgo del agente) y envía con AGENT_MAGIC."""
+        from app.brokers.mt5_demo_trader import MT5DemoTrader
+
+        trader = MT5DemoTrader(self.settings, self.mt5_reader)
+        open_positions = len(trader.positions())
+        result = trader.prepare_from_paper_trade(
+            paper_trade, open_positions,
+            risk_cap_pct=float(self.settings.ai_agent_risk_pct),
+        )
+        if not result.ok or result.draft is None:
+            return None, False, f"preparación: {result.reason}"
+        draft = result.draft
+        now = utc_now()
+        request_id = self.repository.create_demo_trade_request(
+            {
+                "paper_trade_id": paper_trade["id"],
+                "symbol": draft.symbol,
+                "direction": draft.direction,
+                "volume": draft.volume,
+                "entry_price": draft.entry_price,
+                "stop_loss": draft.stop_loss,
+                "take_profit": draft.take_profit,
+                "risk_pct": draft.risk_pct,
+                "strategy_name": f"ai_agent/{draft.strategy_name or '?'}",
+                "status": "pending",
+                "reason": f"Agente IA: {draft.reason}",
+                "request_summary": draft.request_summary,
+                "created_at": now.isoformat(),
+                "expires_at": (
+                    now + timedelta(minutes=self.settings.demo_trade_request_ttl_minutes)
+                ).isoformat(),
+            }
+        )
+        self._auto_execute_demo_request(
+            trader, request_id, open_positions,
+            magic=MT5DemoTrader.AGENT_MAGIC, comment="TradingAlertAI agent",
+            label="Agente IA: orden demo",
+        )
+        request = self.repository.fetch_demo_trade_request(request_id) or {}
+        ok = str(request.get("status") or "") == "sent"
+        return request_id, ok, None if ok else f"envío: {request.get('result_message')}"
+
+    def _maybe_ai_agent_learn(self) -> None:
+        """v3.13.0: el agente aprende de los candidatos cuyo paper trade cerró.
+        Corre cada ciclo (barato: solo decisiones pendientes). Soft-fail."""
+        if not getattr(self.settings, "enable_ai_agent", False):
+            return
+        try:
+            from app.ai_agent.agent import AiAgent
+
+            learned = AiAgent(self.settings, self.repository).learn()
+            if learned:
+                logger.info("Agente IA: aprendió de %d trades cerrados", learned)
+        except Exception:
+            logger.exception("Agente IA: aprendizaje fallo; soft-fail")
 
     def _correct_paper_trade_notional(
         self,

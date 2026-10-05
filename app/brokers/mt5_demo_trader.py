@@ -71,6 +71,9 @@ class MT5DemoTrader:
     """Executes MT5 demo orders only after strict validation."""
 
     MAGIC = 250500
+    # v3.13.0 — órdenes del agente IA (sandbox demo). Nada filtra posiciones por
+    # magic: cierre, SL y reconciler trabajan por ticket. Sirve para separarlas en MT5.
+    AGENT_MAGIC = 250501
 
     def __init__(self, settings: Settings, reader: MT5Reader | None = None) -> None:
         self.settings = settings
@@ -94,8 +97,14 @@ class MT5DemoTrader:
         self,
         paper_trade: dict[str, Any],
         open_demo_positions: int = 0,
+        risk_cap_pct: float | None = None,
     ) -> DemoValidationResult:
-        """Build a safe demo order draft from an open paper trade."""
+        """Build a safe demo order draft from an open paper trade.
+
+        v3.13.0: con `risk_cap_pct` (agente IA) el lote se ACHICA hasta que el riesgo
+        quepa en min(risk_cap_pct, DEMO_RISK_PER_TRADE_PCT) en vez de rechazar; si
+        ni el lote mínimo del broker cabe, rechaza. Sin el parámetro, idéntico a antes.
+        """
         if not self.settings.enable_mt5_demo_trading:
             return DemoValidationResult(False, "ENABLE_MT5_DEMO_TRADING=false")
         if not self.settings.demo_order_require_confirmation:
@@ -162,6 +171,24 @@ class MT5DemoTrader:
         )
         if risk_pct is None:
             return DemoValidationResult(False, reason)
+        if risk_cap_pct is not None:
+            cap = min(float(risk_cap_pct), float(self.settings.demo_risk_per_trade_pct))
+            if risk_pct > cap:
+                scaled = self._scale_volume_to_risk(symbol_info, volume, risk_pct, cap)
+                if scaled is None:
+                    return DemoValidationResult(
+                        False, f"ni el lote mínimo cabe en {cap:.3f}% de riesgo"
+                    )
+                volume = scaled
+                risk_pct, reason = self._estimate_risk_pct(
+                    symbol_info=symbol_info,
+                    account=account,
+                    entry_price=price,
+                    stop_loss=stop_loss,
+                    volume=volume,
+                )
+                if risk_pct is None:
+                    return DemoValidationResult(False, reason)
         if risk_pct > self.settings.demo_risk_per_trade_pct:
             return DemoValidationResult(
                 False,
@@ -197,8 +224,13 @@ class MT5DemoTrader:
         self,
         request_row: dict[str, Any],
         open_demo_positions: int = 0,
+        magic: int | None = None,
+        comment: str | None = None,
     ) -> DemoSendResult:
-        """Revalidate and send one previously prepared demo order."""
+        """Revalidate and send one previously prepared demo order.
+
+        v3.13.0: `magic`/`comment` opcionales (el agente IA usa AGENT_MAGIC); por
+        defecto, los de siempre."""
         if not self.settings.enable_mt5_demo_trading:
             return DemoSendResult(False, "failed", "ENABLE_MT5_DEMO_TRADING=false")
         if open_demo_positions >= self.settings.demo_max_open_trades:
@@ -270,8 +302,8 @@ class MT5DemoTrader:
             "sl": stop_loss,
             "tp": take_profit,
             "deviation": 20,
-            "magic": self.MAGIC,
-            "comment": "TradingAlertAI demo",
+            "magic": int(magic) if magic is not None else self.MAGIC,
+            "comment": comment or "TradingAlertAI demo",
             "type_time": getattr(mt5, "ORDER_TIME_GTC", 0),
         }
         return self._send_deal_request(base_request, symbol_info, price)
@@ -726,6 +758,24 @@ class MT5DemoTrader:
         volume = min(volume, hard_cap, volume_max)
         precision = _step_precision(volume_step)
         return round(volume, precision), "ok"
+
+    def _scale_volume_to_risk(
+        self, symbol_info: Any, volume: float, risk_pct: float, cap_pct: float
+    ) -> float | None:
+        """v3.13.0: lote más grande (múltiplo del step del broker) con riesgo <= cap.
+        El riesgo es lineal en el volumen. None si ni volume_min cabe."""
+        if risk_pct <= 0 or volume <= 0:
+            return None
+        volume_min = _to_float(getattr(symbol_info, "volume_min", None)) or 0.01
+        volume_step = _to_float(getattr(symbol_info, "volume_step", None)) or volume_min
+        # margen 1e-6: justo en el tope, el redondeo flotante del riesgo recalculado
+        # podria quedar apenas encima y la orden se rechazaria.
+        target = volume * cap_pct / risk_pct * (1.0 - 1e-6)
+        if target < volume_min:
+            return None
+        steps = math.floor((target - volume_min) / volume_step + 1e-9)
+        scaled = min(volume_min + max(0, steps) * volume_step, volume)
+        return round(scaled, _step_precision(volume_step))
 
     def _estimate_risk_pct(
         self,

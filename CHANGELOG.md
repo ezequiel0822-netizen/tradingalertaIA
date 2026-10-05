@@ -1,5 +1,30 @@
 # Changelog
 
+## v3.13.0 (2026-10-05) — Agente IA en sandbox demo: decide, opera en MT5 demo y aprende practicando
+
+Pedido del user: "una IA que opere sola, que aprenda mientras practica y meta trades". Se construyó en DEMO con las reglas del proyecto: opt-in OFF (`ENABLE_AI_AGENT=false`), soft-fail, real-money HARDCODED bloqueado, `order_send` solo en `mt5_demo_trader.py`. Cambia una regla de diseño **solo para el agente**: hasta acá la IA/ML solo restaban; el agente decide ejecutar (en demo, con límites duros).
+
+- **`app/ai_agent/`**: `features.py` (16 features acotadas: estrategia, dirección, oro, sesión, régimen D1, VWAP semanal, Hurst, RSI, ATR, CLV; 0 si falta el dato), `model.py` (regresión lineal bayesiana + Thompson sampling, numpy, persistida en `bot_state`), `agent.py` (decisión reproducible por semilla, límites propios, aprendizaje, medición y texto de `/agente`).
+- **Cómo aprende**: de TODOS los candidatos forex/gold, ejecutados o no, con el R realizado de su paper trade (sin artifacts, recortado a [−3, +5]). Explora donde no sabe y explota donde ya aprendió.
+- **Wiring** (`jobs.py`): con el flag ON, los candidatos forex/gold los decide el agente en vez de la cadena de filtros de edge (promotion/ML/LLM/régimen/VWAP). Se mantienen los gates de RIESGO: demo trading on, halt, calendario, cap USD, más límites propios (≤ 0.5 % por trade con lote achicado hasta caber, ≤ 3 abiertas, ≤ 6 por día, stop diario −3R). Con `ENABLE_MT5_DEMO_TRADING=false` decide y aprende en sombra. Aprende cada ciclo (`_maybe_ai_agent_learn`).
+- **MT5**: `AGENT_MAGIC = 250501` y comentario propio; `prepare_from_paper_trade(risk_cap_pct=…)` achica el lote al tope de riesgo en vez de rechazar; `send_prepared_request(magic=…, comment=…)`. Sin los parámetros, comportamiento idéntico (nada filtra por magic: cierre/SL/reconciler van por ticket).
+- **DB**: tabla `ai_agent_decisions` (features, media/desvío/muestra, intención, ejecutada, motivo de bloqueo, R aprendido).
+- **Telegram `/agente`**: estado, experiencia, decisiones, medición contra "no operar" y "ejecutar todo", lo que cree de cada estrategia y límites de hoy.
+- **`scripts/ai_agent_warmstart.py`** (opcional): arranca el modelo con los 578 paper trades forex/gold cerrados del bot (vista previa sin escribir; `--apply` guarda). Vista previa: mean_reversion −1.15R ± 0.17, session_breakout −0.10 ± 0.20, momentum +0.07 ± 0.22.
+- **Evaluación pre-registrada antes de encenderlo**: `research/AGENTE_IA_PREREGISTRO_2026-10-05.md` (≥ 150 decisiones con R desde 2027-01-04; t NW ≥ 2.50; predicción: probable NO PASA, "aprende a casi no operar").
+- **Fix latente**: en la rama ML "confianza baja" `draft.volume = x` sobre un dataclass frozen lanzaba `FrozenInstanceError` (no se disparaba porque el ML está OFF) → `dataclasses.replace`.
+- Tests: +19 (`tests/test_ai_agent.py`): forma cerrada del posterior, reproducibilidad, exploración inicial, magic propio, skip sin orden, ignora el promotion gate pero no el calendario, modo sombra, lote achicado, límites, aprendizaje idempotente sin artifacts, flag OFF por defecto, fix del draft frozen, error de ejecución registrado, `/agente`. **827 tests verdes.**
+
+## Research — plan B4b/B11/B13/B12 ejecutado completo (2026-10-05): 9 hipótesis nuevas, las 9 NO PASAN
+
+Cada tanda con pre-registro commiteado antes de bajar datos, código congelado y verificado con datos sintéticos, un tiro y veredicto en el ledger. Detalle: `research/LEDGER_FAMILIAS.md` (24 familias, 0 operables, con "Lectura transversal").
+
+- **B4b** short Hyperliquid / long Binance (3x): NO PASA la secundaria 2023-06 → 2024-09 solo por la t Newey-West (BTC 2.34, ETH 2.46 < 2.50); exceso +9.1 %/año, DD ≤ 2.8 %, 0 liquidaciones. Adenda declarada antes de correr: Hyperliquid liquidaba funding cada 8 h hasta 2023-06-08. Forward no se corre; colector sin programar.
+- **B11** posicionamiento (OI, top traders por posición, flujo taker): las tres NO PASAN (|t| ≤ 1.3). La fuente no trae top traders en 2022 (H-TT1 inválida → H-TT1b); bug de OI = 0 corregido y declarado.
+- **B13** factores cruzados en 339 perps point-in-time 2020-2024: reversión semanal −34 %/año; funding como predictor +27 %/año pero t 2.26 y 2ª mitad negativa (+67 % en 2020 → −30 % en 2024).
+- **B12** flujos semanales (stablecoins, flujo neto a exchanges, MVRV): t ≤ 1.9. ETF flows no testeables (historia en ventana vista).
+- Sin bump (research).
+
 ## Research — tanda cripto 2026-10-04b (H-FC2, H-XS1, H-POS1): las tres NO PASAN + evaluación de ramas del carry
 
 Pre-registro `research/HIPOTESIS_2026-10-04b_cripto_batch.md` (8e4a3f9) con k = 3 y t ≥ 2.50, descargador (3961dec) y estudio (f53b6f0) commiteados antes de correr. La verificación sintética encontró y corrigió un bug de asignación de capital en H-FC2 antes de usar datos reales. Universo point-in-time con deslistados (466 símbolos), 41.532/41.532 checksums OK. Ventana 2024-10 → 2026-09.
