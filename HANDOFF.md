@@ -10,13 +10,14 @@
 
 ```
 Retomamos Trading Alert AI (bot de trading LOCAL, Python 3.12, Windows, repo en
-C:/Users/LENOVO/tradingalertaIA, venv en .venv). Estado al 5-oct-2026: v3.13.0, 827 tests
+C:/Users/LENOVO/tradingalertaIA, venv en .venv). Estado al 5-oct-2026: v3.13.1, 829 tests
 verdes. Demo MT5 NUEVA (MetaQuotes-Demo, ~3.000 USD). OJO: al 5-oct el bot estaba APAGADO
 (DB cerrada el 4-oct 13:44): verificar que no haya ningún main.py y pedirle al user que lo
 arranque con start_bot.ps1 (pide contraseña; no lo arranques vos).
-Research: 24 familias de hipótesis probadas con pre-registro → 0 operables.
+Research: 25 familias de hipótesis probadas con pre-registro → 0 operables (la 25 = redes
+neuronales H-NN1: peores que el boosting, no se integran).
 
-Leé ANTES de tocar nada: research/LEDGER_FAMILIAS.md (las 24 familias, commits, ventanas
+Leé ANTES de tocar nada: research/LEDGER_FAMILIAS.md (las 25 familias, commits, ventanas
 ya vistas y la "Lectura transversal"), PROXIMOS_PASOS.md (bloque del 5-oct), RESUMEN_COMPLETO.md
 (§2.8-§2.10) y la memoria de Claude.
 
@@ -57,7 +58,9 @@ Gotchas: pandas 3 del venv usa datetime64[us]; klines de Binance mezclan archivo
 encabezado (normalizar por archivo); spot 2025+ en µs; `metrics` de Binance trae vacías las
 columnas de top traders en 2022 y registros con OI = 0; Hyperliquid liquidaba funding cada
 8 h hasta 2023-06-08; FRED corta la conexión → EFFR del NY Fed; Yahoo 429 → UA Mozilla;
-consola cp1252 → sys.stdout.reconfigure(encoding="utf-8"). Los scripts de
+consola cp1252 → sys.stdout.reconfigure(encoding="utf-8"); herramientas de auditoría
+(coverage, pyflakes) se instalan con pip --target en una carpeta aparte, NUNCA en el venv del
+bot; tests/conftest.py vacía .test_dbs al terminar. Los scripts de
 research/ramas_carry_scripts/ NO están revisados.
 ```
 

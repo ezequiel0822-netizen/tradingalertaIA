@@ -57,6 +57,13 @@
 > long Binance). **Registro único con todas las familias, commits y ventanas ya vistas:
 > `research/LEDGER_FAMILIAS.md`.** Main = origin/main en 13a3733 antes de este cierre.
 >
+> **🧪 5-oct-2026 — v3.13.1 + H-NN1 (829 tests, 25 familias).** Auditoría de tests desde cero: sin
+> duplicados, sin dependencia de orden ni de red; 4 tests vacíos arreglados; bug del cierre parcial
+> que aflojaba el trailing (paper de acciones) arreglado; `.test_dbs` se vacía al terminar. Decisión
+> pendiente del user: `realized_pnl_today` ignora la mitad cobrada en TP1. **H-NN1**: las redes
+> neuronales salieron PEORES que el boosting en microestructura y ninguna cubre el costo → no se
+> integran (`research/HIPOTESIS_2026-10-05_redes_neuronales.md`).
+>
 > **🤖 5-oct-2026 — v3.13.0: Agente IA en sandbox demo (827 tests).** Pedido del user: una IA
 > que opere sola y aprenda practicando. `app/ai_agent/` (Thompson sampling sobre 16 features)
 > decide EJECUTAR o NO OPERAR cada candidato forex/gold y aprende de todos con el R del paper

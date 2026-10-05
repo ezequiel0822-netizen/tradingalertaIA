@@ -1,5 +1,14 @@
 # Changelog
 
+## Research — H-NN1 redes neuronales vs boosting en microestructura (2026-10-05): no integrar
+
+Pregunta del user: "¿qué opinás de integrar redes neuronales?". Se probó donde más chance tienen (millones de filas de order book), offline y con pre-registro (8853632) y código congelado (5e90204, selftest 8/8). Train: los 92 días de H-MS1; prueba decisiva 2023-05-17 → 07-31 (76 días nunca bajados) y chequeo causal 2023-11-01 → 11-10; 86/86 días con checksum oficial verificado por zip. `MLPClassifier` de scikit-learn (sin PyTorch, venv del bot intacto).
+
+- **Las redes son PEORES que el boosting**: a 30 s ΔAUC MLP-23 −0.005 (t −5.2), MLP-SEQ (30 s de historia) −0.018 (t −16). AUC HGB 0.595, MLP-23 0.590, MLP-SEQ 0.575.
+- **Economía**: las 6 combinaciones pierden ~−7.5 a −8 bps por trade (ventaja bruta −0.03 a +0.52 bps contra ~8 de costo), también en noviembre y con latencia 1 s.
+- **Réplica de H-MS1 fuera de muestra**: el HGB da AUC 0.595 / 0.576 en datos nunca vistos → la señal de microestructura es real y estable, ~13× menor que el costo.
+- Ledger: 25 familias, 0 operables. Se corrigió la ventana de H-MS1 en el ledger (usó ago-oct 2023, no may-nov). Sin bump (research).
+
 ## v3.13.1 (2026-10-05) — auditoría de tests desde cero + bug del trailing aflojado por el cierre parcial
 
 Pedido del user: auditar todos los tests (qué se puede eliminar sin romper nada) y buscar bugs. Método: cobertura por test (`coverage` instalado en una carpeta aparte, el venv del bot intacto), escaneo AST, cada archivo de tests corrido solo (orden), suite con la red bloqueada, `pyflakes` y revisión manual del código de trading con menos cobertura.

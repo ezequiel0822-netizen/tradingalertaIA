@@ -1,6 +1,6 @@
 # RESUMEN COMPLETO — Trading Alert AI (todo el proyecto en un documento)
 
-> **Actualizado: 2026-06-21.** Este documento es autocontenido: leyéndolo, cualquier
+> **Actualizado: 2026-10-05.** Este documento es autocontenido: leyéndolo, cualquier
 > persona (o cualquier sesión nueva de Claude, con el modelo que sea) entiende QUÉ es
 > el proyecto, DÓNDE está, POR QUÉ está así, y QUÉ sigue. Para profundizar:
 > `CONTEXTO_MAESTRO_v3.8.0.md` (arquitectura vigente), `CHANGELOG.md` (historia por versión),
@@ -15,7 +15,8 @@
 Detecta oportunidades (memecoins / acciones US / forex / oro), decide con un **strategy
 router** (5 estrategias swing + 2 scalping), hace **paper trades** y ejecuta órdenes a
 **MT5 demo**. Tiene capas de IA local (Ollama, ML XGBoost) que son siempre
-**SUBTRACTIVAS**: vetan, explican, registran, proponen — **jamás abren una orden**.
+**SUBTRACTIVAS**: vetan, explican, registran, proponen — **jamás abren una orden**, con UNA
+excepción acotada desde v3.13.0: el **agente IA en sandbox demo** (opt-in, ver §2.11).
 
 **Real-money está BLOQUEADO por diseño (HARDCODED)** y así sigue hasta que los gates de
 `/readiness` estén verdes. El user lo pidió varias veces (incluso "solo 300 MXN"); la
@@ -55,7 +56,7 @@ de los resultados — sin tocar jamás dinero real.**
 
 | Qué | Estado |
 |---|---|
-| Versión | **v3.12.0** (main; §2.9 = qué trajo) |
+| Versión | **v3.13.1** (§2.11 = agente IA + auditoría de tests; §2.9 = v3.12.0) |
 | Tests | **801 verdes** |
 | Foco | **100% LA BOLSA** (acciones US + forex + oro). Memecoins CORTADAS (bot aparte), scalping APAGADO |
 | Bot | Corriendo en la Lenovo vía **`.\start_bot.ps1`**. Preflight: `python preflight.py` |
@@ -239,7 +240,7 @@ Detalle completo en CHANGELOG. Todo informativo + captura para research; ningún
 - **VWAP gate** (`ENABLE_VWAP_GATE=false`): downward-only, molde del regime gate, VWAP semanal del cache D1 MT5. Opt-in OFF.
 - **`/claude_analyze SYMBOL`** (alias `/analisis_llm`): análisis técnico narrado por LLM (VWAP+velas+Hurst+noticias), a demanda, transporte Claude u Ollama, gated por `ENABLE_LLM_ADVISOR`. Analista secundario: jamás señales.
 
-## 2.10 Research fuera del vehículo (9-jul → 5-oct-2026): 24 familias, 0 operables
+## 2.10 Research fuera del vehículo (9-jul → 5-oct-2026): 25 familias, 0 operables
 
 Registro completo (fecha, datos, veredicto, commits, ventanas ya vistas): **`research/LEDGER_FAMILIAS.md`**.
 - **H-M1** (9-jul): trend multi-asset D1 vía CFD → NO PASA; agota el vehículo CFD/MT5/D1.
@@ -254,6 +255,7 @@ Registro completo (fecha, datos, veredicto, commits, ventanas ya vistas): **`res
   - **B13** alts 2020-2024 (339 perps point-in-time): reversión semanal −34 %/año; funding como predictor +27 %/año pero t 2.26 y 2ª mitad negativa (+67 % en 2020 → −30 % en 2024).
   - **B12** stablecoins / flujo a exchanges / MVRV como predictores semanales: t ≤ 1.9. ETF flows no testeables honestamente hoy.
   - **Lectura transversal:** lo único cerca del umbral fueron primas de funding/carry que existieron y se arbitraron; las señales direccionales sobre información pública no muestran nada. Detalle: `research/LEDGER_FAMILIAS.md`.
+- **H-NN1 (5-oct, redes neuronales):** en microestructura L1 de BTCUSDT, sobre 86 días nunca vistos, las redes (MLP-23 y MLP-SEQ con 30 s de historia) salieron PEORES que el boosting (ΔAUC −0.005 y −0.018, significativo) y la economía pierde ~−7.5 bps/trade. El HGB de H-MS1 replica su señal fuera de muestra (AUC 0.595/0.576): real, estable y ~13× menor que el costo. Más modelo no rescata poca señal → no integrar redes.
 - **Sigue en pie:** checkpoint COT del **2026-12-07 09:00** (`--cot-lag-days 4`). El bot estaba APAGADO al 5-oct (DB cerrada el 4-oct 13:44): re-arrancar con `.\start_bot.ps1`.
 
 ## 2.11 v3.13.0 (5-oct-2026) — Agente IA en sandbox demo
@@ -268,6 +270,13 @@ opt-in OFF, soft-fail, real-money bloqueado. **Excepción explícita a la regla 
 resta"**, acotada a la demo. Evaluación pre-registrada antes de encenderlo
 (`research/AGENTE_IA_PREREGISTRO_2026-10-05.md`); predicción honesta: aprende a casi no operar.
 Fix latente de paso: `draft.volume = x` sobre dataclass frozen en la rama ML (OFF).
+
+**v3.13.1 (5-oct) — auditoría de tests desde cero** (cobertura por test, AST, aislamiento por
+archivo, red bloqueada, pyflakes, revisión manual): 0 tests duplicados, 0 dependientes del
+orden, 0 con red; 4 tests que no probaban nada, arreglados (uno no podía fallar nunca); bug
+real en `lifecycle_manager` (el cierre parcial en TP1 aflojaba un trailing stop) arreglado;
+`.test_dbs` ya no crece (~400 MB). Cobertura de `app/` 76 %. Pendiente de decisión del user:
+`realized_pnl_today` no suma la mitad cobrada en TP1 (kill-switch algo más sensible). 829 tests.
 
 ## 3. La verdad de fondo (la filosofía del proyecto)
 
