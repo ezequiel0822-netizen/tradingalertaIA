@@ -1,5 +1,26 @@
 # Pre-registro B4b — short Hyperliquid / long Binance (perp-perp), BTC y ETH, paper hacia adelante
 
+> **VEREDICTO (secundaria corrida 2026-10-05, 2023-06-13 → 2024-10-01, 68 semanas): NO PASA
+> en ningún activo → B4b cerrada sin esperar el forward; el colector NO se programa (§3).**
+> Ambos fallan SOLO el criterio 2, la t de Newey-West: **BTC 2.34, ETH 2.46 < 2.50**.
+> Todo lo demás pasa: exceso neto sobre la EFFR +9.13 % / +9.14 % anual (EFFR media
+> 5.36 %), maxDD −2.8 % / −0.9 %, 0 liquidaciones (también con costos × 2), mitades
+> +6.7/+11.5 % y +14.0/+4.3 %, costos × 2 +7.5 % / +7.2 %, datos válidos (3 horas de
+> funding HL faltantes de 11.424; 0 velas y 0 liquidaciones de Binance faltantes).
+> La t simple daría 3.55 / 3.79, pero se descartó a priori (§6.2) y el diagnóstico
+> POST-HOC lo confirma: autocorrelación de los excesos semanales ≈ 0.5 en el rezago 1.
+> Diagnóstico POST-HOC (no decide): funding HL 20.9 % / 21.8 % anual vs Binance 10.3 % /
+> 11.0 % → spread ~10.5 pp en 2023-24, contra ~2-4 pp en 2024-10 → 2026-09 (agente). O
+> sea: aun si hubiera pasado, la prima de 2023-24 ya se comprimió. Near-miss honesto:
+> la economía era fuerte, la evidencia estadística no alcanza el umbral declarado. Sin
+> re-cortes: otra t, otro apalancamiento u otra ventana = pre-registro NUEVO, y uno
+> motivado por este near-miss sería dredging.
+> Data: 121 archivos, 68/68 checksums oficiales OK; manifest
+> `research/B4b_secondary_data_manifest.csv` (sha256 e09ff8dd…d762da); resultado
+> completo `research/B4b_secondary_result.json` (sha256 608cc64e…4b2fcaf3).
+> Commits: 8febc1a (pre-registro) → d9c27a9 (código congelado, selftest 39/39) →
+> 52b7473 (adenda 1, selftest 40/40) → este.
+
 > **Commiteado ANTES de bajar un solo dato de las ventanas que deciden** (protocolo del
 > proyecto). Familia 16 del ledger (`research/LEDGER_FAMILIAS.md`), k = 2 (BTC, ETH), un
 > tiro por activo. Research-only: no toca el bot, ni flags, ni MT5, ni el .env.
