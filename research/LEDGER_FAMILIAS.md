@@ -1,8 +1,8 @@
 # Registro de familias de hipótesis — Trading Alert AI
 
 > Un solo lugar con TODO lo probado, su veredicto y dónde está la evidencia.
-> Actualizado: 2026-10-05 (B4b + tanda B11).
-> **Saldo: 19 familias probadas con pre-registro → 0 operables.**
+> Actualizado: 2026-10-05 (B4b + tandas B11 y B13).
+> **Saldo: 21 familias probadas con pre-registro → 0 operables.**
 >
 > Regla de uso: una familia cerrada NO se re-abre ni se re-corta. Una variante es una
 > hipótesis NUEVA con su propio pre-registro, y si usa una ventana ya vista se declara
@@ -31,6 +31,8 @@
 | 17 | 2026-10-05 | H-OI1 cambio de open interest extremo → contraria al día (BTC/ETH perps, z 90 d, 3 días) | `metrics` 5 min + klines 1d + funding Binance (2.700/2.700 checksums) | NO PASA: −4.1 %/año, t_NW −0.29, n 164 (corregida por bug OI = 0; original −0.31) | e80f809, dd9e59d, 4ff468d, veredicto | `HIPOTESIS_2026-10-05_B11_posicionamiento.md` |
 | 18 | 2026-10-05 | H-TT1/H-TT1b top traders por posición → SEGUIR | idem (la fuente no trae top traders en casi todo 2022 → H-TT1 INVÁLIDA; H-TT1b en 2022-12-15 → 2024-10-01) | NO PASA: −20.3 %/año, t_NW −1.23, n 135 | idem | idem |
 | 19 | 2026-10-05 | H-TK1 flujo taker extremo (vela 1d) → contraria | idem | NO PASA: −25.0 %/año, t_NW −1.29, n 244 | idem | idem |
+| 20 | 2026-10-05 | H-REV1 reversión semanal cruzada (perps USDT, quintiles, dollar-neutral) | velas 8 h + funding de 339 perps point-in-time (17.281/17.281 checksums; manifest sha256 fca6c943…87d94df) | NO PASA: −34.0 %/año, t_NW −2.48, DD −86 % | 595d964, d240f72, veredicto | `HIPOTESIS_2026-10-05_B13_factores_cruzados.md` |
+| 21 | 2026-10-05 | H-FND1 funding 7 d como predictor cruzado (long bajo / short alto) | idem | NO PASA: +27.1 %/año pero t_NW 2.26 < 2.50 y 2ª mitad −3.4 %; por año +67/+63/+0.5/+20/−30 % (2020→2024): prima que se apagó | idem | idem |
 
 Evaluación previa SIN pre-registro (no cuenta como familia): ramas del carry (B4a, B4b,
 B5, DEX, Ethena, lending) por un agente, commit 62f8905,
@@ -44,6 +46,9 @@ B5, DEX, Ethena, lending) por un agente, commit 62f8905,
   esa ventana es IN-SAMPLE. En particular, cualquier señal de retornos cruzados (reversión,
   momentum corto) ya está contaminada: se vio que el momentum crasheó en la 2ª mitad.
 - **BTCUSDT microestructura 2023-05 → 2023-11** (bookTicker) y aggTrades usados en H-MS1.
+- **Perps USDT 2020-01 → 2024-09, señales cruzadas** (B13, 2026-10-05): reversión semanal y
+  funding como predictor; se vio además que el momentum semanal le ganó a la reversión en
+  2020-21 → esa ventana YA NO es limpia para señales de retornos/funding cruzados.
 - **`metrics` de Binance BTC/ETH 2020-09 → 2024-09** (B11, 2026-10-05): OI, top traders por
   posición y flujo taker de la vela 1d ya usados como señales direccionales a 3 días.
 - **Cripto BTC/ETH 2023-05 → 2024-09** (B4b, 2026-10-05): funding de Hyperliquid (horario desde
@@ -53,9 +58,10 @@ B5, DEX, Ethena, lending) por un agente, commit 62f8905,
 - **Forex/oro/índices D1** del cache propio: estacionalidad, carry, trend y COT ya vistos
   en las tandas de julio.
 - Ventanas NO vistas útiles: cripto **2020-01 → 2024-09** para señales que NO sean de
-  funding/spread ni de posicionamiento de BTC/ETH (p. ej. retornos cruzados de alts), y todo
-  lo que pase **después** de la fecha de cada pre-registro (test hacia adelante).
-  Hyperliquid 2023-05 → 2024-09 y `metrics` BTC/ETH 2020-09 → 2024-09 YA se usaron.
+  funding/spread, posicionamiento ni retornos/funding cruzados (quedan muy pocas), y todo lo
+  que pase **después** de la fecha de cada pre-registro (test hacia adelante). Hyperliquid
+  2023-05 → 2024-09, `metrics` BTC/ETH 2020-09 → 2024-09 y perps USDT 2020-01 → 2024-09 YA
+  se usaron.
 
 ## Pendiente (orden sugerido; detalle en PROXIMOS_PASOS.md)
 
@@ -63,7 +69,7 @@ B5, DEX, Ethena, lending) por un agente, commit 62f8905,
    el forward no se corre; colector `scripts/b4b_forward_collector.py` queda en el repo sin
    programar).
 2. ~~B11 resto~~ → **CERRADA 2026-10-05** (H-OI1, H-TT1b, H-TK1 NO PASAN).
-3. **B13 otros factores cruzados** (reversión semanal, funding como predictor, OI):
-   pre-registro nuevo, ventana 2020-01 → 2024-09.
+3. ~~B13 otros factores cruzados~~ → **CERRADA 2026-10-05** (H-REV1 y H-FND1 NO PASAN; OI
+   descartado a priori).
 4. **B12 flujos de baja frecuencia**: checkpoint COT 2026-12-07 (ya programado, lag 4);
    stablecoins (DefiLlama), flujos de ETF, on-chain gratis. Poca potencia estadística.

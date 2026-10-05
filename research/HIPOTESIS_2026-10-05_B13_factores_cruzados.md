@@ -1,5 +1,23 @@
 # Pre-registro B13 — factores cruzados en perps USDⓈ-M: reversión semanal y funding como predictor (k = 2)
 
+> **VEREDICTO (corrido 2026-10-05, 247 semanas 2020-01-06 → 2024-09-30): las DOS NO PASAN —
+> familias 20-21 cerradas.**
+> - **H-REV1 (reversión semanal): NO PASA.** Exceso −34.0 %/año, t_NW −2.48, maxDD −86 %,
+>   mitades −61 % / −7 %, costos × 2 −42 %. Rotación mediana 160 %/semana.
+> - **H-FND1 (funding como predictor): NO PASA** por dos criterios: t_NW **2.26 < 2.50** y
+>   **segunda mitad negativa** (+57.8 % / −3.4 %). Sí cumplía exceso +27.1 %/año, maxDD
+>   −26 %, costos × 2 +21.8 %, 232 semanas invertidas (mediana 19.5 nombres por lado).
+> Diagnóstico POST-HOC (no decide): H-FND1 por año +67 % (2020), +63 % (2021), +0.5 %
+> (2022), +20 % (2023), −30 % (2024) → una prima de "crowding + cobro de funding" fuerte
+> cuando el funding de las alts era salvaje y que se apagó, igual que el carry (H-FC1/H-FC2).
+> La t simple daría 2.51 (no decide; NW elegida a priori). H-REV1 perdiendo = el momentum
+> semanal le ganó a la reversión en 2020-21; NO es un hallazgo a explotar: es la dirección
+> no pre-registrada y H-XS1 ya vio crashear el momentum en 2024-26.
+> Data: 339 símbolos con velas en la ventana (universo point-in-time de 895, incluye
+> deslistados), 17.281/17.281 checksums oficiales OK; manifest en `trading_data/b13_cross/`
+> (sha256 citado en el ledger); resultado completo `research/B13_result.json`.
+> Commits: 595d964 (pre-registro) → d240f72 (código, 14/14) → este.
+
 > **Commiteado ANTES de bajar los datos de esta tanda** (protocolo del proyecto).
 > Familias 20-21 del ledger. k = 2, un tiro cada una, umbral **t ≥ 2.50**.
 > Research-only: no toca el bot, ni flags, ni MT5, ni el .env. Un PASA habilita solo un
