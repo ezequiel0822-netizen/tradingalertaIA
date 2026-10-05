@@ -1,5 +1,21 @@
 # Pre-registro B12 — flujos de baja frecuencia como predictores semanales de BTC/ETH (k = 3)
 
+> **VEREDICTO (corrido 2026-10-05, 247 semanas 2020-01-06 → 2024-09-30): las TRES NO PASAN —
+> familias 22-24 cerradas.** Ninguna pendiente predictiva llega a |t_NW| 2.50:
+> - **H-STB1 (supply de stablecoins → long):** pendiente con el signo de la tesis pero
+>   t_NW **1.90**; la regla da +10.8 %/año con la 1ª mitad negativa (−1.7 % / +23.3 %);
+>   57 semanas con posición. NO PASA.
+> - **H-EXF1 (flujo neto a exchanges → short):** signo de la tesis, t_NW −0.45 (ruido);
+>   regla +5.9 %/año con 1ª mitad −14.2 %. NO PASA.
+> - **H-MVRV1 (valuación → reversión, h = 4 semanas):** pendiente con el signo OPUESTO a la
+>   tesis (t_NW +0.98); regla −19.7 %/año. NO PASA.
+> Cobertura 100 % en las tres. La advertencia de potencia queda en pie: con ~247 semanas
+> ni siquiera la mejor (H-STB1, t 1.90) sería distinguible de suerte entre 3 pruebas.
+> Data: DefiLlama 2.498 días y CoinMetrics Community 3.044 días por activo, sin huecos ni
+> nulos (sha256 de las respuestas crudas en `trading_data/b12_flows/manifest.csv`); precios
+> y funding de B13 (checksums oficiales). Resultado: `research/B12_result.json`.
+> Commits: 1e5af5b (pre-registro) → 7c5f321 (código, 18/18) → este.
+
 > **Commiteado ANTES de bajar los datos de esta tanda** (protocolo del proyecto).
 > Familias 22-24 del ledger. k = 3, un tiro cada una, umbral **t ≥ 2.50**.
 > Research-only: no toca el bot, ni flags, ni MT5, ni el .env.

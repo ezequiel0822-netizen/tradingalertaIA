@@ -1,0 +1,79 @@
+{
+  "prereg": "research/HIPOTESIS_2026-10-05_B12_flujos.md @ 1e5af5b",
+  "window": "2020-01-06 -> 2024-09-30",
+  "generated_utc": "2026-10-05 06:39:08.512150+00:00",
+  "results": {
+    "H-STB1": {
+      "slope": 0.005989240803172486,
+      "t_nw": 1.903312414883902,
+      "n_obs": 247,
+      "horizon_weeks": 1,
+      "nw_lags": 4,
+      "rule_excess_ann": 0.10832528503003873,
+      "rule_h1_ann": -0.017273310132723856,
+      "rule_h2_ann": 0.23291098829632745,
+      "rule_x2_ann": 0.0991884429247756,
+      "rule_t_nw_info": 0.7400784373959065,
+      "weeks_with_position": 57,
+      "coverage": 1.0,
+      "weeks": 247,
+      "checks": {
+        "1_pendiente_signo_tesis_|t_NW|>=2.50": false,
+        "2_regla_exceso>0": true,
+        "3_regla_mitades>0": false,
+        "4_regla_costos_x2>0": true,
+        "5_semanas_con_posicion>=52": true,
+        "6_cobertura>=95%": true
+      },
+      "pasa": false
+    },
+    "H-EXF1": {
+      "slope": -0.0024517350449689904,
+      "t_nw": -0.45108267229658927,
+      "n_obs": 247,
+      "horizon_weeks": 1,
+      "nw_lags": 4,
+      "rule_excess_ann": 0.05855440060720007,
+      "rule_h1_ann": -0.1420840570766288,
+      "rule_h2_ann": 0.25757480621293344,
+      "rule_x2_ann": 0.04573334797562109,
+      "rule_t_nw_info": 0.5353410903748856,
+      "weeks_with_position": 97,
+      "coverage": 1.0,
+      "weeks": 247,
+      "checks": {
+        "1_pendiente_signo_tesis_|t_NW|>=2.50": false,
+        "2_regla_exceso>0": true,
+        "3_regla_mitades>0": false,
+        "4_regla_costos_x2>0": true,
+        "5_semanas_con_posicion>=52": true,
+        "6_cobertura>=95%": true
+      },
+      "pasa": false
+    },
+    "H-MVRV1": {
+      "slope": 0.022488634314958695,
+      "t_nw": 0.9756296784849781,
+      "n_obs": 244,
+      "horizon_weeks": 4,
+      "nw_lags": 8,
+      "rule_excess_ann": -0.1973688685954985,
+      "rule_h1_ann": -0.5853160728980593,
+      "rule_h2_ann": 0.1874497292207514,
+      "rule_x2_ann": -0.199579394911288,
+      "rule_t_nw_info": -0.9699745498535498,
+      "weeks_with_position": 107,
+      "coverage": 1.0,
+      "weeks": 247,
+      "checks": {
+        "1_pendiente_signo_tesis_|t_NW|>=2.50": false,
+        "2_regla_exceso>0": false,
+        "3_regla_mitades>0": false,
+        "4_regla_costos_x2>0": false,
+        "5_semanas_con_posicion>=52": true,
+        "6_cobertura>=95%": true
+      },
+      "pasa": false
+    }
+  }
+}

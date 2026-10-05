@@ -1,8 +1,8 @@
 # Registro de familias de hipótesis — Trading Alert AI
 
 > Un solo lugar con TODO lo probado, su veredicto y dónde está la evidencia.
-> Actualizado: 2026-10-05 (B4b + tandas B11 y B13).
-> **Saldo: 21 familias probadas con pre-registro → 0 operables.**
+> Actualizado: 2026-10-05 (B4b + tandas B11, B13 y B12).
+> **Saldo: 24 familias probadas con pre-registro → 0 operables.**
 >
 > Regla de uso: una familia cerrada NO se re-abre ni se re-corta. Una variante es una
 > hipótesis NUEVA con su propio pre-registro, y si usa una ventana ya vista se declara
@@ -33,6 +33,9 @@
 | 19 | 2026-10-05 | H-TK1 flujo taker extremo (vela 1d) → contraria | idem | NO PASA: −25.0 %/año, t_NW −1.29, n 244 | idem | idem |
 | 20 | 2026-10-05 | H-REV1 reversión semanal cruzada (perps USDT, quintiles, dollar-neutral) | velas 8 h + funding de 339 perps point-in-time (17.281/17.281 checksums; manifest sha256 fca6c943…87d94df) | NO PASA: −34.0 %/año, t_NW −2.48, DD −86 % | 595d964, d240f72, veredicto | `HIPOTESIS_2026-10-05_B13_factores_cruzados.md` |
 | 21 | 2026-10-05 | H-FND1 funding 7 d como predictor cruzado (long bajo / short alto) | idem | NO PASA: +27.1 %/año pero t_NW 2.26 < 2.50 y 2ª mitad −3.4 %; por año +67/+63/+0.5/+20/−30 % (2020→2024): prima que se apagó | idem | idem |
+| 22 | 2026-10-05 | H-STB1 crecimiento del supply de stablecoins → long BTC/ETH (semanal) | DefiLlama + precios B13, EFFR | NO PASA: pendiente t_NW 1.90 < 2.50; regla +10.8 %/año con 1ª mitad negativa | 1e5af5b, 7c5f321, veredicto | `HIPOTESIS_2026-10-05_B12_flujos.md` |
+| 23 | 2026-10-05 | H-EXF1 flujo neto a exchanges (CoinMetrics) → short | CoinMetrics Community (no point-in-time) | NO PASA: t_NW −0.45 | idem | idem |
+| 24 | 2026-10-05 | H-MVRV1 MVRV extremo → reversión a 4 semanas | CoinMetrics Community | NO PASA: pendiente con signo opuesto (t +0.98); regla −19.7 %/año | idem | idem |
 
 Evaluación previa SIN pre-registro (no cuenta como familia): ramas del carry (B4a, B4b,
 B5, DEX, Ethena, lending) por un agente, commit 62f8905,
@@ -40,6 +43,9 @@ B5, DEX, Ethena, lending) por un agente, commit 62f8905,
 **B4b short Hyperliquid / long Binance**.
 
 ## Ventanas ya vistas (para no contaminar pre-registros futuros)
+
+- **BTC/ETH semanal 2020-01 → 2024-09 con predictores de flujos** (B12, 2026-10-05):
+  supply de stablecoins, flujo neto a exchanges y MVRV ya probados.
 
 - **Cripto 2024-10-01 → 2026-09-30:** usada por H-FC1, H-FC2, H-XS1, H-POS1 y por el agente
   de ramas (incluye Hyperliquid, Bybit, OKX, trimestrales). Cualquier señal cripto sobre
@@ -71,5 +77,7 @@ B5, DEX, Ethena, lending) por un agente, commit 62f8905,
 2. ~~B11 resto~~ → **CERRADA 2026-10-05** (H-OI1, H-TT1b, H-TK1 NO PASAN).
 3. ~~B13 otros factores cruzados~~ → **CERRADA 2026-10-05** (H-REV1 y H-FND1 NO PASAN; OI
    descartado a priori).
-4. **B12 flujos de baja frecuencia**: checkpoint COT 2026-12-07 (ya programado, lag 4);
-   stablecoins (DefiLlama), flujos de ETF, on-chain gratis. Poca potencia estadística.
+4. ~~B12 flujos de baja frecuencia~~ → **CERRADA 2026-10-05** (H-STB1, H-EXF1, H-MVRV1 NO
+   PASAN). Flujos de ETF NO probados (historia en ventana vista, sin API gratis: solo
+   valdría un test hacia adelante). **Sigue en pie: checkpoint COT 2026-12-07 09:00**
+   (tarea `checkpoint-cot-reexperimento`, `--cot-lag-days 4`).
