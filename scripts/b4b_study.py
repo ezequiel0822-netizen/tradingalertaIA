@@ -45,6 +45,10 @@ T0 = pd.Timestamp("2026-10-06 00:00", tz="UTC")   # commit 2026-10-05 05:35 UTC
 T1 = T0 + pd.Timedelta(days=182)                   # 2027-04-06 00:00 UTC
 S1 = pd.Timestamp("2024-10-01 00:00", tz="UTC")
 SEC_EARLIEST = pd.Timestamp("2023-05-01 00:00", tz="UTC")
+# Adenda 1 (antes de correr la secundaria): Hyperliquid liquidó funding cada 8 h hasta
+# 2023-06-08 00:00 UTC y cada hora desde 01:00 (verificado SOLO con marcas de tiempo,
+# BTC y ETH). El §4 modela funding horario -> la secundaria arranca en el régimen horario.
+SEC_HOURLY_FROM = pd.Timestamp("2023-06-08 01:00", tz="UTC")
 LEV = 3.0
 REB_TRIGGER = 0.20
 REB_DELAY = pd.Timedelta(hours=24)
@@ -433,6 +437,12 @@ def align_start(s0_raw: pd.Timestamp, end: pd.Timestamp) -> pd.Timestamp:
     return end - pd.Timedelta(days=7 * weeks)
 
 
+def secondary_start(first_hl: pd.Timestamp, first_bn: pd.Timestamp) -> tuple[pd.Timestamp, pd.Timestamp]:
+    """(S0 crudo, S0 alineado a semanas enteras antes de S1). Adenda 1: régimen horario."""
+    s0_raw = max(first_hl, first_bn, SEC_EARLIEST, SEC_HOURLY_FROM).ceil("D")
+    return s0_raw, align_start(s0_raw, S1)
+
+
 def assert_forward_allowed(now: pd.Timestamp) -> None:
     if now < T1 + pd.Timedelta(days=1):
         raise SystemExit(f"pre-registro §8: la ventana decisoria no se evalúa antes de "
@@ -512,8 +522,7 @@ def secondary(data: Path, report: Path) -> dict:
         f_hl, f_bn = f_hl[f_hl.index <= S1], f_bn[f_bn.index <= S1]
         bn_px = px_frame(pd.read_csv(data / f"bn_klines_1h_{sym}.csv"), "open_time_ms")
         bn_px = bn_px[bn_px.index < S1]
-        s0_raw = max(f_hl.index.min(), bn_px.index.min(), SEC_EARLIEST).ceil("D")
-        s0 = align_start(s0_raw, S1)
+        s0_raw, s0 = secondary_start(f_hl.index.min(), bn_px.index.min())
         grid, gq = build_grid(s0, S1, bn_px, None)
         q = quality_verdict(gq, funding_quality(f_hl, f_bn, s0, S1))
         q.update({"dup_hl_funding": dup_h, "dup_bn_funding": dup_b, "s0_raw": str(s0_raw)})

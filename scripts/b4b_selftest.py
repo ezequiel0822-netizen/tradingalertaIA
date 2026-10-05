@@ -278,6 +278,10 @@ def case_parsing() -> None:
     check("O S0 alineado: S1 − S0 múltiplo de 7 días y corrimiento < 7 días",
           (S.S1 - s0) % pd.Timedelta(days=7) == pd.Timedelta(0)
           and pd.Timedelta(0) <= s0 - pd.Timestamp("2023-05-12", tz="UTC") < pd.Timedelta(days=7))
+    raw, s0b = S.secondary_start(pd.Timestamp("2023-05-12 00:00", tz="UTC"),
+                                 pd.Timestamp("2023-05-01 00:00", tz="UTC"))
+    check("O adenda 1: la secundaria arranca en el régimen horario de HL (S0 2023-06-13)",
+          raw == pd.Timestamp("2023-06-09", tz="UTC") and s0b == pd.Timestamp("2023-06-13", tz="UTC"))
 
 
 def case_guard() -> None:

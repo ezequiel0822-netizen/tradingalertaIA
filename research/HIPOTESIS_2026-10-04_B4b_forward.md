@@ -199,3 +199,24 @@ apalancamientos, otros umbrales, otras monedas u otros venues = pre-registro NUE
 
 Firmado (protocolo): k = 2, un tiro por activo, ventanas y parámetros fijos, umbral
 t ≥ 2.50 (Newey-West), secundaria como requisito.
+
+## Adenda 1 (2026-10-05, ANTES de correr la secundaria; solo se vieron marcas de tiempo)
+
+Al bajar la secundaria (código congelado d9c27a9, 68/68 checksums oficiales OK), el
+chequeo de calidad del §7 mostró 570 "horas faltantes" de funding de Hyperliquid
+(4.7 %). Inspeccionando SOLO las marcas de tiempo (ninguna tasa, ningún precio, ningún
+resultado): **Hyperliquid liquidaba el funding cada 8 h hasta el 2023-06-08 00:00 UTC y
+cada hora desde las 01:00** (81 saltos de 8 h, idénticos en BTC y ETH). En el régimen
+horario faltan solo 3 horas de ~11.300 (2023-07-02 21h, 2023-08-23 21h, 2024-08-15 14h:
+0.03 %). No son datos perdidos: es otra frecuencia de liquidación, que el modelo del §4
+(funding horario) no contempla. Aplicar el gate del 1 % al pie de la letra invalidaría
+ambas secundarias por un tecnicismo de formato, no de calidad.
+
+**Resolución** (bajo la cláusula del §3 "si el funding de HL arranca más tarde, S0 se
+corre y se reporta"): la secundaria arranca en el régimen horario. S0 crudo = primera
+00:00 UTC posterior a 2023-06-08 01:00 = 2023-06-09, alineado a semanas enteras antes de
+S1 → **S0 = 2023-06-13 00:00 UTC** (68 semanas, ambos activos). Todo lo demás sin
+cambios. Implementado como `SEC_HOURLY_FROM` / `secondary_start()` en
+`scripts/b4b_study.py`, con caso nuevo en `scripts/b4b_selftest.py`. Si se hubiera
+aplicado la regla literal, ambas secundarias serían INVÁLIDAS y B4b se cerraría sin
+evaluar.
