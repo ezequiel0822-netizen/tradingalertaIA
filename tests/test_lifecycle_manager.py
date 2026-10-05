@@ -233,3 +233,33 @@ def test_fresh_price_marks_short_at_ask_and_long_at_bid() -> None:
     row = repo_long.fetch_paper_trades(limit=1)[0]
     assert abs(row["latest_price"] - 99.0) < 1e-6  # bid
     assert abs(row["unrealized_return_pct"] - (-1.0)) < 1e-6
+
+
+def test_partial_close_never_loosens_a_trailing_stop() -> None:
+    """Bug 2026-10-05: con el trailing ya activo (stop sobre la entrada), tocar TP1
+    movía el stop de vuelta a breakeven -> lo AFLOJABA. Breakeven solo si ajusta."""
+    repo = _repo()
+    settings = _settings()                                   # trailing stock: +5 % / 3 %
+    _seed(repo, "AMD", 100.0, 95.0, 108.0, 120.0)
+    _set_token_price(repo, "AMD", 106.0)                     # activa trailing: stop 102.82
+    manage_open_positions(settings, repo)
+    row = repo.fetch_paper_trades(limit=1)[0]
+    assert row["trailing_active"] == 1 and row["stop_loss"] > 102.0
+    _set_token_price(repo, "AMD", 108.5)                     # toca TP1 -> parcial
+    manage_open_positions(settings, repo)
+    row = repo.fetch_paper_trades(limit=1)[0]
+    assert row["partial_closed"] == 1
+    assert row["stop_loss"] > 100.0                          # NO vuelve a breakeven
+    assert abs(row["stop_loss"] - 108.5 * 0.97) < 1e-6       # el trailing manda
+
+
+def test_partial_close_never_loosens_short_trailing_stop() -> None:
+    repo = _repo()
+    settings = _settings()
+    _seed(repo, "AMD", 100.0, 105.0, 92.0, 80.0, direction="short")
+    _set_token_price(repo, "AMD", 94.0)                      # +6 % short: stop 96.82
+    manage_open_positions(settings, repo)
+    _set_token_price(repo, "AMD", 91.5)                      # toca TP1 short
+    manage_open_positions(settings, repo)
+    row = repo.fetch_paper_trades(limit=1)[0]
+    assert row["partial_closed"] == 1 and row["stop_loss"] < 100.0

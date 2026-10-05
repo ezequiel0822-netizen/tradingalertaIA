@@ -2,6 +2,7 @@ import json
 import logging
 import time
 from datetime import timedelta
+from typing import Any
 
 from app.alerts.alert_formatter import format_grouped_telegram_alert
 from app.alerts.telegram_notifier import TelegramNotifier

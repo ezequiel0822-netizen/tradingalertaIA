@@ -53,6 +53,11 @@ def test_memecoin_engine_on_runs_all_collectors() -> None:
     forex.collect.assert_called_once()
 
 
-def test_default_is_on_backward_compat() -> None:
-    # El default es True para no cambiarle el comportamiento a nadie.
-    assert _settings().enable_memecoin_engine is True
+def test_default_is_on_backward_compat(monkeypatch) -> None:
+    # El default del CÓDIGO es True para no cambiarle el comportamiento a nadie.
+    # v3.13.1: antes miraba el helper de tests, no load_settings.
+    from app.config.settings import load_settings
+
+    monkeypatch.setattr("app.config.settings.load_dotenv", lambda *a, **k: None)
+    monkeypatch.delenv("ENABLE_MEMECOIN_ENGINE", raising=False)
+    assert load_settings().enable_memecoin_engine is True

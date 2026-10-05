@@ -113,9 +113,15 @@ def manage_open_positions(
                         size_notional * (1 - settings.partial_close_fraction), 4
                     )
                 updates["partial_closed"] = 1
-                # Mover stop a breakeven (entry)
-                updates["stop_loss"] = round(entry, 8)
-                stop = entry
+                # Mover stop a breakeven (entry) SOLO si lo ajusta. v3.13.1: si el
+                # trailing ya lo habia subido sobre la entrada (long) / bajado bajo
+                # la entrada (short), volver a breakeven lo AFLOJABA.
+                tightens = stop is None or (
+                    entry > stop if direction == "long" else entry < stop
+                )
+                if tightens:
+                    updates["stop_loss"] = round(entry, 8)
+                    stop = entry
                 summary["partial_closed"] += 1
                 logger.info(
                     "Partial close TP1: trade_id=%s symbol=%s",

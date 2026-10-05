@@ -1,5 +1,17 @@
 # Changelog
 
+## v3.13.1 (2026-10-05) — auditoría de tests desde cero + bug del trailing aflojado por el cierre parcial
+
+Pedido del user: auditar todos los tests (qué se puede eliminar sin romper nada) y buscar bugs. Método: cobertura por test (`coverage` instalado en una carpeta aparte, el venv del bot intacto), escaneo AST, cada archivo de tests corrido solo (orden), suite con la red bloqueada, `pyflakes` y revisión manual del código de trading con menos cobertura.
+
+- **Bug (lifecycle_manager)**: al tocar TP1 el cierre parcial movía el stop a breakeven SIEMPRE; si el trailing ya lo había subido sobre la entrada (long) o bajado bajo la entrada (short), lo AFLOJABA. Afectaba a los paper trades de acciones (trailing +5 %/3 %; en forex/oro el trailing usa los parámetros de memecoin y no se activa). Ahora breakeven solo si ajusta. +2 tests de regresión (reproducían el bug antes del fix).
+- **Tests que no probaban nada, arreglados**: `test_regime_tags_is_frozen` atrapaba `Exception` y se tragaba su propio `AssertionError` (no podía fallar) → `pytest.raises(FrozenInstanceError)`; `test_memecoin_telegram_default_true_now` afirmaba `in (True, False)`; `test_caps_separated_early_vs_mature` y `test_default_is_on_backward_compat` miraban el helper de tests en vez del código → ahora leen los defaults reales de `load_settings` (sin .env ni entorno).
+- **`.test_dbs` crecía sin límite** (una DB SQLite por test, nunca borrada: ~400 MB en el checkout principal) → `tests/conftest.py` la vacía al terminar la sesión.
+- `from typing import Any` faltante en `jobs.py` (anotación local: no rompía).
+- **Qué NO se eliminó y por qué**: 0 tests duplicados, 0 dependientes del orden, 0 con red. 432 tests no aportan líneas propias de cobertura, pero son variantes que verifican cosas distintas sobre el mismo código (long/short, SL/TP, alias de comandos); borrarlos ahorra segundos y saca protección. Bajo valor pero inofensivos: ~10 tests de constantes o defaults de dataclasses. Cobertura total de `app/` 76 %; lo menos cubierto es el orquestador `jobs.py` (37 %) y los colectores de memecoins (10-20 %, motor apagado).
+- **Hallazgo sin cambiar (decisión del user)**: `realized_pnl_today` no suma la mitad cobrada en TP1 de los trades con cierre parcial → subestima ganancias y hace al kill-switch un poco más sensible (lado conservador; no se tocó un mecanismo de seguridad sin pedido).
+- **829 tests verdes.**
+
 ## v3.13.0 (2026-10-05) — Agente IA en sandbox demo: decide, opera en MT5 demo y aprende practicando
 
 Pedido del user: "una IA que opere sola, que aprenda mientras practica y meta trades". Se construyó en DEMO con las reglas del proyecto: opt-in OFF (`ENABLE_AI_AGENT=false`), soft-fail, real-money HARDCODED bloqueado, `order_send` solo en `mt5_demo_trader.py`. Cambia una regla de diseño **solo para el agente**: hasta acá la IA/ML solo restaban; el agente decide ejecutar (en demo, con límites duros).

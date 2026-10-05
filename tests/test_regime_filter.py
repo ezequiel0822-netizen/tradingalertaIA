@@ -96,9 +96,12 @@ def test_classify_only_uses_data_up_to_n() -> None:
 
 
 def test_regime_tags_is_frozen() -> None:
+    # v3.13.1: antes atrapaba `Exception` -> se tragaba su propio AssertionError y
+    # no podia fallar nunca.
+    import dataclasses
+
+    import pytest
+
     tags = RegimeTags(regime_trend="up", regime_vol="low")
-    try:
+    with pytest.raises(dataclasses.FrozenInstanceError):
         tags.regime_trend = "down"  # type: ignore[misc]
-        raise AssertionError("RegimeTags deberia ser inmutable")
-    except (AttributeError, Exception):
-        pass

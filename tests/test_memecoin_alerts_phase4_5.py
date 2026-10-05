@@ -147,15 +147,29 @@ def test_force_gate_off_when_setting_false() -> None:
     assert "disabled" in reason
 
 
-def test_memecoin_telegram_default_true_now() -> None:
-    """v2.4.0: el default cambio, memecoin Telegram esta ON salvo override .env."""
-    settings = _settings()
-    assert settings.enable_memecoin_telegram in (True, False)  # depende de helper test
+def test_memecoin_telegram_default_true_now(monkeypatch) -> None:
+    """v2.4.0: el default del CÓDIGO es ON (salvo override en .env). v3.13.1: antes
+    afirmaba `in (True, False)`, que no puede fallar."""
+    settings = _code_defaults(monkeypatch, "ENABLE_MEMECOIN_TELEGRAM")
+    assert settings.enable_memecoin_telegram is True
 
 
-def test_caps_separated_early_vs_mature() -> None:
-    """Verifica que existen settings separados para early vs mature."""
-    settings = _settings()
+def test_caps_separated_early_vs_mature(monkeypatch) -> None:
+    """Defaults separados early vs mature, leídos del CÓDIGO (antes miraba el helper)."""
+    settings = _code_defaults(
+        monkeypatch, "MAX_EARLY_MEMECOIN_ALERTS_PER_24H",
+        "MAX_MATURE_MEMECOIN_ALERTS_PER_24H", "MAX_EARLY_MEMECOIN_ALERTS_PER_RUN",
+    )
     assert settings.max_early_memecoin_alerts_per_24h == 3
     assert settings.max_mature_memecoin_alerts_per_24h == 2
     assert settings.max_early_memecoin_alerts_per_run == 1
+
+
+def _code_defaults(monkeypatch, *env_keys):
+    """Settings con los defaults del CÓDIGO (sin .env ni variables de entorno)."""
+    from app.config.settings import load_settings
+
+    monkeypatch.setattr("app.config.settings.load_dotenv", lambda *a, **k: None)
+    for key in env_keys:
+        monkeypatch.delenv(key, raising=False)
+    return load_settings()

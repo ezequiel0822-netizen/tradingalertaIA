@@ -336,7 +336,7 @@ def test_agent_off_by_default(monkeypatch) -> None:
     for k in ("ENABLE_AI_AGENT", "APP_VERSION"):
         monkeypatch.delenv(k, raising=False)
     s = load_settings()
-    assert s.enable_ai_agent is False and s.app_version == "v3.13.0"
+    assert s.enable_ai_agent is False and s.app_version.startswith("v3.13")
 
 
 def test_ml_low_confidence_halves_lot_without_crashing(monkeypatch) -> None:
