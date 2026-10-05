@@ -100,3 +100,27 @@ liquidaciones con rebote), con H-TT1 la menos (el "dinero informado" de un ranki
 - BTC aporta ~2 meses más de trades que ETH.
 
 Firmado (protocolo): k = 3, un tiro por hipótesis, ventana fija, umbral t ≥ 2.50 (NW).
+
+## Adenda 1 (2026-10-05; después de la primera corrida, ANTES de evaluar H-TT1b)
+
+Datos: 2.700/2.700 checksums oficiales OK (código congelado dd9e59d). La primera corrida
+dio H-OI1 exceso −4.6 %/año (t_NW −0.31, n 166), H-TK1 −25.0 %/año (t_NW −1.29, n 244) y
+H-TT1 INVÁLIDA (cobertura 69 %, 0 trades). Verificado sobre el dataset completo:
+
+a) **La fuente trae vacías ("") las columnas de top traders** (y el taker de `metrics`)
+   en 2021-12-31 → 2022-01-29, 2022-01-31 → 2022-05-27 y 2022-06-25 → 2022-12-14, en BTC
+   y ETH (comprobado abriendo los crudos de 2022-03-01 y 2022-08-01). No es un error de
+   parseo: H-TT1 queda INVÁLIDA bajo este pre-registro. **Ningún trade ni estadística de
+   top traders se calculó.**
+b) **Bug de limpieza:** hay registros con `sum_open_interest` = 0 (imposible; 448 en BTC,
+   184 en ETH), y en 5 días el cierre es 0 (BTC 2022-03-07, 2024-07-13, 2024-07-14; ETH
+   2022-03-07, 2024-07-10). ln(0) = −∞ disparó trades sobre basura y anuló ~90 días de z
+   después de cada caso. **Corrección:** valores ≤ 0 se tratan como faltantes antes de
+   tomar el último registro del día (vale para cualquier columna de stock). H-OI1 se
+   vuelve a correr; se reportan ambos resultados y el veredicto usa el corregido.
+c) **H-TT1b (hipótesis nueva, misma regla que H-TT1):** ventana decisoria
+   **2022-12-15 → 2024-10-01**, el único tramo continuo con la columna completa en ambos
+   símbolos (el z se calienta dentro del tramo: opera cuando hay 60 días válidos). Mismos
+   criterios del §5, con la mitad calendario de esta ventana. Como H-TT1 nunca produjo un
+   número, la tanda sigue con 3 evaluaciones efectivas (H-OI1, H-TK1, H-TT1b) y umbral
+   t ≥ 2.50.

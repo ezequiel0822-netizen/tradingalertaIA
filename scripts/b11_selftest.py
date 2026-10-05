@@ -39,6 +39,25 @@ def case_daily_stock() -> None:
     check("1 valor diario = registro de las 00:00 del día siguiente (cierra el día)",
           v.loc[d0] == 287.0, str(v.head(3).to_dict()))
     check("1 día con < 144 registros -> NaN", np.isnan(v.loc[d0 + DAY]) and cnt.loc[d0 + DAY] == 88)
+    mz = five_min("2022-01-01", 2, lambda i: i + 1.0)
+    mz.loc[mz.index[287], "oi"] = 0.0             # cierre del día 0 en 0 (imposible)
+    vz, cz = P.daily_stock(mz, "oi")
+    check("1 adenda 1b: OI <= 0 = faltante; el día cierra con el último registro válido",
+          vz.loc[d0] == 287.0 and cz.loc[d0] == 287)
+
+
+def case_tt1b_window() -> None:
+    orig = P.W0
+    try:
+        P.W0 = P.TT1B_W0
+        b = synthetic_books(True, 9)
+        r = P.run_hypothesis("H-TT1", b)
+        trs = P.trades_for(b["BTCUSDT"]["sig"]["H-TT1"]["side"], b["BTCUSDT"]["close"])
+        ok = (P.W0 == pd.Timestamp("2022-12-15", tz="UTC") and min(t["entry"] for t in trs) >= P.TT1B_W0
+              and r["days"] == (P.W1 - P.TT1B_W0).days)
+    finally:
+        P.W0 = orig
+    check("12 adenda 1c: H-TT1b opera solo en 2022-12-15 -> 2024-10-01", ok)
 
 
 def case_zscore_no_lookahead() -> None:
@@ -194,7 +213,7 @@ def case_parsing() -> None:
 def main() -> int:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     for fn in (case_daily_stock, case_zscore_no_lookahead, case_trades_and_book, case_signal_directions,
-               case_end_to_end, case_parsing):
+               case_end_to_end, case_parsing, case_tt1b_window):
         try:
             fn()
         except Exception as e:  # noqa: BLE001

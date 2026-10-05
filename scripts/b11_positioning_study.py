@@ -39,6 +39,7 @@ import b4b_study as B  # noqa: E402  (nw_t, effr_download, norm_funding, verific
 PREREG = "research/HIPOTESIS_2026-10-05_B11_posicionamiento.md @ e80f809"
 W0 = pd.Timestamp("2021-12-01", tz="UTC")
 W1 = pd.Timestamp("2024-10-01", tz="UTC")
+TT1B_W0 = pd.Timestamp("2022-12-15", tz="UTC")     # adenda 1c (fuente sin top traders antes)
 METRICS_FROM = {"BTCUSDT": pd.Timestamp("2020-09-01", tz="UTC"),
                 "ETHUSDT": pd.Timestamp("2021-12-01", tz="UTC")}
 METRICS_TO = pd.Timestamp("2024-09-30", tz="UTC")
@@ -181,6 +182,7 @@ def daily_stock(m: pd.DataFrame, col: str) -> tuple[pd.Series, pd.Series]:
     ts = B.utc_index(m["ts_ms"].astype("int64"))
     day = (ts - pd.Timedelta(seconds=1)).floor("D")
     s = pd.Series(m[col].astype(float).to_numpy(), index=ts)
+    s = s.where(s > 0)          # adenda 1b: OI o ratio <= 0 es imposible -> faltante
     g = s.groupby(day)
     last, cnt = g.last(), g.count()
     return last.where(cnt >= MIN_RECORDS), cnt
@@ -349,20 +351,37 @@ def study(data: Path, report: Path) -> dict:
     return out
 
 
+def study_tt1b(data: Path, report: Path) -> dict:
+    """Adenda 1c: H-TT1b = regla de H-TT1 en 2022-12-15 -> 2024-10-01."""
+    global W0
+    W0 = TT1B_W0
+    report.mkdir(parents=True, exist_ok=True)
+    r = run_hypothesis("H-TT1", load_books(data))
+    log(f"H-TT1b: PASA={r['pasa']} exceso {r['excess_ann']:+.4f} t_NW {r['t_nw']} n {r['n_trades']} "
+        f"cov {r['coverage']}")
+    out = {"prereg": PREREG + " (adenda 1c)", "window": f"{W0:%Y-%m-%d} -> {W1:%Y-%m-%d}",
+           "generated_utc": str(pd.Timestamp.now(tz="UTC")), "results": {"H-TT1b": r}}
+    (report / "b11_tt1b_result.json").write_text(json.dumps(out, indent=2, default=str), encoding="utf-8")
+    return out
+
+
 def main() -> int:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # consola cp1252
     ap = argparse.ArgumentParser(description="B11 (pre-registro e80f809)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     a = sub.add_parser("download")
     a.add_argument("--out", type=Path, required=True)
-    b = sub.add_parser("study")
-    b.add_argument("--data", type=Path, required=True)
-    b.add_argument("--report", type=Path, required=True)
+    for name in ("study", "study-tt1b"):
+        b = sub.add_parser(name)
+        b.add_argument("--data", type=Path, required=True)
+        b.add_argument("--report", type=Path, required=True)
     args = ap.parse_args()
     if args.cmd == "download":
         download(args.out)
-    else:
+    elif args.cmd == "study":
         study(args.data, args.report)
+    else:
+        study_tt1b(args.data, args.report)
     return 0
 
 
