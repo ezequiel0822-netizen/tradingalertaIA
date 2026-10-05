@@ -239,7 +239,7 @@ Detalle completo en CHANGELOG. Todo informativo + captura para research; ningún
 - **VWAP gate** (`ENABLE_VWAP_GATE=false`): downward-only, molde del regime gate, VWAP semanal del cache D1 MT5. Opt-in OFF.
 - **`/claude_analyze SYMBOL`** (alias `/analisis_llm`): análisis técnico narrado por LLM (VWAP+velas+Hurst+noticias), a demanda, transporte Claude u Ollama, gated por `ENABLE_LLM_ADVISOR`. Analista secundario: jamás señales.
 
-## 2.10 Research fuera del vehículo (9-jul → 4-oct-2026): 15 familias, 0 operables
+## 2.10 Research fuera del vehículo (9-jul → 5-oct-2026): 24 familias, 0 operables
 
 Registro completo (fecha, datos, veredicto, commits, ventanas ya vistas): **`research/LEDGER_FAMILIAS.md`**.
 - **H-M1** (9-jul): trend multi-asset D1 vía CFD → NO PASA; agota el vehículo CFD/MT5/D1.
@@ -248,7 +248,13 @@ Registro completo (fecha, datos, veredicto, commits, ventanas ya vistas): **`res
 - **H-FC1** (4-oct): funding carry BTC/ETH → 3-3.5 %/año vs EFFR 4.04 % → NO PASA (prima arbitrada).
 - **Tanda cripto k=3** (4-oct): H-FC2 carry altcoins (−12 % CAGR), H-XS1 momentum cruzado (crash en la 2ª mitad), H-POS1 posicionamiento (t 0.69) → las tres NO PASAN.
 - **Ramas del carry** (agente, sin pre-registro): todo ≈ tasa libre; único candidato dudoso **B4b** short Hyperliquid / long Binance. Su ventana ya quedó vista → solo vale un test hacia adelante.
-- **Pendiente** (plan detallado en PROXIMOS_PASOS.md): B4b paper hacia adelante, B11 resto (OI/top traders/taker), B13 otros factores cruzados (ventana 2020 → 2024-09), B12 flujos de baja frecuencia + checkpoint COT del 7-dic.
+- **5-oct — plan B4b/B11/B13/B12 ejecutado completo (familias 16-24), las nueve NO PASAN:**
+  - **B4b** short Hyperliquid / long Binance (3x): NO PASA la secundaria 2023-06 → 2024-09 solo por la t Newey-West (BTC 2.34, ETH 2.46 < 2.50) con exceso +9.1 %/año, DD ≤ 2.8 % y 0 liquidaciones. Near-miss; el spread ya se comprimió. El forward no se corre.
+  - **B11** OI / top traders (H-TT1b) / flujo taker en BTC/ETH: |t| ≤ 1.3. La fuente no trae top traders en 2022; bug de OI = 0 corregido y declarado.
+  - **B13** alts 2020-2024 (339 perps point-in-time): reversión semanal −34 %/año; funding como predictor +27 %/año pero t 2.26 y 2ª mitad negativa (+67 % en 2020 → −30 % en 2024).
+  - **B12** stablecoins / flujo a exchanges / MVRV como predictores semanales: t ≤ 1.9. ETF flows no testeables honestamente hoy.
+  - **Lectura transversal:** lo único cerca del umbral fueron primas de funding/carry que existieron y se arbitraron; las señales direccionales sobre información pública no muestran nada. Detalle: `research/LEDGER_FAMILIAS.md`.
+- **Sigue en pie:** checkpoint COT del **2026-12-07 09:00** (`--cot-lag-days 4`). El bot estaba APAGADO al 5-oct (DB cerrada el 4-oct 13:44): re-arrancar con `.\start_bot.ps1`.
 
 ## 3. La verdad de fondo (la filosofía del proyecto)
 

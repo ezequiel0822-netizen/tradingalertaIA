@@ -57,12 +57,35 @@
 > long Binance). **Registro único con todas las familias, commits y ventanas ya vistas:
 > `research/LEDGER_FAMILIAS.md`.** Main = origin/main en 13a3733 antes de este cierre.
 >
+> **⚠️ 5-oct-2026 — plan B4b/B11/B13/B12 EJECUTADO COMPLETO: 24 familias con pre-registro, 0
+> operables.** Cada tanda: pre-registro commiteado antes de bajar datos → código congelado y
+> verificado con datos sintéticos → un tiro → veredicto + fila en el ledger.
+> - **B4b** (short Hyperliquid / long Binance, 3x): NO PASA la secundaria 2023-06 → 2024-09
+>   SOLO por la t Newey-West (BTC 2.34, ETH 2.46 < 2.50); exceso +9.1 %/año, DD ≤ 2.8 %, 0
+>   liquidaciones. Near-miss honesto, y el spread ya se comprimió (~10.5 pp → ~2-4 pp). El
+>   forward NO se corre; el colector `scripts/b4b_forward_collector.py` queda sin programar.
+> - **B11** (OI, top traders, taker; BTC/ETH 2021-12 → 2024-09): las tres NO PASAN (|t| ≤ 1.3).
+>   La fuente no trae top traders en 2022 (H-TT1 inválida → H-TT1b en 2022-12 → 2024-09).
+>   Bug de OI = 0 encontrado, corregido y declarado (no cambió nada).
+> - **B13** (alts 2020-01 → 2024-09, 339 perps point-in-time): reversión semanal −34 %/año;
+>   funding como predictor +27 %/año pero t 2.26 y 2ª mitad negativa (+67 % 2020 → −30 % 2024).
+> - **B12** (stablecoins, flujo a exchanges, MVRV; semanal): las tres NO PASAN (t ≤ 1.9). ETF
+>   flows no probados (historia en ventana vista, sin API gratis).
+> - Lectura transversal en `research/LEDGER_FAMILIAS.md`: lo único cerca del umbral fueron
+>   primas de funding/carry que existieron y se arbitraron; lo direccional no mostró nada.
+> - **Bot:** al 5-oct 00:20 local NO había ningún `main.py` corriendo; la DB se cerró limpia
+>   el 4-oct 13:44. Re-arrancar con `.\start_bot.ps1` (verificar antes que no haya otro).
+>
 > **📅 CHECKPOINT COT: 2026-12-07 09:00** (tarea programada `checkpoint-cot-reexperimento`).
 > Comando decisivo: `python scripts/cot_ml_experiment.py --cot-lag-days 4` (lag 3 solo como
 > comparación con junio). Barra pre-registrada (sin mover): corte FX/oro TimeSeriesSplit
 > OOS ≥ 0.55 robusto Y Δ del COT ≥ +0.03. Si no la cruza: ML sigue OFF.
 >
-> ### 🔜 PLAN PENDIENTE para el chat nuevo (pedido del user: "sigue B11/B12/B13 y el paper de la rama")
+> ### ✅ PLAN (4-oct) para el chat nuevo — EJECUTADO COMPLETO el 5-oct (ver bloque de arriba y el ledger)
+>
+> Se conserva como registro de lo que se pidió:
+>
+> #### (histórico) PLAN PENDIENTE (pedido del user: "sigue B11/B12/B13 y el paper de la rama")
 >
 > Reglas para TODO lo de abajo: research-only (no toca el bot, ni flags, ni MT5, ni .env);
 > pre-registro commiteado ANTES de bajar datos; código congelado y verificado con datos

@@ -37,6 +37,19 @@
 | 23 | 2026-10-05 | H-EXF1 flujo neto a exchanges (CoinMetrics) → short | CoinMetrics Community (no point-in-time) | NO PASA: t_NW −0.45 | idem | idem |
 | 24 | 2026-10-05 | H-MVRV1 MVRV extremo → reversión a 4 semanas | CoinMetrics Community | NO PASA: pendiente con signo opuesto (t +0.98); regla −19.7 %/año | idem | idem |
 
+## Lectura transversal (2026-10-05, 24 familias)
+
+- Lo único que se acercó al umbral fueron **primas estructurales de funding/carry**: B4b
+  (t 2.34/2.46 en 2023-24), H-FND1 (t 2.26, +67 % en 2020 → −30 % en 2024) y H-FC1 (prima
+  real, ya debajo de la tasa libre). Las tres cuentan la misma historia: existieron cuando
+  el apalancamiento minorista era caro y se arbitraron (ETF, basis trade, Ethena).
+- Las **señales direccionales** sobre información pública (posicionamiento, OI, flujo
+  taker, top traders, stablecoins, flujos on-chain, MVRV, COT, estacionalidad, trend,
+  microestructura neta de costos) no mostraron nada: |t| ≤ 1.9.
+- Implicancia: más familias del mismo tipo sobre las mismas fuentes públicas tienen
+  probabilidad previa muy baja. Lo único con sentido es un test HACIA ADELANTE de una
+  prima estructural nueva, con su propio pre-registro, nunca un re-corte de las cerradas.
+
 Evaluación previa SIN pre-registro (no cuenta como familia): ramas del carry (B4a, B4b,
 B5, DEX, Ethena, lending) por un agente, commit 62f8905,
 `EVALUACION_RAMAS_CARRY_2026-10-04.md`. Todo ≈ tasa libre o debajo; único candidato dudoso:
@@ -46,7 +59,6 @@ B5, DEX, Ethena, lending) por un agente, commit 62f8905,
 
 - **BTC/ETH semanal 2020-01 → 2024-09 con predictores de flujos** (B12, 2026-10-05):
   supply de stablecoins, flujo neto a exchanges y MVRV ya probados.
-
 - **Cripto 2024-10-01 → 2026-09-30:** usada por H-FC1, H-FC2, H-XS1, H-POS1 y por el agente
   de ramas (incluye Hyperliquid, Bybit, OKX, trimestrales). Cualquier señal cripto sobre
   esa ventana es IN-SAMPLE. En particular, cualquier señal de retornos cruzados (reversión,

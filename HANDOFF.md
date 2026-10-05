@@ -6,7 +6,58 @@
 
 ---
 
-## Prompt VIGENTE para el chat nuevo (4-oct-2026) — usá ESTE
+## Prompt VIGENTE para el chat nuevo (5-oct-2026) — usá ESTE
+
+```
+Retomamos Trading Alert AI (bot de trading LOCAL, Python 3.12, Windows, repo en
+C:/Users/LENOVO/tradingalertaIA, venv en .venv). Estado al 5-oct-2026: v3.12.0, 808 tests
+verdes. Demo MT5 NUEVA (MetaQuotes-Demo, ~3.000 USD). OJO: al 5-oct el bot estaba APAGADO
+(DB cerrada el 4-oct 13:44): verificar que no haya ningún main.py y pedirle al user que lo
+arranque con start_bot.ps1 (pide contraseña; no lo arranques vos).
+Research: 24 familias de hipótesis probadas con pre-registro → 0 operables.
+
+Leé ANTES de tocar nada: research/LEDGER_FAMILIAS.md (las 24 familias, commits, ventanas
+ya vistas y la "Lectura transversal"), PROXIMOS_PASOS.md (bloque del 5-oct), RESUMEN_COMPLETO.md
+(§2.8-§2.10) y la memoria de Claude.
+
+ESTADO: el plan del 4-oct (B4b, B11, B13, B12) se ejecutó COMPLETO el 5-oct; nada quedó
+abierto. B4b NO PASÓ su chequeo secundario (solo por la t Newey-West: 2.34/2.46 < 2.50) →
+el forward NO se corre y su colector NO se programa. Lo único cerca del umbral en 24
+familias fueron primas de funding/carry que existieron y se arbitraron; las señales
+direccionales sobre información pública no mostraron nada.
+
+LO QUE SIGUE: (1) checkpoint COT ya programado para el 2026-12-07 09:00 (tarea
+checkpoint-cot-reexperimento, --cot-lag-days 4); (2) preguntarle al user qué quiere: NO
+abrir familias nuevas por defecto ni re-cortar las cerradas (B4b y H-FND1 fueron near-miss:
+re-correrlas con otra t, otra ventana u otros parámetros sería dredging).
+
+PROTOCOLO (no negociable): pre-registro commiteado ANTES de bajar datos; código congelado y
+verificado con datos sintéticos ANTES de correr; k declarado, umbral t ≥ 2.50 (Newey-West
+cuando hay autocorrelación o solapamiento); manifest con checksums; NUNCA usar como decisoria
+una ventana marcada como vista en el ledger; diagnósticos post-hoc rotulados; si no pasa, la
+familia se cierra sin re-cortes; adendas (bugs, formatos de la fuente) se commitean ANTES de
+volver a correr y se reportan ambos resultados. Verificar sobre el dataset completo antes de
+afirmar algo (ej. "sin huecos").
+
+REGLAS DEL PROYECTO: real-money BLOQUEADO (ENABLE_REAL_TRADING=false HARDCODED; el user lo
+pide seguido, la respuesta es no); order_send solo en app/brokers/mt5_demo_trader.py; LLM/ML
+solo restan (vetar/bajar a paper); todo lo nuevo opt-in OFF + soft-fail; el research NO toca
+el bot, flags, MT5 ni el .env; nunca leer/mostrar el .env ni secrets (cambios al .env = darle
+al user comandos de PowerShell); al tocar Settings sincronizar tests/test_score._settings() y
+tests/test_alert_rules._settings(); versionado patch/minor sin saltos; el push a main lo hace
+el user; una sola instancia del bot a la vez (verificar que no haya dos main.py).
+
+Gotchas: pandas 3 del venv usa datetime64[us]; klines de Binance mezclan archivos con y sin
+encabezado (normalizar por archivo); spot 2025+ en µs; `metrics` de Binance trae vacías las
+columnas de top traders en 2022 y registros con OI = 0; Hyperliquid liquidaba funding cada
+8 h hasta 2023-06-08; FRED corta la conexión → EFFR del NY Fed; Yahoo 429 → UA Mozilla;
+consola cp1252 → sys.stdout.reconfigure(encoding="utf-8"). Los scripts de
+research/ramas_carry_scripts/ NO están revisados.
+```
+
+---
+
+## Prompt del 4-oct-2026 (histórico: ese plan se ejecutó completo el 5-oct)
 
 ```
 Retomamos Trading Alert AI (bot de trading LOCAL, Python 3.12, Windows, repo en
