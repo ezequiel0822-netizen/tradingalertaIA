@@ -1,18 +1,18 @@
-# Trading Alert AI v3.11.0
+# Trading Alert AI v3.14.0
 
 Trader engine algoritmico **local** (Python 3.12, Windows) enfocado **100% a LA BOLSA** (acciones US + forex + oro). Observa datos publicos, guarda historial en SQLite, decide entradas/salidas con un strategy router swing, opera paper trades simulados, aprende del P&L realizado neto de costos, y puede enviar ordenes **solo a cuenta MT5 demo** (con confirmacion manual o auto-confirmacion opt-in).
 
 **Real-money trading sigue bloqueado por design.** `enable_real_trading` es `False` HARDCODED en `settings.py` (ya no se lee del env), y la barrera real es `_is_demo_account()` en `mt5_demo_trader.py` (rechaza cualquier cuenta no-demo). El sistema no es recomendacion financiera: filtra candidatos, simula y aprende para revision manual.
 
-## Estado actual (v3.11.0, jul-2026)
+## Estado actual (v3.14.0, oct-2026)
 
-- **721 tests verdes.** Corriendo en la Lenovo contra MT5 demo via `.\start_bot.ps1`.
-- **Búsqueda de edge CERRADA (jul-2026): 9 hipótesis con rigor (pre-registro/holdout/Bonferroni), 0 tradeables.** El promotion gate tiene TODAS las estrategias en SHADOW → cero órdenes a MT5 (protección, no bug). Detalle: `RESUMEN_COMPLETO.md` §2.8, `research/HIPOTESIS_*.md`, `exports/INFORME_PROYECTO_2026-07.xlsx`.
-- **REFOCUS v3.7.0 — 100% LA BOLSA.** Las **memecoins se cortaron** (`ENABLE_MEMECOIN_ENGINE=false`; el user tiene un bot aparte) y el **scalping se apago**. Acciones son paper-only; solo forex/oro ejecutan a MT5 demo.
-- **Protecciones vivas (todas downward-only, solo bajan a paper):** calendar gate, cap de exposicion neta USD, cooldown por simbolo, exit shadow (registrando), **regime gate** (`ENABLE_REGIME_GATE`) y **COT collector** (`ENABLE_COT_COLLECTOR`, + backfill de 5 años / 2340 filas en `cot_snapshots`).
-- **NO hay edge probado** — confirmado por multiples vias independientes (backtest D1, diagnostico vivo = regimen, ML AUC 0.533, CV temporal 0.475 OOS, walk-forward por slice). El gate de data de Fase D se cruzo (403/400) pero NO destrabo edge.
-- **Experimento de COT (2026-06-21, `scripts/cot_ml_experiment.py`):** se derivaron features de COT sobre los 5 anios de historia y se re-corrio el test temporal del ML. Veredicto: **sin senial accionable** (test primario TimeSeriesSplit OOS 0.533 < 0.55; corte FX/oro 0.585→0.607 pero dentro del ruido en n=178 sobre ~1 mes). `ENABLE_ML_PREDICTOR` sigue OFF; re-correr el script cuando el COT acumule mas meses.
-- Lo mas valioso ahora: **dejar correr el libro vivo + que el COT acumule** (es lo que destraba el proximo experimento real). El edge se DESCUBRE (informacion nueva), no se inyecta.
+- **864 tests verdes.** Corriendo en la Lenovo contra MT5 demo (MetaQuotes-Demo, ~3.000 USD desde el 4-oct-2026) via `.\start_bot.ps1`. Una sola instancia a la vez.
+- **Research: 26 familias de hipótesis probadas, 0 operables** (la última, H-FADE1 del 6-oct: operar el reverso de las señales del bot tampoco sirve; el bruto es ≈ 0 en ambas direcciones y se pierde el costo).** Cada familia con pre-registro commiteado antes de mirar datos, código verificado con datos sintéticos, k declarado y umbral t ≥ 2.50 (Newey-West). Registro único: `research/LEDGER_FAMILIAS.md` (incluye la "Lectura transversal" y las ventanas ya vistas).
+- **Agente IA en sandbox demo** (v3.13.0, v2 en v3.14.0; opt-in `ENABLE_AI_AGENT`): decide ejecutar, explorar o no operar cada candidato forex/oro en MT5 DEMO y aprende de todos (Thompson sampling). Evaluación pre-registrada desde el 2027-01-11 (`research/AGENTE_IA_V2_PREREGISTRO_2026-10-06.md`); predicción declarada: NO PASA. Ver la sección "Agente IA".
+- **REFOCUS v3.7.0 — 100% LA BOLSA.** Memecoins cortadas (`ENABLE_MEMECOIN_ENGINE=false`; el user tiene un bot aparte), scalping apagado. Acciones paper-only; solo forex/oro llegan a MT5 demo.
+- **Protecciones vivas (downward-only):** calendar gate, cap de exposición neta USD, cooldown por símbolo, exit shadow, regime gate, VWAP gate y COT collector. Promotion gate: todas las estrategias con muestra en SHADOW (cero órdenes por el camino normal); el agente decide por su cuenta pero mantiene los gates de RIESGO.
+- **NO hay edge probado.** Más actividad sin edge = más pérdida esperada en la demo. Real-money bloqueado por código (`/readiness` lista los gates).
+- Cuidado conocido: el cache D1 de MT5 (`mt5_historical_cache`) no lo refresca el loop vivo y está congelado desde el 2026-06-15 (el regime/VWAP gate hacen soft-allow; el agente v2 lee el D1 de MT5 en vivo). Las épocas de MT5 están en hora del SERVIDOR (EET), no UTC.
 
 ## Que hace
 
@@ -34,6 +34,7 @@ Trader engine algoritmico **local** (Python 3.12, Windows) enfocado **100% a LA 
 - Envia Telegram solo con los mejores candidatos y responde 40+ comandos.
 - Escribe memoria diaria y reporte semanal automatico en Obsidian.
 - Prepara y ejecuta ordenes demo MT5 con SL/TP obligatorio.
+- **Agente IA en sandbox demo** (`app/ai_agent/`, opt-in): decide y aprende practicando sobre los candidatos forex/oro (ver abajo).
 
 ## Que NO hace
 
@@ -59,7 +60,7 @@ Copia `.env.example` como referencia y pon los valores reales solo en `.env`. Va
 # Obligatorias
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_CHAT_ID=
-# APP_VERSION: NO pinear (el default vive en settings.py = v3.11.0). Si se pinea, pisa al codigo.
+# APP_VERSION: NO pinear (el default vive en settings.py = v3.14.0). Si se pinea, pisa al codigo.
 
 # MT5 (read + demo). Credenciales reales SOLO en tu .env.
 ENABLE_MT5_READER=true
@@ -117,6 +118,11 @@ ML_GATE_MIN_SAMPLES=400
 ENABLE_LEARNED_WEIGHTS=false
 ENABLE_LEARNING_GATE=false
 
+# Agente IA en sandbox demo (v3.13.0 / v2 en v3.14.0). Opt-in. Ver "Agente IA".
+ENABLE_AI_AGENT=false
+AI_AGENT_VERSION=1
+AI_AGENT_EXPLORE_PCT=0.0
+
 OBSIDIAN_VAULT_PATH=obsidian/tradingbot v.1
 ```
 
@@ -160,6 +166,9 @@ streamlit run app/dashboard/streamlit_app.py
 # Trader engine
 /portfolio       /posiciones      /strategies
 /halt [horas]    /resume_trading  /pausar          /reanudar       /mode
+
+# Agente IA (sandbox demo)
+/agente
 
 # Aprendizaje
 /aprendizaje     /entrenar        /expectancy      /edge            /gate_preview
@@ -279,6 +288,17 @@ Capa de Machine Learning que COMPLEMENTA las reglas (no las reemplaza): predice 
 
 Encuadre honesto: el ML esta **DORMIDO** y `ENABLE_ML_PREDICTOR` sigue OFF — no toca ninguna decision. No crea edge; es andamiaje. **Actualizado (v3.x):** `rsi`/`atr` al entry SI se persisten desde v2.11.0; el gate de data de Fase D se cruzo (403/400), pero el ML sobre los features actuales NO mostro senial forward (CV temporal AUC 0.475 OOS) y el experimento de COT del 21-jun tampoco la levanto sobre la barra (`scripts/cot_ml_experiment.py`, ver "Estado actual"). Se re-evalua cuando el COT acumule mas meses. Requiere `xgboost` + `scikit-learn`.
 
+## Agente IA en sandbox demo (v3.13.0, v2 en v3.14.0)
+
+Excepción acotada a la regla "la IA solo resta": SOLO en demo, con límites duros y evaluación pre-registrada.
+
+- **Qué hace**: para cada candidato forex/oro de las estrategias decide EJECUTAR en MT5 demo, EXPLORAR (v2, riesgo reducido) o NO OPERAR, con regresión lineal bayesiana + Thompson sampling. Aprende de TODOS los candidatos con el R de su paper trade (información completa: ejecutar más no lo hace aprender más rápido).
+- **v2** (`AI_AGENT_VERSION=2`): 24 features (las 16 de v1 + evento económico cercano, COT as-of, costo/riesgo, día y hora, racha de la estrategia), D1 de MT5 en vivo para régimen/VWAP, ajuste de realismo con el P&L REAL de MT5 de sus órdenes (solo lectura), `policy_tag` por decisión. Modelo aparte (`ai_agent_model_v2`).
+- **Exploración** (`AI_AGENT_EXPLORE_PCT`, solo v2): de lo que el modelo saltearía, ejecuta esa fracción a `AI_AGENT_EXPLORE_RISK_PCT` (0.10 %), ≤ 3 por día y stop propio −2R. Sin edge, cuesta (pre-registro §5).
+- **Límites**: ≤ 0.5 % por orden, ≤ 3 abiertas, ≤ 6 por día, stop diario −3R; mantiene calendario, cap USD y halt. Magic MT5 250501. Real-money bloqueado por código.
+- **Herramientas**: `/agente`; `python scripts/ai_agent_warmstart.py --version 2 --mt5-d1 [--apply]` (arranque en caliente, con el bot apagado); `python scripts/ai_agent_report.py` (solo lectura; `--evaluate` corre el criterio pre-registrado y se niega antes del 2027-01-11).
+- **No tocar** `AI_AGENT_PRIOR_VAR` / `AI_AGENT_NOISE_VAR`: cambiarlos descarta el modelo aprendido. Cambiar cualquier parámetro cambia el `policy_tag` y saca esas decisiones de la evaluación.
+
 ## Base de datos
 
 SQLite en `SQLITE_PATH` (default `trading_alert_ai.db` en la raiz). Mantenela en un disco local fuera de iCloud/OneDrive: la sync genera contencion de I/O que ralentiza el bot y los tests y arriesga corrupcion. El schema se crea/migra solo via `_ensure_column` (backward-compat).
@@ -291,18 +311,22 @@ SQLite en `SQLITE_PATH` (default `trading_alert_ai.db` en la raiz). Mantenela en
 - `app/learning`: outcomes, horizontes, lifecycle, training engine, backtester, walk-forward.
 - `app/risk` + `app/portfolio`: sizing, risk manager, portfolio, reconciler MT5.
 - `app/brokers`: MT5 reader (read-only), demo trader (unico con order_send), symbol map, historico.
+- `app/ai_agent`: agente IA en sandbox demo (features, modelo bayesiano, decisión y límites).
+- `app/indicators`: VWAP, Hurst y footprint lite (puros, replayables).
+- `app/backtest`: Backtest Replay Harness (offline, tablas `backtest_*`).
 - `app/scheduler`: ciclo swing (`jobs.py`) + scalping engine.
 - `app/alerts` + `app/assistant`: formato/envio Telegram y comandos.
 - `app/dashboard`: Streamlit.
 - `app/intelligence` + `app/config` + `app/utils`: Claude/macro/calidad, settings, utilidades.
 - `obsidian/tradingbot v.1`: memoria del proyecto.
-- `scripts`: herramientas manuales de research (`cot_backfill.py`, `cot_ml_experiment.py`).
-- `tests`: 721 tests.
+- `scripts`: herramientas manuales del agente (`ai_agent_warmstart.py`, `ai_agent_report.py`) y de research (estudios pre-registrados, `cot_backfill.py`, ...).
+- `research`: pre-registros, veredictos y `LEDGER_FAMILIAS.md`.
+- `tests`: 864 tests.
 
 ## Tests
 
 ```powershell
-python -m pytest tests/ -q     # 721 verdes
+python -m pytest tests/ -q     # 864 verdes
 ```
 
 ## Advertencia

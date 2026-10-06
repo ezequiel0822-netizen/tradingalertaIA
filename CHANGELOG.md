@@ -1,5 +1,14 @@
 # Changelog
 
+## Research — H-FADE1 operar el reverso de las señales del bot (2026-10-06): NO PASA (familia 26)
+
+Pregunta del plan del agente v2: "¿y si el agente hace lo CONTRARIO de lo que dicen las estrategias?". Pre-registro b042301 (antes de bajar datos), código congelado fbf1a6b (selftest sintético 33/33), un tiro sobre velas M15 de MT5 (7 pares + XAUUSD, 2023-01-02 → 2025-12-31, hora del servidor → UTC con la regla UE; 0 huecos; manifest sha256 a6d62387…).
+
+- **Las tres NO PASAN**: reverso 1:1 −0.373R (mean_reversion, n 5.379), −0.212R (momentum, n 18.326), −0.192R (forex_session_breakout, n 12.618) por trade; t NW −18.8 / −23.7 / −12.4; ambas mitades, todos los años, símbolos y sesiones negativos.
+- **Por qué**: el R bruto es ≈ 0 en LAS DOS direcciones (reverso −0.06 / −0.00 / −0.00R; directo −0.01 / −0.04 / −0.05R). Lo que se pierde es el costo: stops de ~1.5-2 ATR de velas de 15 min → 0.19-0.32R de spread por trade. Ruido dado vuelta sigue pagando el spread.
+- **Post-hoc (rotulado)**: el −0.92R del paper vivo de mean_reversion no aparece en el replay (directo bruto −0.01R): esa pérdida extra es de la mecánica del paper, no una dirección que se pueda revertir.
+- El agente NO suma una acción "fade". Ledger: 26 familias, 0 operables. Sin bump (research).
+
 ## v3.14.0 (2026-10-06) — Agente IA v2: más contexto, exploración declarada y P&L real de MT5
 
 Pedido del user: "hacé el agente más activo y mejoralo con todo lo que ya tenemos". Antes del código se cerró la evaluación v1 (n = 11, sin conclusiones) y se commiteó el pre-registro v2 (`research/AGENTE_IA_V2_PREREGISTRO_2026-10-06.md`, 2b0304d). Todo opt-in: con los defaults (`AI_AGENT_VERSION=1`, `AI_AGENT_EXPLORE_PCT=0`) el agente es v1 tal cual.

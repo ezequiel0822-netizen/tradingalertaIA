@@ -6,7 +6,66 @@
 
 ---
 
-## Prompt VIGENTE para el chat nuevo (5-oct-2026) — usá ESTE
+## Prompt VIGENTE para el chat nuevo (6-oct-2026) — usá ESTE
+
+```
+Retomamos Trading Alert AI (bot de trading LOCAL, Python 3.12, Windows, repo en
+C:/Users/LENOVO/tradingalertaIA, venv en .venv). Respondé en español rioplatense, claro y sin
+jerga innecesaria. Estado al 6-oct-2026: v3.14.0 (agente IA v2), 864 tests verdes. Demo MT5
+MetaQuotes-Demo (~2.990 USD). Research: 26 familias de hipótesis probadas con pre-registro →
+0 operables (la 26 = H-FADE1: operar el reverso de las señales del bot
+NO PASA; bruto ≈ 0 en ambas direcciones, se pierde el costo).
+
+Leé ANTES de tocar nada: la memoria de Claude (MEMORY.md; en especial v3-13-0-ai-agent,
+no-direct-mt5-trading, sesiones-paralelas-2026-10, mt5-server-time, real-money-stays-blocked),
+research/LEDGER_FAMILIAS.md (26 familias + "Lectura transversal" + ventanas ya vistas),
+research/AGENTE_IA_V2_PREREGISTRO_2026-10-06.md, PROXIMOS_PASOS.md (bloque del 6-oct) y
+RESUMEN_COMPLETO.md §2.10-§2.12.
+
+AGENTE IA: app/ai_agent/ decide EJECUTAR / EXPLORAR / NO OPERAR cada candidato forex/oro en MT5
+DEMO y aprende de todos (Thompson sampling). v1 (default) cerrado sin conclusiones (n = 11).
+v2 opt-in (AI_AGENT_VERSION=2, AI_AGENT_EXPLORE_PCT=0.20): 24 features as-of, D1 de MT5 en vivo,
+exploración a 0.10 % de riesgo (≤3/día, stop −2R), ajuste de realismo con el P&L real de MT5,
+policy_tag por decisión. Evaluación pre-registrada desde el 2027-01-11 con ≥200 decisiones del
+tag v2|eps0.20|xr0.10|r0.50|thr0.05|pv0.25|nv1.00|xmax3|xstop2.0 (t NW ≥ 2.50; predicción NO
+PASA). NO cambiar parámetros del agente (cambia el tag; prior/ruido además DESCARTAN el modelo).
+Ver cómo va: /agente, scripts/ai_agent_report.py (solo lectura) y la tarea programada
+revision-semanal-agente-ia (lunes 09:04). Más actividad sin edge = más pérdida esperada.
+
+LO QUE SIGUE: (1) si el user todavía no lo hizo: merge+push de v3.14.0, warm start v2 con el bot
+apagado (python scripts/ai_agent_warmstart.py --version 2 --mt5-d1 --apply), .env y reinicio;
+(2) checkpoint COT ya programado para el 2026-12-07 09:00 (tarea checkpoint-cot-reexperimento,
+--cot-lag-days 4); (3) preguntarle al user qué quiere: NO abrir familias nuevas por defecto ni
+re-cortar las cerradas (B4b, H-FND1 y H-FADE1 incluidas).
+
+PROTOCOLO (no negociable): pre-registro commiteado ANTES de bajar datos; código congelado y
+verificado con datos sintéticos ANTES de correr; k declarado, umbral t ≥ 2.50 (Newey-West
+cuando hay autocorrelación o solapamiento); manifest con checksums; NUNCA usar como decisoria
+una ventana marcada como vista en el ledger; diagnósticos post-hoc rotulados; si no pasa, la
+familia se cierra sin re-cortes; adendas se commitean ANTES de volver a correr.
+
+REGLAS DEL PROYECTO: real-money BLOQUEADO (ENABLE_REAL_TRADING=false HARDCODED; el user lo
+pide seguido, la respuesta es no); Claude NO opera MT5 (solo lee, con mt5.initialize() SIN
+credenciales; las órdenes las pone el bot/agente); order_send solo en
+app/brokers/mt5_demo_trader.py; LLM/ML solo restan SALVO el agente IA en demo (excepción
+acotada); todo lo nuevo opt-in OFF + soft-fail; nunca leer/mostrar el .env (cambios = darle al
+user comandos de PowerShell); al tocar Settings sincronizar tests/test_score._settings() y
+tests/test_alert_rules._settings(); versionado patch/minor sin saltos; el push a main lo hace
+el user; una sola instancia del bot (verificar que no haya dos main.py).
+
+Gotchas: las épocas de MT5 (deals, ticks, velas) están en hora del SERVIDOR (EET, UTC+2/+3),
+no UTC — para resultados de posiciones usar history_deals_get(position=...) sin rango de
+fechas; el cache D1 de MT5 (mt5_historical_cache) está congelado desde el 2026-06-15 (no lo
+refresca el loop vivo); la DB viva pesa ~5.6 GB (no copiarla: extraer tablas con ATTACH en
+mode=ro); consola cp1252 → sys.stdout.reconfigure(encoding="utf-8"); herramientas de
+auditoría con pip --target fuera del venv; trading_data/ NO está en .gitignore (no hacer
+git add -A con datos de research en el árbol); otra sesión puede estar tocando mt5_reader.py /
+app/backtest/* (arreglo de la hora del servidor, rama johan/ecstatic-sutherland-4f50c7).
+```
+
+---
+
+## Prompt del 5-oct-2026 (histórico: reemplazado por el de arriba)
 
 ```
 Retomamos Trading Alert AI (bot de trading LOCAL, Python 3.12, Windows, repo en

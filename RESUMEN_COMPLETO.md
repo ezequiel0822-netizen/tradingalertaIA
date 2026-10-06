@@ -1,6 +1,6 @@
 # RESUMEN COMPLETO — Trading Alert AI (todo el proyecto en un documento)
 
-> **Actualizado: 2026-10-05.** Este documento es autocontenido: leyéndolo, cualquier
+> **Actualizado: 2026-10-06.** Este documento es autocontenido: leyéndolo, cualquier
 > persona (o cualquier sesión nueva de Claude, con el modelo que sea) entiende QUÉ es
 > el proyecto, DÓNDE está, POR QUÉ está así, y QUÉ sigue. Para profundizar:
 > `CONTEXTO_MAESTRO_v3.8.0.md` (arquitectura vigente), `CHANGELOG.md` (historia por versión),
@@ -240,7 +240,7 @@ Detalle completo en CHANGELOG. Todo informativo + captura para research; ningún
 - **VWAP gate** (`ENABLE_VWAP_GATE=false`): downward-only, molde del regime gate, VWAP semanal del cache D1 MT5. Opt-in OFF.
 - **`/claude_analyze SYMBOL`** (alias `/analisis_llm`): análisis técnico narrado por LLM (VWAP+velas+Hurst+noticias), a demanda, transporte Claude u Ollama, gated por `ENABLE_LLM_ADVISOR`. Analista secundario: jamás señales.
 
-## 2.10 Research fuera del vehículo (9-jul → 5-oct-2026): 25 familias, 0 operables
+## 2.10 Research fuera del vehículo (9-jul → 5-oct-2026): 25 familias, 0 operables (la 26, H-FADE1, en §2.12)
 
 Registro completo (fecha, datos, veredicto, commits, ventanas ya vistas): **`research/LEDGER_FAMILIAS.md`**.
 - **H-M1** (9-jul): trend multi-asset D1 vía CFD → NO PASA; agota el vehículo CFD/MT5/D1.
@@ -282,6 +282,28 @@ real en `lifecycle_manager` (el cierre parcial en TP1 aflojaba un trailing stop)
 forex/oro usaban el estimador y el score de memecoins, y `should_send_alert` dejaba pasar TODO snapshot
 forex/oro. Ahora: estimador propio (movimiento observado, sin inventar subidas/caídas), envío solo con
 movimiento notable, título por mercado y comandos de Telegram sin memecoins con el motor apagado. 838 tests.
+
+## 2.12 v3.14.0 (6-oct-2026) — Agente IA v2 + H-FADE1
+
+El user pidió "el agente más activo y mejorado" (antes había pedido que Claude operara su demo
+para "generar el 10 %": se declinó; Claude solo LEE MT5 y no se usan metas de ganancia).
+
+- **Cierre de v1 sin conclusiones** (n = 11; agente −1.08R, ejecutar todo −9.83R) y **pre-registro
+  v2 commiteado antes del código**. Evaluación v2 desde el 2027-01-11 con ≥ 200 decisiones del tag
+  `v2|eps0.20|xr0.10|r0.50|thr0.05|pv0.25|nv1.00|xmax3|xstop2.0`, t NW ≥ 2.50; predicción NO PASA.
+- **v2 (opt-in `AI_AGENT_VERSION=2`)**: 24 features as-of (evento high a ±2 h, COT index con lag 4
+  días, costo/riesgo del trade, lunes/viernes, hora, racha de la estrategia); régimen/VWAP con el
+  D1 de MT5 en vivo (el cache D1 está congelado desde el 15-jun y v1 los tuvo en 0); exploración
+  `AI_AGENT_EXPLORE_PCT` a 0.10 % de riesgo con presupuesto propio; ajuste de realismo con el
+  P&L REAL de MT5 de sus órdenes (`closed_position_outcome`, solo lectura); `policy_tag` por fila.
+- **Honestidad**: el agente aprende del paper de TODOS los candidatos (información completa), así
+  que ejecutar más NO acelera el aprendizaje; sin edge, la exploración cuesta ~0.2-0.3 % del equity
+  por día de mercado. Lo que sí suma candidatos: subir `MAX_OPEN_TRADES_TOTAL` (lleno el 96 % del
+  tiempo desde el 1-sep porque cuenta acciones que duran ~7 días).
+- **Herramientas**: warm start v2 (`--version 2 --mt5-d1`), `scripts/ai_agent_report.py` (mode=ro,
+  `--evaluate` bloqueado hasta 2027-01-11), tarea programada `revision-semanal-agente-ia`, línea
+  del agente en el resumen diario de Telegram.
+- **H-FADE1 (familia 26)**: NO PASA las tres estrategias (familia 26): el reverso pierde −0.37 / −0.21 / −0.19R por trade (t NW −18.8 / −23.7 / −12.4) en M15 2023-2025. El bruto es ≈ 0 en ambas direcciones y se pierde el costo de stops cortísimos (0.19-0.32R por trade): las señales son ruido y darlas vuelta vuelve a pagar el spread. Post-hoc: el −0.92R del paper vivo de mean_reversion no se reproduce (directo bruto −0.01R) → artefacto de la simulación paper. El agente NO suma acción "fade". `research/HIPOTESIS_2026-10-06_fade.md`.
 
 ## 3. La verdad de fondo (la filosofía del proyecto)
 

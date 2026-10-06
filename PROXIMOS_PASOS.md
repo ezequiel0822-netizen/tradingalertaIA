@@ -57,6 +57,25 @@
 > long Binance). **Registro único con todas las familias, commits y ventanas ya vistas:
 > `research/LEDGER_FAMILIAS.md`.** Main = origin/main en 13a3733 antes de este cierre.
 >
+> **🤖 6-oct-2026 — v3.14.0: agente IA v2 (864 tests) + H-FADE1 (familia 26).** Pedido del user:
+> "hacé el agente más activo y mejoralo". Orden seguido: (1) evaluación v1 CERRADA sin conclusiones
+> (n = 11: agente −1.08R vs ejecutar todo −9.83R) y pre-registro v2 commiteado ANTES del código
+> (`research/AGENTE_IA_V2_PREREGISTRO_2026-10-06.md`, 2b0304d); (2) v2 opt-in: 24 features as-of
+> (calendario, COT lag 4, costo/riesgo, día/hora, racha de la estrategia), D1 de MT5 en vivo (el
+> cache D1 está congelado desde el 15-jun: régimen/VWAP valían 0 en v1), exploración ε 0.20 a
+> 0.10 % de riesgo (≤ 3/día, stop −2R), ajuste de realismo con el P&L REAL de MT5 (solo lectura,
+> verificado: −1.00R real vs −1.08R paper), `policy_tag`; (3) `scripts/ai_agent_report.py` (solo
+> lectura) + tarea programada **`revision-semanal-agente-ia`** (lunes 09:04); (4) línea del agente
+> en el resumen diario. **Dicho sin vueltas:** ejecutar más NO acelera el aprendizaje (aprende del
+> paper de TODOS los candidatos) y sin edge cuesta (~0.2-0.3 % del equity por día de mercado).
+> **Lo que más candidatos daría:** el tope `MAX_OPEN_TRADES_TOTAL` (5, cuenta también acciones)
+> estuvo lleno el 96 % del tiempo desde el 1-sep → comando de `.env` en el cierre de sesión.
+> **H-FADE1** (¿operar el reverso de las señales?): NO PASA las tres estrategias (familia 26): el reverso pierde −0.37 / −0.21 / −0.19R por trade (t NW −18.8 / −23.7 / −12.4) en M15 2023-2025. El bruto es ≈ 0 en ambas direcciones y se pierde el costo de stops cortísimos (0.19-0.32R por trade): las señales son ruido y darlas vuelta vuelve a pagar el spread. Post-hoc: el −0.92R del paper vivo de mean_reversion no se reproduce (directo bruto −0.01R) → artefacto de la simulación paper. El agente NO suma acción "fade". `research/HIPOTESIS_2026-10-06_fade.md`.
+> **Pasos del user para encender v2** (en este orden, bot apagado): merge + push → warm start
+> `python scripts/ai_agent_warmstart.py --version 2 --mt5-d1 --apply` → `.env`
+> (`AI_AGENT_VERSION=2`, `AI_AGENT_EXPLORE_PCT=0.20`) → `.\start_bot.ps1`. Evaluación v2 desde el
+> **2027-01-11** con ≥ 200 decisiones del tag pre-registrado; predicción: NO PASA.
+>
 > **📨 5-oct-2026 — v3.13.2 (838 tests): alertas forex/oro sin restos de memecoins.** Llegaban como
 > "TOP MEMECOINS" con "caída est. 90 %" (estimador de memecoins aplicado a forex) y salían TODOS los
 > snapshots forex (should_send devolvía True siempre). Ahora: título por mercado, movimiento observado,
