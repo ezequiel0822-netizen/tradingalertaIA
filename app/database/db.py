@@ -238,6 +238,20 @@ def _init_db_unsafe(db_path: Path) -> None:
             CREATE INDEX IF NOT EXISTS idx_mt5_hist_symbol_tf
                 ON mt5_historical_cache(symbol, timeframe, time);
 
+            -- v3.13.3: base horaria de cada serie INTRADIA del cache MT5.
+            -- time_basis: 'utc' (instantes UTC real) | 'server' (hora del
+            -- servidor MT5, legacy). Sin fila = legacy ('server'). D1+ no se
+            -- marca: su epoch es una etiqueta de fecha (ver brokers/mt5_time.py).
+            CREATE TABLE IF NOT EXISTS mt5_cache_meta (
+                symbol TEXT NOT NULL,
+                timeframe INTEGER NOT NULL,
+                time_basis TEXT NOT NULL,
+                server_tz TEXT,
+                updated_at TEXT NOT NULL,
+                note TEXT,
+                PRIMARY KEY(symbol, timeframe)
+            );
+
             CREATE TABLE IF NOT EXISTS walk_forward_results (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 strategy_name TEXT NOT NULL,

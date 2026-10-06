@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from app.brokers.mt5_reader import MT5Reader
+from app.brokers.mt5_time import ensure_cache_time_basis, mark_cache_time_basis
 from app.config.settings import Settings
 
 
@@ -77,6 +78,17 @@ class MT5HistoricalFetcher:
     def _persist(self, symbol: str, timeframe: int, candles: list[dict]) -> int:
         if not hasattr(self.repository, "upsert_mt5_cache_candle"):
             return 0
+        # v3.13.3: no mezclar hora del servidor y UTC real en la misma serie.
+        server_tz = getattr(self.settings, "mt5_server_tz", "")
+        try:
+            can_write, note = ensure_cache_time_basis(
+                self.repository, symbol, timeframe, server_tz
+            )
+        except Exception:
+            can_write, note = False, "chequeo de base horaria fallo (soft-fail)"
+        if not can_write:
+            logger.warning("MT5 cache %s tf=%s sin escribir: %s", symbol, timeframe, note)
+            return 0
         n = 0
         for c in candles:
             try:
@@ -84,6 +96,8 @@ class MT5HistoricalFetcher:
                     n += 1
             except Exception:
                 continue
+        if n:
+            mark_cache_time_basis(self.repository, symbol, timeframe, server_tz)
         return n
 
     @staticmethod

@@ -6,13 +6,13 @@ Trader engine algoritmico **local** (Python 3.12, Windows) enfocado **100% a LA 
 
 ## Estado actual (v3.14.0, oct-2026)
 
-- **864 tests verdes.** Corriendo en la Lenovo contra MT5 demo (MetaQuotes-Demo, ~3.000 USD desde el 4-oct-2026) via `.\start_bot.ps1`. Una sola instancia a la vez.
+- **889 tests verdes.** Corriendo en la Lenovo contra MT5 demo (MetaQuotes-Demo, ~3.000 USD desde el 4-oct-2026) via `.\start_bot.ps1`. Una sola instancia a la vez.
 - **Research: 26 familias de hipótesis probadas, 0 operables** (la última, H-FADE1 del 6-oct: operar el reverso de las señales del bot tampoco sirve; el bruto es ≈ 0 en ambas direcciones y se pierde el costo).** Cada familia con pre-registro commiteado antes de mirar datos, código verificado con datos sintéticos, k declarado y umbral t ≥ 2.50 (Newey-West). Registro único: `research/LEDGER_FAMILIAS.md` (incluye la "Lectura transversal" y las ventanas ya vistas).
 - **Agente IA en sandbox demo** (v3.13.0, v2 en v3.14.0; opt-in `ENABLE_AI_AGENT`): decide ejecutar, explorar o no operar cada candidato forex/oro en MT5 DEMO y aprende de todos (Thompson sampling). Evaluación pre-registrada desde el 2027-01-11 (`research/AGENTE_IA_V2_PREREGISTRO_2026-10-06.md`); predicción declarada: NO PASA. Ver la sección "Agente IA".
 - **REFOCUS v3.7.0 — 100% LA BOLSA.** Memecoins cortadas (`ENABLE_MEMECOIN_ENGINE=false`; el user tiene un bot aparte), scalping apagado. Acciones paper-only; solo forex/oro llegan a MT5 demo.
 - **Protecciones vivas (downward-only):** calendar gate, cap de exposición neta USD, cooldown por símbolo, exit shadow, regime gate, VWAP gate y COT collector. Promotion gate: todas las estrategias con muestra en SHADOW (cero órdenes por el camino normal); el agente decide por su cuenta pero mantiene los gates de RIESGO.
 - **NO hay edge probado.** Más actividad sin edge = más pérdida esperada en la demo. Real-money bloqueado por código (`/readiness` lista los gates).
-- Cuidado conocido: el cache D1 de MT5 (`mt5_historical_cache`) no lo refresca el loop vivo y está congelado desde el 2026-06-15 (el regime/VWAP gate hacen soft-allow; el agente v2 lee el D1 de MT5 en vivo). Las épocas de MT5 están en hora del SERVIDOR (EET), no UTC.
+- Cuidado conocido: el cache D1 de MT5 (`mt5_historical_cache`) no lo refresca el loop vivo y está congelado desde el 2026-06-15 (el regime/VWAP gate hacen soft-allow; el agente v2 lee el D1 de MT5 en vivo). Las épocas de MT5 están en hora del SERVIDOR (EET), no UTC: v3.13.3 lo corrige para el harness con `MT5_SERVER_TZ=EET` (opt-in; D1 no se toca).
 
 ## Que hace
 
@@ -321,12 +321,12 @@ SQLite en `SQLITE_PATH` (default `trading_alert_ai.db` en la raiz). Mantenela en
 - `obsidian/tradingbot v.1`: memoria del proyecto.
 - `scripts`: herramientas manuales del agente (`ai_agent_warmstart.py`, `ai_agent_report.py`) y de research (estudios pre-registrados, `cot_backfill.py`, ...).
 - `research`: pre-registros, veredictos y `LEDGER_FAMILIAS.md`.
-- `tests`: 864 tests.
+- `tests`: 889 tests.
 
 ## Tests
 
 ```powershell
-python -m pytest tests/ -q     # 864 verdes
+python -m pytest tests/ -q     # 889 verdes
 ```
 
 ## Advertencia

@@ -57,7 +57,7 @@
 > long Binance). **Registro único con todas las familias, commits y ventanas ya vistas:
 > `research/LEDGER_FAMILIAS.md`.** Main = origin/main en 13a3733 antes de este cierre.
 >
-> **🤖 6-oct-2026 — v3.14.0: agente IA v2 (864 tests) + H-FADE1 (familia 26).** Pedido del user:
+> **🤖 6-oct-2026 — v3.14.0: agente IA v2 (889 tests, con v3.13.3 integrada) + H-FADE1 (familia 26).** Pedido del user:
 > "hacé el agente más activo y mejoralo". Orden seguido: (1) evaluación v1 CERRADA sin conclusiones
 > (n = 11: agente −1.08R vs ejecutar todo −9.83R) y pre-registro v2 commiteado ANTES del código
 > (`research/AGENTE_IA_V2_PREREGISTRO_2026-10-06.md`, 2b0304d); (2) v2 opt-in: 24 features as-of
@@ -75,6 +75,13 @@
 > `python scripts/ai_agent_warmstart.py --version 2 --mt5-d1 --apply` → `.env`
 > (`AI_AGENT_VERSION=2`, `AI_AGENT_EXPLORE_PCT=0.20`) → `.\start_bot.ps1`. Evaluación v2 desde el
 > **2027-01-11** con ≥ 200 decisiones del tag pre-registrado; predicción: NO PASA.
+>
+> **🕒 6-oct-2026 — v3.13.3 (863 tests): hora del servidor MT5.** MT5 entrega las épocas en hora del
+> SERVIDOR (MetaQuotes-Demo: EET, UTC+3 hasta el domingo 25-oct, después UTC+2). En vivo no afecta
+> (forex de Yahoo); el harness H1 de `forex_session_breakout` (familia 5) corrió con sesiones corridas.
+> Fix opt-in `MT5_SERVER_TZ=EET` + `scripts/mt5_cache_tz_migrate.py` (cache H1; D1 no se toca). Familia 5:
+> NO se re-corta; una réplica sería hipótesis nueva con pre-registro (nota en el ledger). Verificar la
+> zona en cualquier momento: `python scripts/mt5_server_time_check.py` (solo lecturas).
 >
 > **📨 5-oct-2026 — v3.13.2 (838 tests): alertas forex/oro sin restos de memecoins.** Llegaban como
 > "TOP MEMECOINS" con "caída est. 90 %" (estimador de memecoins aplicado a forex) y salían TODOS los

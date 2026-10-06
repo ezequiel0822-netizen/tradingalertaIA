@@ -26,6 +26,7 @@ from app.analyzers.technical_patterns import atr_pct_from_candles
 from app.backtest.context_builder import build_context
 from app.backtest.historical_loader import timeframe_minutes_from_label
 from app.backtest.trade_simulator import TradeSetup, net_r, simulate_trade
+from app.brokers.mt5_time import TIME_BASIS_UTC, cache_time_basis
 from app.config.settings import Settings
 from app.intelligence.regime_filter import (
     ATR_PERIOD,
@@ -167,6 +168,19 @@ class ReplayHarness:
                 "first": candles[0].get("time"),
                 "last": candles[-1].get("time"),
             }
+            # v3.13.3: las estrategias leen el bar-time como UTC. Una serie
+            # intradia en hora del servidor MT5 corre las sesiones 2-3 h: queda
+            # registrado en el run (auditable) y se avisa.
+            basis = cache_time_basis(self.repository, symbol, tf_minutes)
+            if basis is not None:
+                data_ranges[symbol]["time_basis"] = basis
+                if basis != TIME_BASIS_UTC:
+                    logger.warning(
+                        "%s %s: velas en HORA DEL SERVIDOR MT5 (no UTC): las "
+                        "sesiones quedan corridas 2-3 h. Migrar con "
+                        "scripts/mt5_cache_tz_migrate.py",
+                        symbol, config.timeframe,
+                    )
             category = config.category or category_for(symbol)
             self._replay_symbol(
                 symbol, candles, selected, tf_minutes, lookback, all_trades, category

@@ -26,6 +26,9 @@ Limites honestos del anchor "session" (= dia UTC del bar-time):
   UTC+2/3): agrupar por "dia UTC" sobre intradia MT5 corre el corte ~2-3h.
   Para Yahoo (UTC real) el corte es exacto. Aproximacion aceptada y documentada;
   si algun dia el VWAP de sesion se calcula sobre intradia MT5, revisar esto.
+  (v3.13.3: con MT5_SERVER_TZ configurado el intradia de MT5 llega en UTC real;
+  el D1 sigue siendo la fecha de trading del servidor, que es lo que usan los
+  anchors week/month.)
 
 Sin numpy/pandas: stdlib puro, mismo estilo que technical_patterns.py.
 """

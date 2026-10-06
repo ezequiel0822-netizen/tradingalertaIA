@@ -1,4 +1,5 @@
 import json
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -2158,6 +2159,135 @@ class Repository:
             "first_epoch": row["first_epoch"],
             "last_epoch": row["last_epoch"],
         }
+
+    # ------------------------------------------------------------------ #
+    # v3.13.3 — base horaria del cache MT5 (hora del servidor vs UTC real)
+    # ------------------------------------------------------------------ #
+    def get_mt5_cache_time_basis(
+        self, symbol: str, timeframe: int
+    ) -> dict[str, Any] | None:
+        """Marca de base horaria de una serie; None si nunca se marco (legacy)."""
+        with get_connection(self.db_path) as connection:
+            row = connection.execute(
+                """
+                SELECT symbol, timeframe, time_basis, server_tz, updated_at, note
+                FROM mt5_cache_meta WHERE symbol = ? AND timeframe = ?
+                """,
+                (symbol, timeframe),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def set_mt5_cache_time_basis(
+        self,
+        symbol: str,
+        timeframe: int,
+        time_basis: str,
+        server_tz: str | None = None,
+        note: str | None = None,
+    ) -> None:
+        with get_connection(self.db_path) as connection:
+            self._upsert_mt5_cache_meta(
+                connection, symbol, timeframe, time_basis, server_tz, note
+            )
+
+    @staticmethod
+    def _upsert_mt5_cache_meta(
+        connection, symbol, timeframe, time_basis, server_tz, note
+    ) -> None:
+        connection.execute(
+            """
+            INSERT INTO mt5_cache_meta (
+                symbol, timeframe, time_basis, server_tz, updated_at, note
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(symbol, timeframe) DO UPDATE SET
+                time_basis = excluded.time_basis,
+                server_tz = excluded.server_tz,
+                updated_at = excluded.updated_at,
+                note = excluded.note
+            """,
+            (symbol, timeframe, time_basis, server_tz or None, utc_now_iso(), note),
+        )
+
+    def list_mt5_cache_series(self) -> list[dict[str, Any]]:
+        """(symbol, timeframe, bars, first/last epoch, time_basis) de todo el cache."""
+        with get_connection(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT c.symbol, c.timeframe, COUNT(*) AS bars,
+                       MIN(c.time) AS first_epoch, MAX(c.time) AS last_epoch,
+                       m.time_basis, m.server_tz
+                FROM mt5_historical_cache c
+                LEFT JOIN mt5_cache_meta m
+                  ON m.symbol = c.symbol AND m.timeframe = c.timeframe
+                GROUP BY c.symbol, c.timeframe
+                ORDER BY c.timeframe, c.symbol
+                """
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def rewrite_mt5_cache_times(
+        self,
+        symbol: str,
+        timeframe: int,
+        convert_fn: Callable[[int], int],
+        *,
+        time_basis: str,
+        server_tz: str | None,
+        note: str | None = None,
+        apply: bool = True,
+    ) -> dict[str, Any]:
+        """Re-expresa el 'time' de TODA una serie con convert_fn, en UNA
+        transaccion (todo o nada) y marca su base horaria.
+
+        Si dos barras caerian en el mismo epoch (colision), NO toca nada y lo
+        reporta. apply=False = dry-run (solo calcula). Devuelve
+        {rows, collisions, applied, first/last old/new}."""
+        with get_connection(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT time, open, high, low, close, volume
+                FROM mt5_historical_cache
+                WHERE symbol = ? AND timeframe = ?
+                ORDER BY time ASC
+                """,
+                (symbol, timeframe),
+            ).fetchall()
+            new_times = [int(convert_fn(int(r["time"]))) for r in rows]
+            collisions = len(new_times) - len(set(new_times))
+            result: dict[str, Any] = {
+                "rows": len(rows),
+                "collisions": collisions,
+                "applied": False,
+                "first_old": rows[0]["time"] if rows else None,
+                "first_new": new_times[0] if rows else None,
+                "last_old": rows[-1]["time"] if rows else None,
+                "last_new": new_times[-1] if rows else None,
+            }
+            if not apply or collisions:
+                return result
+            connection.execute(
+                "DELETE FROM mt5_historical_cache WHERE symbol = ? AND timeframe = ?",
+                (symbol, timeframe),
+            )
+            connection.executemany(
+                """
+                INSERT INTO mt5_historical_cache (
+                    symbol, timeframe, time, open, high, low, close, volume
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (symbol, timeframe, t, r["open"], r["high"], r["low"],
+                     r["close"], r["volume"])
+                    for t, r in zip(new_times, rows)
+                ],
+            )
+            self._upsert_mt5_cache_meta(
+                connection, symbol, timeframe, time_basis, server_tz, note
+            )
+        result["applied"] = True
+        return result
 
     # ------------------------------------------------------------------ #
     # v3.13.0 — agente IA en sandbox demo (ai_agent_decisions)

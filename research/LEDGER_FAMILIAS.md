@@ -1,7 +1,8 @@
 # Registro de familias de hipótesis — Trading Alert AI
 
 > Un solo lugar con TODO lo probado, su veredicto y dónde está la evidencia.
-> Actualizado: 2026-10-06 (H-FADE1: reverso de las señales del bot).
+> Actualizado: 2026-10-06 (H-FADE1: reverso de las señales del bot; nota de integridad de
+> datos de la familia 5: hora del servidor MT5).
 > **Saldo: 26 familias probadas con pre-registro → 0 operables.**
 >
 > Regla de uso: una familia cerrada NO se re-abre ni se re-corta. Una variante es una
@@ -16,7 +17,7 @@
 | 2 | 2026-07-02 | H-A1 COT legacy extremos × precio (8 mercados, ~40 años) | CFTC COT + precio | NO PASA, familia muerta (deja sin efecto el 0.607 de junio) | 3db0af7, cfcf792 | `HIPOTESIS_2026-07-02.md` |
 | 3 | 2026-07-02/03 | H-B2 viernes del oro → gate §11 `gold_friday_hold` | cache D1 propio, 21 años | NO PASA §11 por expectancy (+0.040R < +0.10R). Tilt REAL (86 % de años) pero no operable | 4d87090 (v3.11.0), 29fe818 | `HIPOTESIS_2026-07-02.md` §11 |
 | 4 | 2026-07-02 | H-B3 oro agosto+septiembre | cache D1 propio | NO PASA (t −0.04) | cfcf792 | `HIPOTESIS_2026-07-02.md` |
-| 5 | 2026-07 | `forex_session_breakout` H1 (replayable desde v3.10.0) | harness H1 | NO PASA (−0.161R) | 7b3c070 (v3.10.0), 85142f9 | CHANGELOG v3.10.0, memoria auditoría |
+| 5 | 2026-07 | `forex_session_breakout` H1 (replayable desde v3.10.0) | harness H1 | NO PASA (−0.161R). ⚠️ Evaluada con las sesiones corridas 2-3 h (velas MT5 en hora del servidor; bug de datos hallado 2026-10-06, v3.13.3). El veredicto queda como está: ver "Integridad de datos" | 7b3c070 (v3.10.0), 85142f9 | CHANGELOG v3.10.0 y v3.13.3, memoria auditoría |
 | 6 | 2026-07-04 | H-C1/H-D1 carry FX (diferencial de tasas FRED, retorno total neto de swap) | FRED + precio | NO PASA: carry real (+17 bps bruto) pero 2ª mitad negativa y el swap se lo come (t 1.46) | 829063f, 55c37e6, f70e7e5 | `HIPOTESIS_2026-07-04_carry.md` |
 | 7 | 2026-07-05 | E1 turn-of-month en índices | Yahoo D1 | NO PASA | 6210edf, d15bd4a | `HIPOTESIS_2026-07-05_batch.md` |
 | 8 | 2026-07-05 | F1 COT lado commercials ("smart money") | COT 40 años + precio | NO PASA (COT cerrado como señal de precio) | 6210edf, d15bd4a | `HIPOTESIS_2026-07-05_batch.md` |
@@ -60,6 +61,31 @@
   y, por lo mismo, ningún filtro (incluido el agente IA) puede sacar mucho de ellas: a lo sumo
   evitar las de costo/riesgo más alto.
 
+## Integridad de datos (2026-10-06): hora del servidor MT5 en el harness H1
+
+- **Bug**: MetaTrader5 entrega las épocas en hora del SERVIDOR (MetaQuotes-Demo: EET, UTC+2
+  en invierno / UTC+3 en verano, regla UE; medido el 2026-10-06, ver CHANGELOG v3.13.3). El
+  cache H1 del harness (8 series, 2017-12 → 2026-06-15) se guardó así y
+  `forex_session_breakout` lo leyó como UTC → en la **familia 5** el rango asiático
+  (00-08 UTC) y el overlap Londres-NY (13-17 UTC) quedaron corridos 2-3 h: la regla
+  evaluada no fue la regla escrita. Lo mismo vale para el slicing por sesión de ese run.
+- **No afectadas**: las familias D1 (2, 3, 4, 6, 8 y el D1 de forex/oro en general). La época
+  D1 de MT5 es la FECHA de trading del servidor (sesión que cierra 17:00 NY), no un
+  instante: weekday/mes/fecha salen bien y es la convención con la que se evaluaron.
+  Tampoco la evidencia EN VIVO de `forex_session_breakout`: el bot usa velas de Yahoo (UTC
+  real).
+- **Protocolo**: el veredicto de la familia 5 NO se re-corta ni se re-abre. Si se quiere
+  medir la regla con las sesiones correctas, es una hipótesis NUEVA con pre-registro
+  propio, declarada como **réplica por bug de datos**, con la ventana H1 2017-12 → 2026-06
+  marcada como YA VISTA (la regla está congelada, pero los datos no son nuevos) o, mejor,
+  un test hacia adelante desde la fecha del pre-registro. Antes, migrar el cache
+  (`scripts/mt5_cache_tz_migrate.py --server-tz EET --apply`). El harness corregido NO se
+  corrió.
+- **Prior**: bajo. La evidencia en vivo, con sesiones correctas, ya es negativa: recuento
+  read-only del 2026-10-06 = 373 paper trades cerrados sin artifacts (filtro de
+  `trade_outcomes`), −0.134R promedio (el brief del user citaba 306 trades / −0.28R con otro
+  corte; las dos lecturas dan negativo). La réplica no es prioridad.
+
 Evaluación previa SIN pre-registro (no cuenta como familia): ramas del carry (B4a, B4b,
 B5, DEX, Ethena, lending) por un agente, commit 62f8905,
 `EVALUACION_RAMAS_CARRY_2026-10-04.md`. Todo ≈ tasa libre o debajo; único candidato dudoso:
@@ -91,6 +117,9 @@ B5, DEX, Ethena, lending) por un agente, commit 62f8905,
 - **Forex/oro M15 de MT5 2022-11 → 2025-12** (H-FADE1, 2026-10-06): las señales de
   mean_reversion, momentum y forex_session_breakout ya se simularon en AMBAS direcciones
   (1:1). Esa ventana ya no es limpia para variantes de esas estrategias en M15.
+- **Forex/oro H1 2017-12 → 2026-06-15** (cache MT5, 7 pares + XAUUSD): visto por la familia 5
+  (con las sesiones corridas 2-3 h). Cualquier señal intradía/de sesión sobre esa ventana es
+  IN-SAMPLE aunque se corrija la hora.
 - Ventanas NO vistas útiles: cripto **2020-01 → 2024-09** para señales que NO sean de
   funding/spread, posicionamiento ni retornos/funding cruzados (quedan muy pocas), y todo lo
   que pase **después** de la fecha de cada pre-registro (test hacia adelante). Hyperliquid

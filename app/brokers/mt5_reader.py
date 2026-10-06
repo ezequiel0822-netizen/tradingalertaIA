@@ -7,12 +7,27 @@ excepciones, asi el bot sigue corriendo degradado con yfinance.
 
 Read-only: NUNCA llama order_send, position_modify, ni close.
 Logs no incluyen password, server completo ni login.
+
+v3.13.3: MT5 entrega los timestamps en HORA DEL SERVIDOR (MetaQuotes-Demo: EET,
+UTC+2/+3). Con MT5_SERVER_TZ configurado, este adapter los pasa a UTC real en
+la entrada: ticks y velas INTRADIA (D1+ quedan como etiqueta de fecha; ver
+app/brokers/mt5_time.py). Sin MT5_SERVER_TZ, comportamiento identico al anterior.
 """
 
 import logging
-from datetime import datetime
+import time
+from datetime import datetime, timezone
 from typing import Any
 
+from app.brokers.mt5_time import (
+    convert_candles_to_utc,
+    is_intraday_timeframe,
+    is_known_server_tz,
+    normalize_server_tz,
+    server_epoch_to_utc,
+    utc_offset_seconds,
+    utc_to_server_epoch,
+)
 from app.config.settings import Settings
 
 
@@ -54,11 +69,77 @@ def _safe_tick_volume(r: Any) -> float:
         return 0.0
 
 
+def _to_utc_datetime(value: datetime) -> datetime:
+    """datetime naive = UTC (convencion del proyecto); aware se respeta."""
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value
+
+
 class MT5Reader:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self._mt5 = None
         self._connected = False
+
+    @property
+    def server_tz(self) -> str:
+        """Zona del servidor normalizada ("" = sin conversion)."""
+        return normalize_server_tz(getattr(self.settings, "mt5_server_tz", ""))
+
+    def _tick_time_utc(self, raw_time: Any) -> int:
+        epoch = int(raw_time or 0)
+        if epoch <= 0 or not self.server_tz:
+            return epoch
+        return server_epoch_to_utc(epoch, self.server_tz)
+
+    def measure_server_offset_seconds(self, symbol: str = "EURUSD") -> int | None:
+        """Desfase MEDIDO hora-servidor vs reloj local (redondeado a la hora).
+        None si no hay tick fresco (mercado cerrado) o el reader no conecto.
+        Solo lectura: symbol_info_tick."""
+        if not self.is_connected():
+            return None
+        try:
+            tick = self._mt5.symbol_info_tick(symbol)  # type: ignore[union-attr]
+            raw_ms = getattr(tick, "time_msc", None) if tick is not None else None
+            server_s = (float(raw_ms) / 1000.0) if raw_ms else float(getattr(tick, "time", 0) or 0)
+        except Exception:
+            return None
+        if server_s <= 0:
+            return None
+        diff = server_s - time.time()
+        hours = round(diff / 3600.0)
+        # Tick viejo (fin de semana / simbolo quieto): la diferencia no es una
+        # hora entera -> no hay medicion confiable.
+        if abs(diff - hours * 3600.0) > 300:
+            return None
+        return int(hours * 3600)
+
+    def _check_server_tz(self) -> None:
+        """v3.13.3: avisa si MT5_SERVER_TZ no coincide con el desfase medido.
+        Soft-fail total: nunca bloquea el connect."""
+        raw = getattr(self.settings, "mt5_server_tz", "")
+        if not is_known_server_tz(raw):
+            logger.warning(
+                "MT5_SERVER_TZ=%r no reconocido (usar EET, NY+7, UTC+N o vacio): "
+                "sin conversion de hora del servidor", raw,
+            )
+        measured = self.measure_server_offset_seconds()
+        if measured is None:
+            return
+        expected = utc_offset_seconds(self.server_tz, time.time()) if self.server_tz else 0
+        if not self.server_tz and measured != 0:
+            logger.info(
+                "MT5: hora del servidor = UTC%+d (medido); MT5_SERVER_TZ vacio -> "
+                "las velas intradia de MT5 quedan en hora del servidor",
+                measured // 3600,
+            )
+        elif self.server_tz and measured != expected:
+            logger.warning(
+                "MT5_SERVER_TZ=%s espera UTC%+d pero el servidor mide UTC%+d: "
+                "revisar la zona (las velas intradia quedarian corridas)",
+                self.server_tz, expected // 3600, measured // 3600,
+            )
 
     def connect(self) -> bool:
         if not self.settings.enable_mt5_reader:
@@ -99,6 +180,10 @@ class MT5Reader:
         self._mt5 = mt5
         self._connected = True
         logger.info("MT5 reader connected (read-only)")
+        try:
+            self._check_server_tz()
+        except Exception:
+            pass
         return True
 
     def disconnect(self) -> None:
@@ -146,7 +231,8 @@ class MT5Reader:
             "bid": float(getattr(tick, "bid", 0)),
             "ask": float(getattr(tick, "ask", 0)),
             "last": float(getattr(tick, "last", 0)) or None,
-            "time": int(getattr(tick, "time", 0)),
+            # v3.13.3: UTC real si MT5_SERVER_TZ esta configurado.
+            "time": self._tick_time_utc(getattr(tick, "time", 0)),
         }
 
     def get_rates(
@@ -184,7 +270,8 @@ class MT5Reader:
                     "volume": _safe_tick_volume(r),
                 }
             )
-        return candles
+        # v3.13.3: intradia -> UTC real (con MT5_SERVER_TZ); D1+ sin tocar.
+        return convert_candles_to_utc(candles, timeframe, self.server_tz)
 
     def get_account_info(self) -> dict | None:
         if not self.is_connected():
@@ -269,12 +356,25 @@ class MT5Reader:
         start_utc: datetime,
         end_utc: datetime,
     ) -> list[dict] | None:
-        """Wrapper sobre mt5.copy_rates_range para fetch historico arbitrario."""
+        """Wrapper sobre mt5.copy_rates_range para fetch historico arbitrario.
+
+        v3.13.3: MT5 interpreta el rango en hora del servidor. Con MT5_SERVER_TZ
+        e intradia, los bordes UTC se pasan a hora del servidor (y las velas
+        vuelven en UTC real), asi la ventana pedida es la ventana devuelta."""
         if not self.is_connected():
             return None
+        req_start, req_end = start_utc, end_utc
+        if self.server_tz and is_intraday_timeframe(timeframe):
+            req_start, req_end = (
+                datetime.fromtimestamp(
+                    utc_to_server_epoch(_to_utc_datetime(d).timestamp(), self.server_tz),
+                    tz=timezone.utc,
+                )
+                for d in (start_utc, end_utc)
+            )
         try:
             rates = self._mt5.copy_rates_range(  # type: ignore[union-attr]
-                symbol, timeframe, start_utc, end_utc
+                symbol, timeframe, req_start, req_end
             )
         except Exception:
             return None
@@ -292,4 +392,4 @@ class MT5Reader:
                     "volume": _safe_tick_volume(r),
                 }
             )
-        return candles
+        return convert_candles_to_utc(candles, timeframe, self.server_tz)

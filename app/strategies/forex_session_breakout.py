@@ -31,7 +31,12 @@ _OVERLAP_END_HOUR = 17
 
 def _candle_epoch(candle: dict) -> float | None:
     """Epoch (s) de una vela: 'timestamp' (feed vivo Yahoo) o 'time' (cache MT5
-    del harness). None si no hay ninguna."""
+    del harness). None si no hay ninguna.
+
+    v3.13.3: se interpreta como UTC REAL. El cache MT5 intradia viejo esta en
+    hora del servidor (EET, +2/+3 h): sin migrarlo (scripts/mt5_cache_tz_migrate.py)
+    el rango asiatico y el overlap quedan corridos. El harness lo registra en
+    data_ranges[symbol]['time_basis'] y avisa."""
     for key in ("timestamp", "time"):
         value = candle.get(key)
         if value is not None:

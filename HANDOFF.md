@@ -11,7 +11,8 @@
 ```
 Retomamos Trading Alert AI (bot de trading LOCAL, Python 3.12, Windows, repo en
 C:/Users/LENOVO/tradingalertaIA, venv en .venv). Respondé en español rioplatense, claro y sin
-jerga innecesaria. Estado al 6-oct-2026: v3.14.0 (agente IA v2), 864 tests verdes. Demo MT5
+jerga innecesaria. Estado al 6-oct-2026: v3.14.0 (agente IA v2; incluye v3.13.3 = hora del servidor MT5),
+889 tests verdes. Demo MT5
 MetaQuotes-Demo (~2.990 USD). Research: 26 familias de hipótesis probadas con pre-registro →
 0 operables (la 26 = H-FADE1: operar el reverso de las señales del bot
 NO PASA; bruto ≈ 0 en ambas direcciones, se pierde el costo).
@@ -59,8 +60,9 @@ fechas; el cache D1 de MT5 (mt5_historical_cache) está congelado desde el 2026-
 refresca el loop vivo); la DB viva pesa ~5.6 GB (no copiarla: extraer tablas con ATTACH en
 mode=ro); consola cp1252 → sys.stdout.reconfigure(encoding="utf-8"); herramientas de
 auditoría con pip --target fuera del venv; trading_data/ NO está en .gitignore (no hacer
-git add -A con datos de research en el árbol); otra sesión puede estar tocando mt5_reader.py /
-app/backtest/* (arreglo de la hora del servidor, rama johan/ecstatic-sutherland-4f50c7).
+git add -A con datos de research en el árbol); v3.13.3 (hora del servidor: MT5_SERVER_TZ=EET
+opt-in + scripts/mt5_cache_tz_migrate.py para el cache H1; D1 no se convierte) ya está
+integrada en la rama de v3.14.0.
 ```
 
 ---
@@ -69,8 +71,9 @@ app/backtest/* (arreglo de la hora del servidor, rama johan/ecstatic-sutherland-
 
 ```
 Retomamos Trading Alert AI (bot de trading LOCAL, Python 3.12, Windows, repo en
-C:/Users/LENOVO/tradingalertaIA, venv en .venv). Estado al 5-oct-2026: v3.13.2, 838 tests
-verdes. Demo MT5 NUEVA (MetaQuotes-Demo, ~3.000 USD). OJO: al 5-oct el bot estaba APAGADO
+C:/Users/LENOVO/tradingalertaIA, venv en .venv). Estado al 6-oct-2026: v3.13.3, 863 tests
+verdes. OJO: MT5 entrega las épocas en HORA DEL SERVIDOR (EET, UTC+2/+3), no UTC: ver
+CHANGELOG v3.13.3 y MT5_SERVER_TZ. Demo MT5 NUEVA (MetaQuotes-Demo, ~3.000 USD). OJO: al 5-oct el bot estaba APAGADO
 (DB cerrada el 4-oct 13:44): verificar que no haya ningún main.py y pedirle al user que lo
 arranque con start_bot.ps1 (pide contraseña; no lo arranques vos).
 Research: 25 familias de hipótesis probadas con pre-registro → 0 operables (la 25 = redes

@@ -215,6 +215,11 @@ class Settings:
     mt5_password: str | None
     mt5_server: str | None
     mt5_connection_timeout_ms: int
+    # v3.13.3 — zona horaria del SERVIDOR MT5 (las epocas de MT5 vienen en hora
+    # del servidor, no UTC). "" = sin conversion (default, comportamiento previo);
+    # "EET" = MetaQuotes-Demo (UTC+2/+3, regla UE; medido 2026-10-06); "NY+7";
+    # "UTC+N". Solo convierte ticks y velas INTRADIA (ver app/brokers/mt5_time.py).
+    mt5_server_tz: str
     enable_macro_context: bool
     enable_trade_action_reports: bool
     # Phase 3 + 3.5 v2.2.0 — forex price-action + LLM integration
@@ -724,6 +729,7 @@ def load_settings() -> Settings:
         mt5_password=os.getenv("MT5_PASSWORD") or None,
         mt5_server=os.getenv("MT5_SERVER") or None,
         mt5_connection_timeout_ms=_get_int("MT5_CONNECTION_TIMEOUT_MS", 5000),
+        mt5_server_tz=(os.getenv("MT5_SERVER_TZ") or "").strip(),
         enable_macro_context=_get_bool("ENABLE_MACRO_CONTEXT", True),
         enable_trade_action_reports=_get_bool("ENABLE_TRADE_ACTION_REPORTS", True),
         # Phase 3 + 3.5 v2.2.0

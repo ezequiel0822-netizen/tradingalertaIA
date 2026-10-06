@@ -25,6 +25,11 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 from app.brokers.mt5_reader import MT5Reader, MT5Timeframe
+from app.brokers.mt5_time import (
+    cache_time_basis,
+    ensure_cache_time_basis,
+    mark_cache_time_basis,
+)
 from app.config.settings import Settings
 
 
@@ -97,6 +102,8 @@ class SymbolDepth:
     fetched_from_mt5: bool = False
     truncation_suspect: bool = False
     note: str = ""
+    # v3.13.3: base horaria de la serie intradia ('utc' | 'server' | None=D1+/vacia)
+    time_basis: str | None = None
 
 
 @dataclass
@@ -134,13 +141,30 @@ class BacktestHistoricalLoader:
 
         if self._reader_connected():
             candles = self._fetch_max_depth(symbol, timeframe_minutes)
-            if candles:
+            # v3.13.3: el reader ya entrega UTC real si MT5_SERVER_TZ esta
+            # configurado; la serie del cache no puede mezclar bases horarias.
+            server_tz = getattr(self.settings, "mt5_server_tz", "")
+            can_write, basis_note = (
+                ensure_cache_time_basis(
+                    self.repository, symbol, timeframe_minutes, server_tz
+                )
+                if candles
+                else (True, "")
+            )
+            if candles and can_write:
                 written = self.repository.upsert_mt5_cache_candles(
                     symbol, timeframe_minutes, candles
                 )
                 depth.fetched_from_mt5 = written > 0
-                if written == 0:
+                if written > 0:
+                    mark_cache_time_basis(
+                        self.repository, symbol, timeframe_minutes, server_tz
+                    )
+                    depth.note = basis_note
+                else:
                     depth.note = "MT5 devolvio data pero el cache no escribio (soft-fail)"
+            elif candles:
+                depth.note = basis_note
             else:
                 depth.note = "MT5 conectado pero sin data para este simbolo/timeframe"
         else:
@@ -214,6 +238,14 @@ class BacktestHistoricalLoader:
         depth.bars = int(info.get("bars") or 0)
         depth.first_utc = _epoch_to_iso(info.get("first_epoch"))
         depth.last_utc = _epoch_to_iso(info.get("last_epoch"))
+        depth.time_basis = cache_time_basis(
+            self.repository, depth.symbol, depth.timeframe_minutes
+        )
+        if depth.time_basis == "server":
+            depth.note = (
+                depth.note + "; epochs en HORA DEL SERVIDOR (legacy, ver "
+                "scripts/mt5_cache_tz_migrate.py)"
+            ).strip("; ")
         suspect_under = _TRUNCATION_SUSPECT_BARS.get(depth.timeframe_minutes)
         if suspect_under and 0 < depth.bars < suspect_under:
             depth.truncation_suspect = True
