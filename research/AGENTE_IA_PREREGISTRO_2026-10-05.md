@@ -60,3 +60,30 @@ habilidad de suerte.
   reabrir la evaluación con otros parámetros "a ver si sí".
 
 Firmado (protocolo): parámetros y criterio fijos desde este commit.
+
+---
+
+## 7. Cierre anticipado de la evaluación v1 (2026-10-06)
+
+El user pidió un agente "más activo y mejorado" (v2, v3.14.0): cambian features,
+exploración y límites, así que **esta evaluación se cierra hoy, antes de su fecha**,
+sin conclusiones. Se reporta lo que hubo para que no se pierda ni se reinterprete:
+
+| Medida (decisiones con R, precio paper) | Valor |
+|---|---|
+| Decisiones registradas (5-oct 13:00 → 6-oct 04:33 UTC) | 13 |
+| Con R realizado | 11 (2 sin R utilizable: #10 y #11) |
+| Quiso ejecutar / ejecutadas en MT5 | 1 / 1 (USDCAD short breakout) |
+| Valor del agente | −1.08R total (−0.098R por decisión) |
+| Ejecutar todo | −9.83R total (−0.893R por decisión) |
+| No operar | 0 |
+| MT5 real de la única orden (magic 250501) | −9.82 USD, cerrada por el stop del broker (≈ −1R) |
+
+n = 11 es ~7 % de las 150 previstas: **no permite ninguna conclusión** (ni a favor ni en
+contra). Hallazgo de proceso (no de resultado): el cache D1 de MT5 está congelado desde el
+2026-06-15, así que las features `regime_align` y `vwap_week_signed` valieron 0 en TODAS
+las decisiones de v1 (el job las saca de ese cache y su guard de frescura las anula).
+
+Las decisiones que el bot v1 siga tomando hasta el reinicio con v2 quedan como v1
+(`policy_tag` vacío) y NO cuentan para la evaluación v2
+(`research/AGENTE_IA_V2_PREREGISTRO_2026-10-06.md`).
