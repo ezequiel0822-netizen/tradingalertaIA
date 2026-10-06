@@ -10,8 +10,9 @@
 
 ```
 Retomamos Trading Alert AI (bot de trading LOCAL, Python 3.12, Windows, repo en
-C:/Users/LENOVO/tradingalertaIA, venv en .venv). Estado al 5-oct-2026: v3.13.2, 838 tests
-verdes. Demo MT5 NUEVA (MetaQuotes-Demo, ~3.000 USD). OJO: al 5-oct el bot estaba APAGADO
+C:/Users/LENOVO/tradingalertaIA, venv en .venv). Estado al 6-oct-2026: v3.13.3, 863 tests
+verdes. OJO: MT5 entrega las épocas en HORA DEL SERVIDOR (EET, UTC+2/+3), no UTC: ver
+CHANGELOG v3.13.3 y MT5_SERVER_TZ. Demo MT5 NUEVA (MetaQuotes-Demo, ~3.000 USD). OJO: al 5-oct el bot estaba APAGADO
 (DB cerrada el 4-oct 13:44): verificar que no haya ningún main.py y pedirle al user que lo
 arranque con start_bot.ps1 (pide contraseña; no lo arranques vos).
 Research: 25 familias de hipótesis probadas con pre-registro → 0 operables (la 25 = redes

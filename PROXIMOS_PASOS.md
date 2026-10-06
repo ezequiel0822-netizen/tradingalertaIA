@@ -57,6 +57,13 @@
 > long Binance). **Registro único con todas las familias, commits y ventanas ya vistas:
 > `research/LEDGER_FAMILIAS.md`.** Main = origin/main en 13a3733 antes de este cierre.
 >
+> **🕒 6-oct-2026 — v3.13.3 (863 tests): hora del servidor MT5.** MT5 entrega las épocas en hora del
+> SERVIDOR (MetaQuotes-Demo: EET, UTC+3 hasta el domingo 25-oct, después UTC+2). En vivo no afecta
+> (forex de Yahoo); el harness H1 de `forex_session_breakout` (familia 5) corrió con sesiones corridas.
+> Fix opt-in `MT5_SERVER_TZ=EET` + `scripts/mt5_cache_tz_migrate.py` (cache H1; D1 no se toca). Familia 5:
+> NO se re-corta; una réplica sería hipótesis nueva con pre-registro (nota en el ledger). Verificar la
+> zona en cualquier momento: `python scripts/mt5_server_time_check.py` (solo lecturas).
+>
 > **📨 5-oct-2026 — v3.13.2 (838 tests): alertas forex/oro sin restos de memecoins.** Llegaban como
 > "TOP MEMECOINS" con "caída est. 90 %" (estimador de memecoins aplicado a forex) y salían TODOS los
 > snapshots forex (should_send devolvía True siempre). Ahora: título por mercado, movimiento observado,

@@ -56,7 +56,7 @@ de los resultados — sin tocar jamás dinero real.**
 
 | Qué | Estado |
 |---|---|
-| Versión | **v3.13.2** (§2.11 = agente IA, auditoría de tests y alertas forex/oro; §2.9 = v3.12.0) |
+| Versión | **v3.13.3** (§2.11 = agente IA, auditoría de tests, alertas forex/oro y hora del servidor MT5; §2.9 = v3.12.0) |
 | Tests | **801 verdes** |
 | Foco | **100% LA BOLSA** (acciones US + forex + oro). Memecoins CORTADAS (bot aparte), scalping APAGADO |
 | Bot | Corriendo en la Lenovo vía **`.\start_bot.ps1`**. Preflight: `python preflight.py` |
@@ -282,6 +282,12 @@ real en `lifecycle_manager` (el cierre parcial en TP1 aflojaba un trailing stop)
 forex/oro usaban el estimador y el score de memecoins, y `should_send_alert` dejaba pasar TODO snapshot
 forex/oro. Ahora: estimador propio (movimiento observado, sin inventar subidas/caídas), envío solo con
 movimiento notable, título por mercado y comandos de Telegram sin memecoins con el motor apagado. 838 tests.
+
+**v3.13.3 (6-oct) — hora del servidor MT5**: MT5 entrega las épocas (velas, ticks, deals) en hora del
+SERVIDOR (MetaQuotes-Demo: EET, UTC+2 invierno / UTC+3 verano, regla UE; medido). En vivo no pegaba (forex
+viene de Yahoo); en el harness H1 `forex_session_breakout` corrió con las sesiones 2-3 h corridas (familia 5:
+veredicto intacto, nota en el ledger). Fix opt-in `MT5_SERVER_TZ=EET` (convierte ticks e intradía; D1 queda
+como fecha de trading) + `mt5_cache_meta` + `scripts/mt5_cache_tz_migrate.py` para el cache H1. 863 tests.
 
 ## 3. La verdad de fondo (la filosofía del proyecto)
 
