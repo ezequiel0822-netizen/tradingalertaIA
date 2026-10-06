@@ -333,10 +333,12 @@ def test_learns_from_closed_trades_skips_artifacts_and_is_idempotent() -> None:
 # ------------------------------------------------------------- otros wiring
 def test_agent_off_by_default(monkeypatch) -> None:
     monkeypatch.setattr("app.config.settings.load_dotenv", lambda *a, **k: None)
-    for k in ("ENABLE_AI_AGENT", "APP_VERSION"):
+    for k in ("ENABLE_AI_AGENT", "APP_VERSION", "AI_AGENT_VERSION", "AI_AGENT_EXPLORE_PCT"):
         monkeypatch.delenv(k, raising=False)
     s = load_settings()
-    assert s.enable_ai_agent is False and s.app_version.startswith("v3.13")
+    assert s.enable_ai_agent is False and s.app_version.startswith("v3.14")
+    # v3.14.0: v2 y la exploración también son opt-in (defaults = v1 tal cual)
+    assert s.ai_agent_version == 1 and s.ai_agent_explore_pct == 0.0
 
 
 def test_ml_low_confidence_halves_lot_without_crashing(monkeypatch) -> None:

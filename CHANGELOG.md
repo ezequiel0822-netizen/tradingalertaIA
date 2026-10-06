@@ -1,5 +1,21 @@
 # Changelog
 
+## v3.14.0 (2026-10-06) — Agente IA v2: más contexto, exploración declarada y P&L real de MT5
+
+Pedido del user: "hacé el agente más activo y mejoralo con todo lo que ya tenemos". Antes del código se cerró la evaluación v1 (n = 11, sin conclusiones) y se commiteó el pre-registro v2 (`research/AGENTE_IA_V2_PREREGISTRO_2026-10-06.md`, 2b0304d). Todo opt-in: con los defaults (`AI_AGENT_VERSION=1`, `AI_AGENT_EXPLORE_PCT=0`) el agente es v1 tal cual.
+
+- **Dicho sin vueltas**: más actividad NO acelera el aprendizaje (el agente ya aprende del paper trade de TODOS los candidatos: información completa, no un bandit) y sin edge cuesta. La exploración se dimensionó chica y con presupuesto propio; costo esperado declarado ~0.2-0.3 % del equity por día de mercado si los candidatos siguen en ~−0.9R.
+- **24 features (v2)**: las 16 de v1 + cercanía a evento high del calendario (±120 min), COT index especulativo de la moneda (as-of, lag 4 días, 3 años), costo/riesgo del trade (`cost_r`), lunes/viernes, hora (sin/cos) y racha de la estrategia (R medio de sus últimos 20 cerrados ANTES de la apertura). Funciones puras, sin mirar el futuro (tests).
+- **Contexto D1 arreglado para v2**: el cache D1 de MT5 está congelado desde el 2026-06-15 → `regime_align` y `vwap_week_signed` valieron 0 en TODAS las decisiones de v1. v2 lee las velas D1 de MT5 en vivo (solo lectura) cuando el cache está viejo y descarta la vela del día en curso.
+- **Exploración (`AI_AGENT_EXPLORE_PCT`)**: de lo que el modelo saltearía, ejecuta esa fracción a `AI_AGENT_EXPLORE_RISK_PCT` (0.10 %), ≤ `AI_AGENT_EXPLORE_MAX_PER_DAY` (3) y stop propio `AI_AGENT_EXPLORE_DAILY_STOP_R` (−2R). Orden con comentario `TradingAlertAI agent explore` y `ai_agent_explore/` en la request. Azar reproducible por semilla.
+- **P&L REAL de MT5**: `MT5DemoTrader.closed_position_outcome` (solo lectura) suma profit+swap+comisión+fee de los deals de la posición (`history_deals_get(position=...)`, sin rango de fechas → inmune a la hora del servidor) y lo divide por la pérdida en el SL (`order_calc_profit`). Verificado contra la cuenta real: la orden del 5-oct dio R_mt5 −1.00 vs −1.08 en paper. Alimenta un **ajuste de realismo** encogido ĝ = Σ(R_mt5 − R_paper)/(n+5) que se suma al puntaje antes de decidir; el modelo sigue aprendiendo del paper (misma etiqueta para todos, sin sesgo de selección).
+- **`policy_tag` por decisión** (+ `agent_version`, `risk_cap_pct`, `realism_gap`, `mt5_r`, `mt5_profit_usd`, `mt5_status` en `ai_agent_decisions`): la evaluación cuenta solo el tag pre-registrado. Modelo v2 aparte (`bot_state['ai_agent_model_v2']`); el de v1 no se toca.
+- **`scripts/ai_agent_warmstart.py --version 2 [--mt5-d1]`**: arranque en caliente con features as-of (con `--mt5-d1`, 509 de 593 trades tienen régimen D1). Muestra el R esperado en el contexto MEDIO de cada estrategia (el "contexto neutro" engaña en v2: pone el costo en 0).
+- **`scripts/ai_agent_report.py`**: reporte en solo lectura (`mode=ro`) por versión/política; `--evaluate` codifica el criterio pre-registrado (t Newey-West, mitades, límites) y se niega antes del 2027-01-11.
+- `/agente` muestra versión/tag, exploración, MT5 real, ajuste de realismo y los pesos de las features nuevas; el resumen diario de Telegram suma una línea del agente.
+- `.env.example` al día (claves del agente; sin `APP_VERSION`).
+- Tests: +26 (`tests/test_ai_agent_v2.py`, `tests/test_ai_agent_report.py`). **864 tests verdes.**
+
 ## v3.13.2 (2026-10-05) — alertas de forex/oro sin restos de memecoins
 
 Reporte del user con captura: "Trading Alert AI v3.13.1 / TOP MEMECOINS" con EURUSD y USDCAD, "Caída est.: 90.01%", confianza 25, score 21, cuando las memecoins están apagadas desde v3.7.0. Eran tres bugs encadenados más textos viejos:

@@ -1165,6 +1165,14 @@ class TradingAlertJob:
             f"({stats['wins']} ganados, {stats['losses']} perdidos)",
             f"R neto del dia: {stats['net_r']:+.2f}",
         ]
+        # v3.14.0: una linea del agente IA (si esta encendido). Soft-fail.
+        if getattr(self.settings, "enable_ai_agent", False):
+            try:
+                from app.ai_agent.agent import AiAgent
+
+                lines.append(AiAgent(self.settings, self.repository).summary_line(today))
+            except Exception:
+                logger.exception("Resumen diario: linea del agente fallo; se omite")
         lesson = None
         try:
             from app.intelligence.reasoner import TradingReasoner
@@ -1791,21 +1799,29 @@ class TradingAlertJob:
         """Decide EJECUTAR o NO OPERAR un candidato forex/gold y, si ejecuta y
         ningún límite lo frena, manda la orden a MT5 demo con magic propio.
         Registra SIEMPRE la decisión (aprende de todos los candidatos). Soft-fail:
-        cualquier error = sin orden, el bot sigue."""
+        cualquier error = sin orden, el bot sigue.
+
+        v3.14.0: con AI_AGENT_VERSION=2 usa 24 features (calendario, COT, costo,
+        día/hora, racha) y puede EXPLORAR (riesgo reducido, presupuesto propio)."""
         try:
             from app.ai_agent.agent import AiAgent
-            from app.ai_agent.features import build_features
+            from app.ai_agent.features import build_features, build_features_v2
 
             if paper_trade.get("id") is None:
                 return
             agent = AiAgent(self.settings, self.repository)
-            regime, vwap_week = self._ai_agent_context(paper_trade)
-            x = build_features(paper_trade, regime, vwap_week)
+            if agent.version == 2:
+                regime, vwap_week = self._ai_agent_context(paper_trade, live_fallback=True)
+                x = build_features_v2(paper_trade, regime, vwap_week,
+                                      self._ai_agent_extras(paper_trade))
+            else:
+                regime, vwap_week = self._ai_agent_context(paper_trade)
+                x = build_features(paper_trade, regime, vwap_week)
             model = agent.load_model()
-            mean, sd, sampled, intended = agent.decide(model, x, int(paper_trade["id"]))
+            dec = agent.choose(model, x, int(paper_trade["id"]))
             block = None
-            if intended == "execute":
-                block = self._ai_agent_block_reason(agent, paper_trade)
+            if dec.intended in ("execute", "explore"):
+                block = self._ai_agent_block_reason(agent, paper_trade, kind=dec.intended)
             decision_id = self.repository.create_ai_agent_decision(
                 {
                     "paper_trade_id": int(paper_trade["id"]),
@@ -1815,25 +1831,30 @@ class TradingAlertJob:
                     "strategy_name": paper_trade.get("strategy_name"),
                     "direction": paper_trade.get("direction"),
                     "features_json": json.dumps(x),
-                    "mean_r": mean,
-                    "std_r": sd,
-                    "sampled_r": sampled,
-                    "intended": intended,
+                    "mean_r": dec.mean,
+                    "std_r": dec.sd,
+                    "sampled_r": dec.sampled,
+                    "intended": dec.intended,
                     "executed": False,
                     "block_reason": block,
                     "model_n": model.n,
+                    "agent_version": agent.version,
+                    "policy_tag": agent.policy_tag(),
+                    "risk_cap_pct": dec.risk_cap_pct,
+                    "realism_gap": dec.gap,
                 }
             )
             logger.info(
-                "Agente IA: %s %s %s -> %s (R esperado %+.2f ± %.2f, muestra %+.2f)%s",
-                paper_trade.get("strategy_name"), paper_trade.get("symbol"),
-                paper_trade.get("direction"), intended, mean, sd, sampled,
+                "Agente IA v%s: %s %s %s -> %s (R esperado %+.2f ± %.2f, muestra %+.2f)%s",
+                agent.version, paper_trade.get("strategy_name"), paper_trade.get("symbol"),
+                paper_trade.get("direction"), dec.intended, dec.mean, dec.sd, dec.sampled,
                 f" BLOQUEADO: {block}" if block else "",
             )
-            if decision_id is None or intended != "execute" or block:
+            if decision_id is None or dec.intended not in ("execute", "explore") or block:
                 return
             try:
-                request_id, ok, reason = self._ai_agent_execute(paper_trade)
+                request_id, ok, reason = self._ai_agent_execute(
+                    paper_trade, risk_cap_pct=dec.risk_cap_pct, kind=dec.intended)
             except Exception as exc:
                 logger.exception("Agente IA: la ejecución falló; sin orden")
                 request_id, ok, reason = None, False, f"error: {type(exc).__name__}"
@@ -1845,9 +1866,15 @@ class TradingAlertJob:
         except Exception:
             logger.exception("Agente IA fallo; soft-fail (sin orden)")
 
-    def _ai_agent_context(self, paper_trade: dict) -> tuple[str | None, float | None]:
+    def _ai_agent_context(
+        self, paper_trade: dict, live_fallback: bool = False
+    ) -> tuple[str | None, float | None]:
         """(régimen D1 'up'/'down'/'flat', distancia % al VWAP semanal) del cache D1
-        de MT5, igual que los gates. (None, None) si no hay data. Soft-fail."""
+        de MT5, igual que los gates. (None, None) si no hay data. Soft-fail.
+
+        v3.14.0 (`live_fallback`, solo v2): si el cache D1 está viejo (no lo refresca
+        el loop vivo; quedó congelado el 2026-06-15) lee las velas D1 de MT5 en vivo
+        (solo lectura) y descarta la vela del día en curso (incompleta)."""
         try:
             from app.brokers.mt5_symbol_map import yahoo_to_mt5
             from app.indicators.vwap import weekly_vwap
@@ -1862,6 +1889,10 @@ class TradingAlertJob:
                 raw, getattr(self.settings, "mt5_broker_profile", "icmarkets")
             ) or raw.upper().replace("=X", "")
             candles = self._d1_candles_for_regime(mt5_sym)
+            if live_fallback:
+                if not candles:
+                    candles = self._ai_agent_live_d1(mt5_sym)
+                candles = _complete_d1_bars(candles, utc_now())
             regime = None
             if len(candles) >= SMA_TREND_PERIOD + TREND_SLOPE_LOOKBACK:
                 regime = classify(candles).regime_trend
@@ -1875,13 +1906,67 @@ class TradingAlertJob:
             logger.exception("Agente IA: contexto D1 fallo; sigue sin régimen/VWAP")
             return None, None
 
-    def _ai_agent_block_reason(self, agent, paper_trade: dict) -> str | None:
+    def _ai_agent_live_d1(self, mt5_symbol: str, count: int = 400) -> list[dict]:
+        """Velas D1 de MT5 en vivo (solo lectura, vía el reader). [] si no hay."""
+        reader = getattr(self, "mt5_reader", None)
+        if reader is None:
+            return []
+        try:
+            mt5_mod = getattr(reader, "_mt5", None)
+            timeframe = int(getattr(mt5_mod, "TIMEFRAME_D1", 16408))
+            return list(reader.get_rates(mt5_symbol, timeframe, count) or [])
+        except Exception:
+            return []
+
+    def _ai_agent_extras(self, paper_trade: dict) -> dict[str, float]:
+        """Features v2 que necesitan la DB, as-of la apertura (pre-registro v2 §1.1).
+        Cada una soft-fail por separado: si falla, vale 0 ("no sé")."""
+        from app.ai_agent.features import (
+            EVENT_WINDOW_MIN,
+            cot_index_signed,
+            cot_market_for,
+            event_proximity,
+            parse_utc,
+            recent_strategy_r,
+        )
+        from app.intelligence.calendar_filter import currencies_for_symbol
+
+        extras: dict[str, float] = {}
+        opened = parse_utc(paper_trade.get("opened_at")) or utc_now()
+        symbol = str(paper_trade.get("symbol") or "")
+        try:
+            win = timedelta(minutes=EVENT_WINDOW_MIN)
+            events = self.repository.fetch_economic_events_window(
+                start_iso=(opened - win).isoformat(), end_iso=(opened + win).isoformat(),
+                countries=sorted(currencies_for_symbol(symbol)), impact="high",
+            )
+            extras["event_near"] = event_proximity(opened, events)
+        except Exception:
+            logger.exception("Agente IA: feature de calendario fallo; vale 0")
+        try:
+            market = cot_market_for(symbol)
+            if market is not None:
+                reports = self.repository.fetch_cot_history(market[0], limit=200)
+                extras["cot_signed"] = cot_index_signed(
+                    symbol, str(paper_trade.get("direction") or "long"), opened, reports)
+        except Exception:
+            logger.exception("Agente IA: feature COT fallo; vale 0")
+        try:
+            closed = self.repository.fetch_closed_paper_trades(limit=1500)
+            extras["strat_recent_r"] = recent_strategy_r(
+                str(paper_trade.get("strategy_name") or ""), opened, closed)
+        except Exception:
+            logger.exception("Agente IA: feature de racha fallo; vale 0")
+        return extras
+
+    def _ai_agent_block_reason(self, agent, paper_trade: dict, kind: str = "execute"
+                               ) -> str | None:
         """Límites que frenan una ejecución del agente (riesgo, no edge)."""
         if not self.settings.enable_mt5_demo_trading:
             return "ENABLE_MT5_DEMO_TRADING=false (decide en sombra)"
         if self.repository.get_state("demo_trading_halted", "false") == "true":
             return "demo trading en halt"
-        own = agent.guardrail_block()
+        own = agent.guardrail_block(kind=kind)
         if own:
             return own
         if not self._calendar_gate(paper_trade):
@@ -1890,20 +1975,25 @@ class TradingAlertJob:
             return "cap de exposición USD"
         return None
 
-    def _ai_agent_execute(self, paper_trade: dict) -> tuple[int | None, bool, str | None]:
-        """Prepara (lote achicado al riesgo del agente) y envía con AGENT_MAGIC."""
+    def _ai_agent_execute(
+        self, paper_trade: dict, risk_cap_pct: float | None = None, kind: str = "execute"
+    ) -> tuple[int | None, bool, str | None]:
+        """Prepara (lote achicado al riesgo del agente) y envía con AGENT_MAGIC.
+        v3.14.0: `kind='explore'` usa su riesgo reducido y otro comentario."""
         from app.brokers.mt5_demo_trader import MT5DemoTrader
 
+        cap = float(risk_cap_pct if risk_cap_pct is not None else self.settings.ai_agent_risk_pct)
+        explore = kind == "explore"
         trader = MT5DemoTrader(self.settings, self.mt5_reader)
         open_positions = len(trader.positions())
         result = trader.prepare_from_paper_trade(
-            paper_trade, open_positions,
-            risk_cap_pct=float(self.settings.ai_agent_risk_pct),
+            paper_trade, open_positions, risk_cap_pct=cap,
         )
         if not result.ok or result.draft is None:
             return None, False, f"preparación: {result.reason}"
         draft = result.draft
         now = utc_now()
+        prefix = "ai_agent_explore" if explore else "ai_agent"
         request_id = self.repository.create_demo_trade_request(
             {
                 "paper_trade_id": paper_trade["id"],
@@ -1914,9 +2004,9 @@ class TradingAlertJob:
                 "stop_loss": draft.stop_loss,
                 "take_profit": draft.take_profit,
                 "risk_pct": draft.risk_pct,
-                "strategy_name": f"ai_agent/{draft.strategy_name or '?'}",
+                "strategy_name": f"{prefix}/{draft.strategy_name or '?'}",
                 "status": "pending",
-                "reason": f"Agente IA: {draft.reason}",
+                "reason": f"Agente IA ({'exploración' if explore else 'decisión'}): {draft.reason}",
                 "request_summary": draft.request_summary,
                 "created_at": now.isoformat(),
                 "expires_at": (
@@ -1926,8 +2016,9 @@ class TradingAlertJob:
         )
         self._auto_execute_demo_request(
             trader, request_id, open_positions,
-            magic=MT5DemoTrader.AGENT_MAGIC, comment="TradingAlertAI agent",
-            label="Agente IA: orden demo",
+            magic=MT5DemoTrader.AGENT_MAGIC,
+            comment="TradingAlertAI agent explore" if explore else "TradingAlertAI agent",
+            label="Agente IA: orden demo (exploración)" if explore else "Agente IA: orden demo",
         )
         request = self.repository.fetch_demo_trade_request(request_id) or {}
         ok = str(request.get("status") or "") == "sent"
@@ -1935,15 +2026,24 @@ class TradingAlertJob:
 
     def _maybe_ai_agent_learn(self) -> None:
         """v3.13.0: el agente aprende de los candidatos cuyo paper trade cerró.
-        Corre cada ciclo (barato: solo decisiones pendientes). Soft-fail."""
+        Corre cada ciclo (barato: solo decisiones pendientes). Soft-fail.
+        v3.14.0: además registra el resultado REAL de MT5 de lo ejecutado."""
         if not getattr(self.settings, "enable_ai_agent", False):
             return
         try:
             from app.ai_agent.agent import AiAgent
 
-            learned = AiAgent(self.settings, self.repository).learn()
+            agent = AiAgent(self.settings, self.repository)
+            learned = agent.learn()
             if learned:
                 logger.info("Agente IA: aprendió de %d trades cerrados", learned)
+            if self.settings.enable_mt5_demo_trading:
+                from app.brokers.mt5_demo_trader import MT5DemoTrader
+
+                got = agent.collect_mt5_outcomes(
+                    lambda: MT5DemoTrader(self.settings, self.mt5_reader))
+                if got:
+                    logger.info("Agente IA: %d resultados reales de MT5 registrados", got)
         except Exception:
             logger.exception("Agente IA: aprendizaje fallo; soft-fail")
 
@@ -1992,3 +2092,20 @@ class TradingAlertJob:
                 "v2.6.8: failed to correct paper_trade=%s notional",
                 paper_trade_id,
             )
+
+
+def _complete_d1_bars(candles: list[dict], now) -> list[dict]:
+    """v3.14.0: descarta las velas D1 cuya fecha (etiqueta del servidor MT5) sea >=
+    la fecha UTC de la decisión: esa vela todavía no cerró."""
+    from datetime import datetime, timezone
+
+    today = now.date()
+    out = []
+    for c in candles or []:
+        try:
+            d = datetime.fromtimestamp(int(c.get("time") or 0), tz=timezone.utc).date()
+        except (TypeError, ValueError, OSError):
+            continue
+        if d < today:
+            out.append(c)
+    return out

@@ -331,6 +331,19 @@ class Settings:
     ai_agent_prior_var: float
     ai_agent_noise_var: float
     ai_agent_seed: int
+    # v3.14.0 — agente v2 (research/AGENTE_IA_V2_PREREGISTRO_2026-10-06.md). Opt-in:
+    # con AI_AGENT_VERSION=1 y AI_AGENT_EXPLORE_PCT=0 (defaults) el agente es v1 tal
+    # cual. v2 = 24 features + ajuste de realismo con el P&L real de MT5; modelo
+    # aparte en bot_state (ai_agent_model_v2), el de v1 no se toca.
+    ai_agent_version: int
+    # Exploracion: de los candidatos que el modelo NO ejecutaria, ejecuta esta
+    # fraccion con riesgo reducido y presupuesto diario propio. NO acelera el
+    # aprendizaje (el agente ya aprende del paper de TODOS los candidatos): solo
+    # suma actividad y datos de ejecucion real. Sin edge, cuesta (pre-registro §5).
+    ai_agent_explore_pct: float
+    ai_agent_explore_risk_pct: float
+    ai_agent_explore_max_per_day: int
+    ai_agent_explore_daily_stop_r: float
     # Phase 4 v2.3.0 — MT5 validation + walk-forward + data quality + CSV
     mt5_broker_profile: str
     enable_walk_forward_backtest: bool
@@ -515,7 +528,7 @@ def load_settings() -> Settings:
         obsidian_vault_path = safe_obsidian
 
     return Settings(
-        app_version=os.getenv("APP_VERSION", "v3.13.2"),
+        app_version=os.getenv("APP_VERSION", "v3.14.0"),
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
         telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID"),
         dexscreener_base_url=os.getenv(
@@ -773,6 +786,11 @@ def load_settings() -> Settings:
         ai_agent_prior_var=_get_float("AI_AGENT_PRIOR_VAR", 0.25),
         ai_agent_noise_var=_get_float("AI_AGENT_NOISE_VAR", 1.0),
         ai_agent_seed=_get_int("AI_AGENT_SEED", 20261005),
+        ai_agent_version=_get_int("AI_AGENT_VERSION", 1),
+        ai_agent_explore_pct=_get_float("AI_AGENT_EXPLORE_PCT", 0.0),
+        ai_agent_explore_risk_pct=_get_float("AI_AGENT_EXPLORE_RISK_PCT", 0.10),
+        ai_agent_explore_max_per_day=_get_int("AI_AGENT_EXPLORE_MAX_PER_DAY", 3),
+        ai_agent_explore_daily_stop_r=_get_float("AI_AGENT_EXPLORE_DAILY_STOP_R", 2.0),
         # Phase 4 v2.3.0
         mt5_broker_profile=os.getenv("MT5_BROKER_PROFILE", "icmarkets"),
         enable_walk_forward_backtest=_get_bool("ENABLE_WALK_FORWARD_BACKTEST", True),

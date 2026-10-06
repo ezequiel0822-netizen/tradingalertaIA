@@ -650,6 +650,61 @@ class MT5DemoTrader:
             )
         return positions
 
+    def closed_position_outcome(
+        self, position_ticket: int, stop_loss: float
+    ) -> dict[str, Any] | None:
+        """v3.14.0 — SOLO LECTURA: resultado real de una posición ya cerrada.
+
+        Suma profit + swap + comisión + fee de todos sus deals
+        (`history_deals_get(position=...)`, sin rango de fechas: así no depende de la
+        hora del servidor) y lo divide por la pérdida que habría dado el SL con el
+        volumen y el precio de apertura REALES (`order_calc_profit`). None si sigue
+        abierta, si no hay deals o si MT5 no responde (el caller reintenta)."""
+        if not position_ticket or not self.connect():
+            return None
+        mt5 = self._mt5()
+        try:
+            if mt5.positions_get(ticket=int(position_ticket)):
+                return None                       # sigue abierta
+            deals = mt5.history_deals_get(position=int(position_ticket))
+        except Exception:
+            return None
+        rows = [_asdict(d) for d in (deals or ())]
+        entry_in = getattr(mt5, "DEAL_ENTRY_IN", 0)
+        exits = {getattr(mt5, "DEAL_ENTRY_OUT", 1), getattr(mt5, "DEAL_ENTRY_OUT_BY", 3)}
+        opens = [r for r in rows if r.get("entry") == entry_in]
+        if not opens or not any(r.get("entry") in exits for r in rows):
+            return None
+        profit = sum(
+            (_to_float(r.get(k)) or 0.0)
+            for r in rows
+            for k in ("profit", "swap", "commission", "fee")
+        )
+        first = opens[0]
+        volume = sum(_to_float(r.get("volume")) or 0.0 for r in opens)
+        price_open = _to_float(first.get("price"))
+        is_buy = first.get("type") == getattr(mt5, "DEAL_TYPE_BUY", 0)
+        order_type = getattr(mt5, "ORDER_TYPE_BUY", 0) if is_buy else getattr(
+            mt5, "ORDER_TYPE_SELL", 1
+        )
+        risk_usd = None
+        try:
+            at_sl = mt5.order_calc_profit(
+                order_type, str(first.get("symbol")), volume, price_open, float(stop_loss)
+            )
+            if at_sl is not None and float(at_sl) < 0:
+                risk_usd = abs(float(at_sl))
+        except Exception:
+            risk_usd = None
+        return {
+            "profit_usd": round(profit, 2),
+            "risk_usd": round(risk_usd, 2) if risk_usd else None,
+            "r": round(profit / risk_usd, 4) if risk_usd else None,
+            "symbol": first.get("symbol"),
+            "volume": volume,
+            "price_open": price_open,
+        }
+
     def _mt5(self):
         mt5 = getattr(self.reader, "_mt5", None)
         if mt5 is None:

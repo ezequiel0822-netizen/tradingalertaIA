@@ -625,6 +625,19 @@ def _init_db_unsafe(db_path: Path) -> None:
         _ensure_column(connection, "paper_trades", "hurst_entry", "REAL")
         _ensure_column(connection, "paper_trades", "clv_entry", "REAL")
         _ensure_column(connection, "paper_trades", "candle_strength", "TEXT")
+        # v3.14.0 — agente IA v2: versión/política de cada decisión (la evaluación
+        # cuenta solo su policy_tag), riesgo usado, ajuste de realismo y el resultado
+        # REAL de MT5 de las ejecutadas (mt5_status: closed | unavailable).
+        for column, ctype in (
+            ("agent_version", "INTEGER"),
+            ("policy_tag", "TEXT"),
+            ("risk_cap_pct", "REAL"),
+            ("realism_gap", "REAL"),
+            ("mt5_r", "REAL"),
+            ("mt5_profit_usd", "REAL"),
+            ("mt5_status", "TEXT"),
+        ):
+            _ensure_column(connection, "ai_agent_decisions", column, ctype)
 
 
 def _ensure_column(

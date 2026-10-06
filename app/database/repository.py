@@ -2164,6 +2164,7 @@ class Repository:
     # ------------------------------------------------------------------ #
     _AI_DECISION_UPDATABLE = {
         "executed", "block_reason", "demo_request_id", "reward_r", "rewarded_at",
+        "mt5_r", "mt5_profit_usd", "mt5_status",
     }
 
     def create_ai_agent_decision(self, decision: dict[str, Any]) -> int | None:
@@ -2175,9 +2176,10 @@ class Repository:
                 INSERT OR IGNORE INTO ai_agent_decisions (
                     paper_trade_id, created_at, symbol, category, strategy_name,
                     direction, features_json, mean_r, std_r, sampled_r, intended,
-                    executed, block_reason, demo_request_id, model_n
+                    executed, block_reason, demo_request_id, model_n,
+                    agent_version, policy_tag, risk_cap_pct, realism_gap
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     int(decision["paper_trade_id"]),
@@ -2195,6 +2197,10 @@ class Repository:
                     decision.get("block_reason"),
                     decision.get("demo_request_id"),
                     decision.get("model_n"),
+                    decision.get("agent_version"),
+                    decision.get("policy_tag"),
+                    decision.get("risk_cap_pct"),
+                    decision.get("realism_gap"),
                 ),
             )
         return int(cursor.lastrowid) if cursor.rowcount else None
@@ -2228,3 +2234,33 @@ class Repository:
                 (int(limit),),
             ).fetchall()
         return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------ #
+    # v3.14.0 — lecturas para el agente IA v2 (features as-of y P&L real)
+    # ------------------------------------------------------------------ #
+    def fetch_cot_history(self, market_code: str, limit: int = 400) -> list[dict[str, Any]]:
+        """Reportes COT de un mercado (los más recientes `limit`), ascendentes."""
+        with get_connection(self.db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT report_date, market_code, net_noncomm, open_interest
+                FROM cot_snapshots
+                WHERE market_code = ?
+                ORDER BY report_date DESC
+                LIMIT ?
+                """,
+                (market_code, int(limit)),
+            ).fetchall()
+        return [dict(r) for r in reversed(rows)]
+
+    def fetch_demo_order_for_request(self, demo_request_id: int) -> dict[str, Any] | None:
+        with get_connection(self.db_path) as connection:
+            row = connection.execute(
+                """
+                SELECT * FROM demo_orders
+                WHERE demo_request_id = ?
+                ORDER BY id DESC LIMIT 1
+                """,
+                (int(demo_request_id),),
+            ).fetchone()
+        return dict(row) if row else None
