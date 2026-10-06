@@ -1,5 +1,30 @@
 # Pre-registro H-FADE1 — operar el REVERSO de las señales del bot (forex/oro, M15; k = 3)
 
+> **VEREDICTO (corrido 2026-10-06, un tiro): las TRES NO PASAN — familia 26 cerrada.**
+>
+> | Estrategia | n reversos | R neto/trade | estrés ×1.5 | t NW diaria | mitades (media diaria) |
+> |---|---|---|---|---|---|
+> | mean_reversion | 5.379 | −0.373 | −0.436 | −18.8 | −2.96 / −2.00 |
+> | momentum | 18.326 | −0.212 | −0.254 | −23.7 | −4.82 / −4.95 |
+> | forex_session_breakout | 12.618 | −0.192 | −0.230 | −12.4 | −2.99 / −3.19 |
+>
+> - **La forma es la predicha (§6):** el R BRUTO es ≈ 0 en las dos direcciones — reverso
+>   −0.057 / −0.004 / −0.001R, directo −0.013 / −0.042 / −0.051R — y lo que se pierde es el
+>   costo: 0.32 / 0.21 / 0.19R por trade, porque los stops salen de ~1.5-2 ATR de velas de 15
+>   min. Las señales son ruido; dar vuelta ruido vuelve a pagar el spread. Ningún año, símbolo
+>   ni sesión da positivo (descriptivo, no decisorio).
+> - **Diagnóstico post-hoc (rotulado, no decide nada):** el −0.92R de `mean_reversion` en el
+>   paper VIVO no se reproduce en el replay (directo bruto −0.01R, neto −0.33R). La pérdida
+>   extra del paper vivo viene de la mecánica de simulación (precio de entrada y monitoreo
+>   del paper), no de una dirección predecible que se pueda revertir.
+> - Datos: 8 símbolos M15 de MT5 (78.662 velas EURUSD; 74.777 XAUUSD), 2022-10-31 → 2025-12-31
+>   UTC, 0 huecos > 3 días hábiles; manifest `research/H-FADE1_manifest.csv` (sha256
+>   a6d62387…472687a7b); resultado completo `research/H-FADE1_result.json` (36.323 trades).
+>   La v3.13.3 (otra sesión, misma fecha) confirmó la regla EET/UE usada acá.
+> - Consecuencia: el agente NO suma una acción "fade". No se re-corta (ni otra geometría,
+>   ni otro timeframe, ni otra ventana).
+> - Commits: b042301 (pre-registro) → fbf1a6b (código, selftest 33/33) → este veredicto.
+
 > **Commiteado ANTES de bajar los datos** (protocolo del proyecto). Familia 26 del ledger.
 > k = 3 (una por estrategia), un tiro cada una, umbral **t ≥ 2.50** (Newey-West).
 > Research-only: no toca el bot, ni flags, ni el .env; a MT5 solo se le LEEN velas

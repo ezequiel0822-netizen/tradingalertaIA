@@ -1,0 +1,326 @@
+{
+  "by_strategy": {
+    "mean_reversion": {
+      "n": 5379,
+      "mean_r_net": -0.3731,
+      "mean_r_net_stress": -0.4363,
+      "t_nw_daily": -18.7952,
+      "half1_daily_mean": -2.9556,
+      "half2_daily_mean": -2.0022,
+      "criteria": {
+        "1_n_ge_100": true,
+        "2_mean_ge_0.05R": false,
+        "3_t_nw_ge_2.50": false,
+        "4_both_halves_pos": false,
+        "5_stress_pos": false
+      },
+      "verdict": "NO PASA",
+      "descriptive": {
+        "by_symbol": {
+          "AUDUSD": {
+            "n": 704,
+            "mean_r_net": -0.2449
+          },
+          "EURUSD": {
+            "n": 702,
+            "mean_r_net": -0.4682
+          },
+          "GBPUSD": {
+            "n": 632,
+            "mean_r_net": -0.4204
+          },
+          "NZDUSD": {
+            "n": 672,
+            "mean_r_net": -0.3356
+          },
+          "USDCAD": {
+            "n": 646,
+            "mean_r_net": -0.5261
+          },
+          "USDCHF": {
+            "n": 706,
+            "mean_r_net": -0.3795
+          },
+          "USDJPY": {
+            "n": 672,
+            "mean_r_net": -0.3613
+          },
+          "XAUUSD": {
+            "n": 645,
+            "mean_r_net": -0.254
+          }
+        },
+        "by_year": {
+          "2023": {
+            "n": 2086,
+            "mean_r_net": -0.339
+          },
+          "2024": {
+            "n": 1827,
+            "mean_r_net": -0.4061
+          },
+          "2025": {
+            "n": 1466,
+            "mean_r_net": -0.3804
+          }
+        },
+        "by_session": {
+          "Asia": {
+            "n": 1697,
+            "mean_r_net": -0.4459
+          },
+          "LDN-NY": {
+            "n": 756,
+            "mean_r_net": -0.2172
+          },
+          "London": {
+            "n": 728,
+            "mean_r_net": -0.2491
+          },
+          "NY": {
+            "n": 1300,
+            "mean_r_net": -0.3509
+          },
+          "Off": {
+            "n": 898,
+            "mean_r_net": -0.4994
+          }
+        },
+        "by_signal_dir": {
+          "long": {
+            "n": 3109,
+            "mean_r_net": -0.3427
+          },
+          "short": {
+            "n": 2270,
+            "mean_r_net": -0.4146
+          }
+        },
+        "exit_reasons": {
+          "tp": 0.46,
+          "sl": 0.47,
+          "time": 0.052,
+          "gap_sl": 0.018
+        },
+        "mean_cost_r": 0.3163,
+        "mean_r_gross_fade": -0.0567,
+        "mean_r_gross_direct": -0.0132,
+        "mean_r_net_direct": -0.3295,
+        "mean_bars_held": 5.768
+      }
+    },
+    "momentum": {
+      "n": 18326,
+      "mean_r_net": -0.2123,
+      "mean_r_net_stress": -0.2539,
+      "t_nw_daily": -23.7024,
+      "half1_daily_mean": -4.8178,
+      "half2_daily_mean": -4.9537,
+      "criteria": {
+        "1_n_ge_100": true,
+        "2_mean_ge_0.05R": false,
+        "3_t_nw_ge_2.50": false,
+        "4_both_halves_pos": false,
+        "5_stress_pos": false
+      },
+      "verdict": "NO PASA",
+      "descriptive": {
+        "by_symbol": {
+          "AUDUSD": {
+            "n": 2357,
+            "mean_r_net": -0.1245
+          },
+          "EURUSD": {
+            "n": 2286,
+            "mean_r_net": -0.2555
+          },
+          "GBPUSD": {
+            "n": 2289,
+            "mean_r_net": -0.2371
+          },
+          "NZDUSD": {
+            "n": 2316,
+            "mean_r_net": -0.1025
+          },
+          "USDCAD": {
+            "n": 2275,
+            "mean_r_net": -0.3018
+          },
+          "USDCHF": {
+            "n": 2273,
+            "mean_r_net": -0.1764
+          },
+          "USDJPY": {
+            "n": 2323,
+            "mean_r_net": -0.2273
+          },
+          "XAUUSD": {
+            "n": 2207,
+            "mean_r_net": -0.2795
+          }
+        },
+        "by_year": {
+          "2023": {
+            "n": 6040,
+            "mean_r_net": -0.1874
+          },
+          "2024": {
+            "n": 6086,
+            "mean_r_net": -0.2366
+          },
+          "2025": {
+            "n": 6200,
+            "mean_r_net": -0.2126
+          }
+        },
+        "by_session": {
+          "Asia": {
+            "n": 5338,
+            "mean_r_net": -0.2811
+          },
+          "LDN-NY": {
+            "n": 4446,
+            "mean_r_net": -0.1799
+          },
+          "London": {
+            "n": 4804,
+            "mean_r_net": -0.2408
+          },
+          "NY": {
+            "n": 2523,
+            "mean_r_net": -0.043
+          },
+          "Off": {
+            "n": 1215,
+            "mean_r_net": -0.2667
+          }
+        },
+        "by_signal_dir": {
+          "long": {
+            "n": 18326,
+            "mean_r_net": -0.2123
+          }
+        },
+        "exit_reasons": {
+          "tp": 0.506,
+          "sl": 0.49,
+          "gap_sl": 0.004,
+          "time": 0.001
+        },
+        "mean_cost_r": 0.2081,
+        "mean_r_gross_fade": -0.0041,
+        "mean_r_gross_direct": -0.0415,
+        "mean_r_net_direct": -0.2497,
+        "mean_bars_held": 12.2221
+      }
+    },
+    "forex_session_breakout": {
+      "n": 12618,
+      "mean_r_net": -0.1918,
+      "mean_r_net_stress": -0.23,
+      "t_nw_daily": -12.4383,
+      "half1_daily_mean": -2.9927,
+      "half2_daily_mean": -3.1895,
+      "criteria": {
+        "1_n_ge_100": true,
+        "2_mean_ge_0.05R": false,
+        "3_t_nw_ge_2.50": false,
+        "4_both_halves_pos": false,
+        "5_stress_pos": false
+      },
+      "verdict": "NO PASA",
+      "descriptive": {
+        "by_symbol": {
+          "AUDUSD": {
+            "n": 1427,
+            "mean_r_net": -0.1337
+          },
+          "EURUSD": {
+            "n": 1671,
+            "mean_r_net": -0.1912
+          },
+          "GBPUSD": {
+            "n": 1579,
+            "mean_r_net": -0.175
+          },
+          "NZDUSD": {
+            "n": 1378,
+            "mean_r_net": -0.1332
+          },
+          "USDCAD": {
+            "n": 1746,
+            "mean_r_net": -0.2651
+          },
+          "USDCHF": {
+            "n": 1672,
+            "mean_r_net": -0.1905
+          },
+          "USDJPY": {
+            "n": 1415,
+            "mean_r_net": -0.2294
+          },
+          "XAUUSD": {
+            "n": 1730,
+            "mean_r_net": -0.199
+          }
+        },
+        "by_year": {
+          "2023": {
+            "n": 4334,
+            "mean_r_net": -0.1773
+          },
+          "2024": {
+            "n": 4298,
+            "mean_r_net": -0.2243
+          },
+          "2025": {
+            "n": 3986,
+            "mean_r_net": -0.1726
+          }
+        },
+        "by_session": {
+          "LDN-NY": {
+            "n": 10759,
+            "mean_r_net": -0.1994
+          },
+          "NY": {
+            "n": 1859,
+            "mean_r_net": -0.1483
+          }
+        },
+        "by_signal_dir": {
+          "long": {
+            "n": 6541,
+            "mean_r_net": -0.1943
+          },
+          "short": {
+            "n": 6077,
+            "mean_r_net": -0.1892
+          }
+        },
+        "exit_reasons": {
+          "tp": 0.465,
+          "sl": 0.446,
+          "time": 0.084,
+          "gap_sl": 0.005
+        },
+        "mean_cost_r": 0.1908,
+        "mean_r_gross_fade": -0.001,
+        "mean_r_gross_direct": -0.0511,
+        "mean_r_net_direct": -0.242,
+        "mean_bars_held": 7.0074
+      }
+    }
+  },
+  "k": 3,
+  "family_verdict": "NO PASA",
+  "hypothesis": "H-FADE1 (familia 26)",
+  "preregistration": "research/HIPOTESIS_2026-10-06_fade.md",
+  "window": [
+    "2023-01-02",
+    "2025-12-31"
+  ],
+  "manifest_sha256": "a6d62387d37d8ada8e2d1086a5d85cd65da537fd96857cbd60b645a472687a7b",
+  "n_trades_total": 36323,
+  "generated_utc": "2026-10-06T09:13:35+00:00"
+}

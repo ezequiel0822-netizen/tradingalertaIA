@@ -1,8 +1,8 @@
 # Registro de familias de hipótesis — Trading Alert AI
 
 > Un solo lugar con TODO lo probado, su veredicto y dónde está la evidencia.
-> Actualizado: 2026-10-05 (B4b + tandas B11, B13, B12 y H-NN1).
-> **Saldo: 25 familias probadas con pre-registro → 0 operables.**
+> Actualizado: 2026-10-06 (H-FADE1: reverso de las señales del bot).
+> **Saldo: 26 familias probadas con pre-registro → 0 operables.**
 >
 > Regla de uso: una familia cerrada NO se re-abre ni se re-corta. Una variante es una
 > hipótesis NUEVA con su propio pre-registro, y si usa una ventana ya vista se declara
@@ -37,8 +37,9 @@
 | 23 | 2026-10-05 | H-EXF1 flujo neto a exchanges (CoinMetrics) → short | CoinMetrics Community (no point-in-time) | NO PASA: t_NW −0.45 | idem | idem |
 | 24 | 2026-10-05 | H-MVRV1 MVRV extremo → reversión a 4 semanas | CoinMetrics Community | NO PASA: pendiente con signo opuesto (t +0.98); regla −19.7 %/año | idem | idem |
 | 25 | 2026-10-05 | H-NN1 redes neuronales (MLP-23 y MLP-SEQ con 30 s de historia) vs HGB en microestructura L1 BTCUSDT | bookTicker + aggTrades 2023-05-17 → 07-31 y 11-01 → 11-10 (86/86 días, checksum oficial por zip); train = los 92 días de H-MS1 | NO PASA: las redes son PEORES que el HGB (ΔAUC 30 s −0.005 t −5.2 / −0.018 t −16) y la economía pierde ~−7.5 bps/trade en las 6 combinaciones. Réplica de H-MS1 fuera de muestra: AUC HGB 0.595 / 0.576 (señal real y estable, 13× menor que el costo). No integrar redes | 8853632, 5e90204, veredicto | `HIPOTESIS_2026-10-05_redes_neuronales.md` |
+| 26 | 2026-10-06 | H-FADE1 operar el REVERSO de las señales del bot (mean_reversion, momentum, forex_session_breakout; 1:1 con la distancia de riesgo de la señal), k = 3 | MT5 M15 de 7 pares + XAUUSD, 2023-01-02 → 2025-12-31 (hora del servidor → UTC, regla UE), simulador pesimista del harness | NO PASA las tres: −0.37 / −0.21 / −0.19R por trade, t_NW −18.8 / −23.7 / −12.4. Bruto ≈ 0 en ambas direcciones; se pierde el costo (0.19-0.32R por stops de velas de 15 min). El −0.92R del paper vivo de mean_reversion no se reproduce (directo bruto −0.01R): artefacto de la simulación paper, no dirección revertible | b042301, fbf1a6b, veredicto | `HIPOTESIS_2026-10-06_fade.md` |
 
-## Lectura transversal (2026-10-05, 24 familias)
+## Lectura transversal (2026-10-05, 24 familias; nota del 2026-10-06 al final)
 
 - Lo único que se acercó al umbral fueron **primas estructurales de funding/carry**: B4b
   (t 2.34/2.46 en 2023-24), H-FND1 (t 2.26, +67 % en 2020 → −30 % en 2024) y H-FC1 (prima
@@ -53,6 +54,11 @@
 - Implicancia: más familias del mismo tipo sobre las mismas fuentes públicas tienen
   probabilidad previa muy baja. Lo único con sentido es un test HACIA ADELANTE de una
   prima estructural nueva, con su propio pre-registro, nunca un re-corte de las cerradas.
+
+- **2026-10-06 (H-FADE1):** las señales propias del bot en forex/oro tienen R BRUTO ≈ 0 en
+  las dos direcciones; lo que se pierde es el costo de stops muy cortos. Invertirlas no sirve
+  y, por lo mismo, ningún filtro (incluido el agente IA) puede sacar mucho de ellas: a lo sumo
+  evitar las de costo/riesgo más alto.
 
 Evaluación previa SIN pre-registro (no cuenta como familia): ramas del carry (B4a, B4b,
 B5, DEX, Ethena, lending) por un agente, commit 62f8905,
@@ -82,6 +88,9 @@ B5, DEX, Ethena, lending) por un agente, commit 62f8905,
   ya había aparecido como contexto anual en H-FC1.)
 - **Forex/oro/índices D1** del cache propio: estacionalidad, carry, trend y COT ya vistos
   en las tandas de julio.
+- **Forex/oro M15 de MT5 2022-11 → 2025-12** (H-FADE1, 2026-10-06): las señales de
+  mean_reversion, momentum y forex_session_breakout ya se simularon en AMBAS direcciones
+  (1:1). Esa ventana ya no es limpia para variantes de esas estrategias en M15.
 - Ventanas NO vistas útiles: cripto **2020-01 → 2024-09** para señales que NO sean de
   funding/spread, posicionamiento ni retornos/funding cruzados (quedan muy pocas), y todo lo
   que pase **después** de la fecha de cada pre-registro (test hacia adelante). Hyperliquid
