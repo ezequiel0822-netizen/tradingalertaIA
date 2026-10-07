@@ -57,6 +57,10 @@
 > long Binance). **Registro único con todas las familias, commits y ventanas ya vistas:
 > `research/LEDGER_FAMILIAS.md`.** Main = origin/main en 13a3733 antes de este cierre.
 >
+> **📈 7-oct-2026 — v3.16.0 (938 tests): colector de options flow.** Foto diaria de las cadenas de opciones
+> de Yahoo (26 símbolos) para un pre-registro cuando haya ≥ 120 sesiones (~abr-2027). NO se miran los
+> valores antes (`research/OPCIONES_COLECTA_2026-10-07.md`). Encender: `ENABLE_OPTIONS_COLLECTOR=true` + reinicio.
+>
 > **🧱 7-oct-2026 — H-FVG1 / H-IFVG1 (familia 27): NO PASA.** Fair Value Gaps (retesteo) e inverse FVG en
 > H1 de MT5, 8 símbolos, 2011-01 → 2017-11 (ventana no vista) + secundaria 2026-06 → 2026-10: −0.24R y
 > −0.27R por trade (t NW −13.3 / −16.0), negativos ANTES de costos y en todos los símbolos, años y

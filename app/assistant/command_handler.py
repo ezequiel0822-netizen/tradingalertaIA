@@ -233,6 +233,9 @@ class BasicTelegramAssistant:
         if normalized in {"/agente", "agente", "/agent", "/ia", "agente ia"}:
             return self.ai_agent_message()
 
+        if normalized in {"/opciones", "opciones", "/options", "/options_flow", "options flow"}:
+            return self.options_message()
+
         if normalized in {"/edge", "edge", "/edges", "/borde", "bolsillos"}:
             return self.edge_message()
 
@@ -419,7 +422,7 @@ class BasicTelegramAssistant:
                         "/strategies", "/estrategias", "/demo_candidates",
                         "/demo_prepare", "/confirm_demo_trade", "/demo_positions",
                         "/demo_close_all", "/cerrar_demo", "/demo_halt",
-                        "/agente",
+                        "/agente", "/opciones",
                     }
                     if cmd in known_prefixes:
                         # Re-ejecutar como comando real (recursion controlada por longitud)
@@ -505,6 +508,7 @@ Comandos:
 /demo_close_all - cierra todas las posiciones demo abiertas en MT5
 /demo_halt - bloquea nuevas ordenes demo
 /agente - agente IA en sandbox demo: que decide, que aprendio y como le va
+/opciones - colector de options flow: cuantos dias guardo (sin valores, hasta el pre-registro)
 /pausar - pausa alertas automaticas
 /reanudar - reactiva alertas automaticas
 /config - ver configuracion sin secretos
@@ -743,6 +747,35 @@ Forex/oro: {", ".join(symbol.upper() for symbol in getattr(self.settings, "forex
         lines.extend(_render_block("SCALPING LESSONS", scalping_lessons))
         lines.append("")
         lines.append(DISCLAIMER)
+        return "\n".join(lines)
+
+    def options_message(self) -> str:
+        """v3.16.0: /opciones — estado del colector de options flow. Muestra SOLO cuanto
+        se guardo, nunca los valores: se evaluan con un pre-registro y mirarlos antes
+        contaminaria la prueba (research/OPCIONES_COLECTA_2026-10-07.md). Read-only."""
+        from app.collectors.options_collector import collector_symbols, raw_size_mb
+
+        try:
+            stats = self.repository.options_collection_stats()
+        except Exception:
+            return "No pude leer el estado del colector de opciones."
+        on = bool(getattr(self.settings, "enable_options_collector", False))
+        n_sym = len(collector_symbols(self.settings))
+        hour = int(getattr(self.settings, "options_collector_hour_utc", 22))
+        days = stats["days"]
+        lines = [
+            "Colector de opciones (options flow)",
+            f"Estado: {'ENCENDIDO' if on else 'APAGADO (ENABLE_OPTIONS_COLLECTOR=false)'}",
+            f"Simbolos: {n_sym} | captura desde las {hour}:00 UTC, dias habiles",
+            f"Sesiones guardadas: {days}"
+            + (f" ({stats['first']} -> {stats['last']})" if days else ""),
+            (f"Ultima sesion: {stats['symbols_last_day']}/{n_sym} simbolos"
+             if stats["last"] else "Ultima sesion: -"),
+            f"Archivos crudos: {raw_size_mb(self.settings):.1f} MB",
+            "",
+            "No muestra los valores a proposito: se evaluan con un pre-registro cuando haya"
+            " >= 120 sesiones (~abr-2027). Mirarlos antes contaminaria la prueba.",
+        ]
         return "\n".join(lines)
 
     def ai_agent_message(self) -> str:

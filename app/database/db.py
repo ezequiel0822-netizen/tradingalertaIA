@@ -334,6 +334,36 @@ def _init_db_unsafe(db_path: Path) -> None:
             CREATE INDEX IF NOT EXISTS idx_cot_report
                 ON cot_snapshots(report_date);
 
+            -- v3.16.0: foto diaria de las cadenas de opciones (Yahoo). Solo captura
+            -- para research (pre-registro futuro); el bot no la usa para decidir.
+            CREATE TABLE IF NOT EXISTS options_snapshots (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_date TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                captured_at TEXT NOT NULL,
+                underlying_price REAL,
+                n_expiries INTEGER,
+                n_contracts INTEGER,
+                call_volume REAL,
+                put_volume REAL,
+                call_oi REAL,
+                put_oi REAL,
+                call_premium REAL,
+                put_premium REAL,
+                unusual_call_count INTEGER,
+                unusual_put_count INTEGER,
+                unusual_call_premium REAL,
+                unusual_put_premium REAL,
+                atm_iv REAL,
+                skew_iv REAL,
+                ref_expiry_days REAL,
+                source TEXT,
+                UNIQUE(session_date, symbol)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_options_session
+                ON options_snapshots(session_date);
+
             CREATE TABLE IF NOT EXISTS daily_pnl_log (
                 date TEXT PRIMARY KEY,
                 realized_pnl_pct REAL DEFAULT 0,

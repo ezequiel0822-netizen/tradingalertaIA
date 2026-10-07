@@ -1526,6 +1526,47 @@ class Repository:
         return dict(row) if row else None
 
     # v3.9.0 — COT (Commitments of Traders, CFTC semanal). Solo captura para research.
+    # v3.16.0 — options flow (solo captura para research)
+    _OPTIONS_COLUMNS = (
+        "session_date", "symbol", "captured_at", "underlying_price", "n_expiries",
+        "n_contracts", "call_volume", "put_volume", "call_oi", "put_oi", "call_premium",
+        "put_premium", "unusual_call_count", "unusual_put_count", "unusual_call_premium",
+        "unusual_put_premium", "atm_iv", "skew_iv", "ref_expiry_days", "source",
+    )
+
+    def insert_options_snapshot(self, snapshot: dict[str, Any]) -> bool:
+        """Idempotente por (session_date, symbol). True si insertó una fila nueva."""
+        cols = self._OPTIONS_COLUMNS
+        with get_connection(self.db_path) as connection:
+            try:
+                cursor = connection.execute(
+                    f"INSERT OR IGNORE INTO options_snapshots ({', '.join(cols)}) "
+                    f"VALUES ({', '.join('?' for _ in cols)})",
+                    tuple(snapshot.get(c) for c in cols),
+                )
+                return cursor.rowcount > 0
+            except Exception:
+                return False
+
+    def options_collection_stats(self) -> dict[str, Any]:
+        """Cuánto se guardó (sin valores: no se mira la ventana antes del pre-registro)."""
+        with get_connection(self.db_path) as connection:
+            row = connection.execute(
+                "SELECT COUNT(*) AS rows, COUNT(DISTINCT session_date) AS days, "
+                "MIN(session_date) AS first, MAX(session_date) AS last "
+                "FROM options_snapshots"
+            ).fetchone()
+            last = row["last"] if row else None
+            n_last = 0
+            if last:
+                n_last = connection.execute(
+                    "SELECT COUNT(*) FROM options_snapshots WHERE session_date = ?", (last,)
+                ).fetchone()[0]
+        return {"rows": int(row["rows"] or 0) if row else 0,
+                "days": int(row["days"] or 0) if row else 0,
+                "first": row["first"] if row else None, "last": last,
+                "symbols_last_day": int(n_last)}
+
     def insert_cot_snapshot(self, snapshot: dict[str, Any]) -> bool:
         """Idempotente por (report_date, market_code). True si inserto una fila nueva."""
         with get_connection(self.db_path) as connection:

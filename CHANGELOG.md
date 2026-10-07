@@ -1,5 +1,22 @@
 # Changelog
 
+## v3.16.0 (2026-10-07) — colector de options flow (solo captura, para un pre-registro futuro)
+
+Pedido del user: "¿se puede agregar algo de options flow?". El flujo real de opciones es de pago y lo gratis (Yahoo) no trae historia, así que hoy no hay con qué probarlo. Lo honesto es **guardar la foto diaria desde ahora** y evaluarla con un pre-registro cuando haya ≥ 120 sesiones (~abr-2027), como se hizo con el COT. Reglas fijadas antes del primer día: `research/OPCIONES_COLECTA_2026-10-07.md`.
+
+- **`app/collectors/options_collector.py`**:
+  - Yahoo v7 con cookie A3 + crumb (se renueva solo si vence), UA de navegador y pausa de 15 min ante un 429.
+  - Corre después del cierre de EE.UU. (22:00 → 08:00 UTC, días hábiles), unos pocos símbolos por ciclo para no frenar al bot.
+  - La fecha de sesión sale de la cotización (un feriado no se guarda). Hasta 3 reintentos por símbolo y sesión.
+- **Qué guarda**:
+  - `options_snapshots`, un resumen por (sesión, símbolo): volumen y OI de calls/puts, prima, actividad inusual (volumen ≥ 100 y > OI), IV ATM y skew 95/105.
+  - La cadena compacta en `options_raw/<sesión>/<SÍMBOLO>.json.gz` (opcional, ~200 KB por día).
+  - Símbolos: los ETF de `OPTIONS_COLLECTOR_SYMBOLS` (SPY, QQQ, IWM, GLD, SLV, TLT, UUP, FXE) + las acciones del bot = 26.
+- **No mira**: no genera señal ni gate y no muestra valores. `/opciones` solo cuenta sesiones y símbolos: mirar los datos antes del pre-registro contaminaría la prueba.
+- Opt-in `ENABLE_OPTIONS_COLLECTOR` (OFF) + soft-fail: apagado o con error, el bot corre igual.
+- Probado contra Yahoo real el 7-oct, solo formato y tiempos: SPY 6 vencimientos / 1.327 contratos en ~5 s; AAPL ~3 s; UUP ~1 s.
+- Tests: +15 (`tests/test_options_collector.py`, sin red).
+
 ## v3.15.0 (2026-10-07) — agentes sombra: 3 políticas que deciden y nunca operan
 
 Pedido del user: "¿se pueden agregar más [agentes]?", y después "ármalo cuando esté el arreglo del oro, pero haz todo ya". Pre-registro commiteado ANTES del código: `research/AGENTE_IA_SOMBRAS_PREREGISTRO_2026-10-07.md` (866e66b).

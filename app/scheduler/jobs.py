@@ -28,6 +28,7 @@ from app.assistant.telegram_assistant import TelegramAssistantPoller
 from app.alerts.trade_reporter import format_trade_opened
 from app.brokers.mt5_reader import MT5Reader
 from app.collectors.cot_collector import COTCollector
+from app.collectors.options_collector import OptionsFlowCollector
 from app.collectors.dexscreener_collector import DexScreenerCollector
 from app.collectors.economic_calendar_collector import EconomicCalendarCollector
 from app.collectors.forex_collector import ForexCollector
@@ -120,6 +121,8 @@ class TradingAlertJob:
         self.calendar_collector = EconomicCalendarCollector(settings)
         # v3.9.0: COT collector (CFTC semanal, info que el precio no digirio; opt-in OFF)
         self.cot_collector = COTCollector(settings)
+        # v3.16.0: options flow (foto diaria de cadenas; solo captura, opt-in OFF)
+        self.options_collector = OptionsFlowCollector(settings)
         # Phase 4 v2.3.0: data quality check counter (no es por tiempo, es por ciclo)
         self._cycle_counter = 0
         # v2.6.7: MT5 reconciler. Instancia única reusable; lazy del trader.
@@ -231,6 +234,9 @@ class TradingAlertJob:
                     )
         except Exception:
             logger.exception("COT collector failed")
+
+        # v3.16.0: options flow (incremental, soft-fail; no decide nada)
+        self._maybe_collect_options()
 
         # Phase 3 v2.2.0: economic calendar refresh (gateado por interval)
         try:
@@ -2057,6 +2063,19 @@ class TradingAlertJob:
         request = self.repository.fetch_demo_trade_request(request_id) or {}
         ok = str(request.get("status") or "") == "sent"
         return request_id, ok, None if ok else f"envío: {request.get('result_message')}"
+
+    def _maybe_collect_options(self) -> None:
+        """v3.16.0: foto diaria de las cadenas de opciones para un pre-registro
+        futuro (research/OPCIONES_COLECTA_2026-10-07.md). Opt-in OFF, incremental
+        (pocos símbolos por ciclo) y soft-fail: nunca frena ni rompe el ciclo."""
+        if not getattr(self.settings, "enable_options_collector", False):
+            return
+        try:
+            saved = self.options_collector.step(self.repository)
+            if saved:
+                logger.info("Opciones: %d resúmenes guardados", saved)
+        except Exception:
+            logger.exception("Options collector fallo; el ciclo sigue")
 
     def _maybe_ai_agent_learn(self) -> None:
         """v3.13.0: el agente aprende de los candidatos cuyo paper trade cerró.

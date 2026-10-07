@@ -236,6 +236,17 @@ class Settings:
     # v3.9.0 — COT collector (CFTC semanal, info que el precio no digirio). Opt-in OFF.
     enable_cot_collector: bool
     cot_collector_interval_minutes: int
+    # v3.16.0 — options flow: foto diaria de las cadenas de opciones de Yahoo (volumen,
+    # OI, actividad inusual, IV) para un pre-registro futuro. SOLO captura: no genera
+    # señal ni muestra valores. Opt-in OFF + soft-fail. Incremental: N símbolos por
+    # ciclo, desde OPTIONS_COLLECTOR_HOUR_UTC hasta las 08:00 UTC del día siguiente.
+    enable_options_collector: bool
+    options_collector_symbols: list[str]
+    options_collector_hour_utc: int
+    options_collector_symbols_per_cycle: int
+    options_collector_max_expiries: int
+    options_collector_max_days: int
+    options_collector_save_raw: bool
     enable_economic_calendar: bool
     calendar_buffer_minutes: int
     calendar_refresh_hours: int
@@ -546,7 +557,7 @@ def load_settings() -> Settings:
         obsidian_vault_path = safe_obsidian
 
     return Settings(
-        app_version=os.getenv("APP_VERSION", "v3.15.0"),
+        app_version=os.getenv("APP_VERSION", "v3.16.0"),
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
         telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID"),
         dexscreener_base_url=os.getenv(
@@ -756,6 +767,16 @@ def load_settings() -> Settings:
         cot_collector_interval_minutes=_get_int(
             "COT_COLLECTOR_INTERVAL_MINUTES", 720
         ),
+        enable_options_collector=_get_bool("ENABLE_OPTIONS_COLLECTOR", False),
+        options_collector_symbols=[s.upper() for s in _get_list(
+            "OPTIONS_COLLECTOR_SYMBOLS",
+            ["spy", "qqq", "iwm", "gld", "slv", "tlt", "uup", "fxe"],
+        )],
+        options_collector_hour_utc=_get_int("OPTIONS_COLLECTOR_HOUR_UTC", 22),
+        options_collector_symbols_per_cycle=_get_int("OPTIONS_COLLECTOR_SYMBOLS_PER_CYCLE", 4),
+        options_collector_max_expiries=_get_int("OPTIONS_COLLECTOR_MAX_EXPIRIES", 6),
+        options_collector_max_days=_get_int("OPTIONS_COLLECTOR_MAX_DAYS", 60),
+        options_collector_save_raw=_get_bool("OPTIONS_COLLECTOR_SAVE_RAW", True),
         enable_economic_calendar=_get_bool("ENABLE_ECONOMIC_CALENDAR", True),
         calendar_buffer_minutes=_get_int("CALENDAR_BUFFER_MINUTES", 30),
         calendar_refresh_hours=_get_int("CALENDAR_REFRESH_HOURS", 12),
