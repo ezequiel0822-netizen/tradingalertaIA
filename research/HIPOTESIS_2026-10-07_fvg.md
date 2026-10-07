@@ -151,7 +151,7 @@ el dataset. Resultado completo: `research/H-FVG1_result.json`.
 
 - El R **bruto ya es negativo**: −0.05R (FVG) y −0.08R (iFVG).
 - Con TP a 2R hace falta acertar el 33.3 % para empatar en bruto. Llegó al TP el 31.5 % y
-  el 31.3 % de las veces; el resto es stop (65-66 %) o salida por tiempo.
+  el 31.3 % de las veces; el resto es stop (65 % y 67 %, con los gaps) o salida por tiempo.
 - El costo suma ~0.19R por trade.
 - Negativo en los 8 símbolos (−0.18 a −0.33R), en los 7 años (2011-2017) y en las dos
   direcciones.
