@@ -128,3 +128,42 @@ El código se congela y se commitea con el selftest pasando ANTES de `--download
 
 Firmado (protocolo): definiciones, ventanas, k, criterio y predicción fijos desde este
 commit.
+
+---
+
+## 7. Veredicto (2026-10-07) — **NO PASA las dos. Familia 27 cerrada.**
+
+Un tiro con el código congelado (7ac8dd5) sobre los datos del manifest (e96d690, sha256
+`9400d828…`): 8/8 símbolos con ≥ 5 años en la ventana; 0 huecos > 3 días hábiles en todo
+el dataset. Resultado completo: `research/H-FVG1_result.json`.
+
+| | H-FVG1 (continuación) | H-IFVG1 (inversión) |
+|---|---|---|
+| n (decisoria) | 9.854 | 7.423 |
+| R neto por trade (central) | **−0.239** | **−0.274** |
+| R neto en stress | −0.276 | −0.313 |
+| t NW diaria | **−13.3** | **−16.0** |
+| media diaria 1ª / 2ª mitad | −1.25 / −1.19 | −1.10 / −1.15 |
+| secundaria 2026 (n, R neto) | 408, −0.23 | 302, −0.33 |
+| criterios cumplidos | solo n ≥ 100 | solo n ≥ 100 |
+
+**Descriptivo (no decide):**
+
+- El R **bruto ya es negativo**: −0.05R (FVG) y −0.08R (iFVG).
+- Con TP a 2R hace falta acertar el 33.3 % para empatar en bruto. Llegó al TP el 31.5 % y
+  el 31.3 % de las veces; el resto es stop (65-66 %) o salida por tiempo.
+- El costo suma ~0.19R por trade.
+- Negativo en los 8 símbolos (−0.18 a −0.33R), en los 7 años (2011-2017) y en las dos
+  direcciones.
+- Nota de método: las reglas pesimistas del pre-registro restan algo al bruto (el TP no
+  cuenta en la vela del llenado y no hay mejora de precio). Pero con −0.05/−0.08R de
+  bruto y ~0.19R de costo, ninguna variante "optimista" lo llevaría a +0.05R neto con
+  t ≥ 2.50.
+
+**Lectura:** el FVG es un patrón de precio público y muy difundido; acá se comporta
+como cualquier otra señal de velas: ≈ 0 o algo peor antes de costos y negativo después.
+Coincide con H-FADE1 (familia 26).
+
+**Qué habilita:** nada. NO entra al bot ni al agente. Sin re-cortes: no se prueban
+otros tamaños de gap, múltiplos de R, timeframes, filtros de sesión o tendencia, ni
+otras ventanas. La H1 de MT5 de los 8 símbolos queda vista entera (ledger).

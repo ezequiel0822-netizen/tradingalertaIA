@@ -1,9 +1,8 @@
 # Registro de familias de hipótesis — Trading Alert AI
 
 > Un solo lugar con TODO lo probado, su veredicto y dónde está la evidencia.
-> Actualizado: 2026-10-06 (H-FADE1: reverso de las señales del bot; nota de integridad de
-> datos de la familia 5: hora del servidor MT5).
-> **Saldo: 26 familias probadas con pre-registro → 0 operables.**
+> Actualizado: 2026-10-07 (H-FVG1/H-IFVG1: Fair Value Gaps e inverse FVG, familia 27).
+> **Saldo: 27 familias probadas con pre-registro → 0 operables.**
 >
 > Regla de uso: una familia cerrada NO se re-abre ni se re-corta. Una variante es una
 > hipótesis NUEVA con su propio pre-registro, y si usa una ventana ya vista se declara
@@ -39,6 +38,7 @@
 | 24 | 2026-10-05 | H-MVRV1 MVRV extremo → reversión a 4 semanas | CoinMetrics Community | NO PASA: pendiente con signo opuesto (t +0.98); regla −19.7 %/año | idem | idem |
 | 25 | 2026-10-05 | H-NN1 redes neuronales (MLP-23 y MLP-SEQ con 30 s de historia) vs HGB en microestructura L1 BTCUSDT | bookTicker + aggTrades 2023-05-17 → 07-31 y 11-01 → 11-10 (86/86 días, checksum oficial por zip); train = los 92 días de H-MS1 | NO PASA: las redes son PEORES que el HGB (ΔAUC 30 s −0.005 t −5.2 / −0.018 t −16) y la economía pierde ~−7.5 bps/trade en las 6 combinaciones. Réplica de H-MS1 fuera de muestra: AUC HGB 0.595 / 0.576 (señal real y estable, 13× menor que el costo). No integrar redes | 8853632, 5e90204, veredicto | `HIPOTESIS_2026-10-05_redes_neuronales.md` |
 | 26 | 2026-10-06 | H-FADE1 operar el REVERSO de las señales del bot (mean_reversion, momentum, forex_session_breakout; 1:1 con la distancia de riesgo de la señal), k = 3 | MT5 M15 de 7 pares + XAUUSD, 2023-01-02 → 2025-12-31 (hora del servidor → UTC, regla UE), simulador pesimista del harness | NO PASA las tres: −0.37 / −0.21 / −0.19R por trade, t_NW −18.8 / −23.7 / −12.4. Bruto ≈ 0 en ambas direcciones; se pierde el costo (0.19-0.32R por stops de velas de 15 min). El −0.92R del paper vivo de mean_reversion no se reproduce (directo bruto −0.01R): artefacto de la simulación paper, no dirección revertible | b042301, fbf1a6b, veredicto | `HIPOTESIS_2026-10-06_fade.md` |
+| 27 | 2026-10-07 | H-FVG1 / H-IFVG1 Fair Value Gaps (retesteo = continuación) e inverse FVG (gap roto → retesteo del otro lado); límite en el borde del gap, stop al otro borde + 0.1 ATR, TP 2R, 48 velas; k = 2 | MT5 H1 de 7 pares + XAUUSD, decisoria 2011-01-03 → 2017-11-30 (no vista para intradía), secundaria 2026-06-16 → 2026-10-06; costos del harness | NO PASA las dos: −0.24R (n 9.854, t_NW −13.3) y −0.27R (n 7.423, t_NW −16.0) por trade; secundaria −0.23 / −0.33R. BRUTO ya negativo (−0.05 / −0.08R: el TP de 2R sale el 31 % de las veces, hace falta 33 %); costo ~0.19R. Negativo en los 8 símbolos, los 7 años y las dos direcciones | 797fe5f, 7ac8dd5, e96d690, veredicto | `HIPOTESIS_2026-10-07_fvg.md` |
 
 ## Lectura transversal (2026-10-05, 24 familias; nota del 2026-10-06 al final)
 
@@ -120,6 +120,9 @@ B5, DEX, Ethena, lending) por un agente, commit 62f8905,
 - **Forex/oro H1 2017-12 → 2026-06-15** (cache MT5, 7 pares + XAUUSD): visto por la familia 5
   (con las sesiones corridas 2-3 h). Cualquier señal intradía/de sesión sobre esa ventana es
   IN-SAMPLE aunque se corrija la hora.
+- **Forex/oro H1 2010-09 → 2017-11 y 2026-05 → 2026-10-06** (H-FVG1/H-IFVG1, 2026-10-07):
+  patrones de gaps de 3 velas (FVG/iFVG) ya simulados. Con esto, la H1 de MT5 de esos 8
+  símbolos quedó vista ENTERA (2010-09 → 2026-10) para señales intradía de precio.
 - Ventanas NO vistas útiles: cripto **2020-01 → 2024-09** para señales que NO sean de
   funding/spread, posicionamiento ni retornos/funding cruzados (quedan muy pocas), y todo lo
   que pase **después** de la fecha de cada pre-registro (test hacia adelante). Hyperliquid

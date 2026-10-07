@@ -1,0 +1,285 @@
+{
+  "family": 27,
+  "prereg": "research/HIPOTESIS_2026-10-07_fvg.md",
+  "manifest_sha256": "9400d8283bd0173b23d236fc177075d2b96686f047a8606ae655753476bcc30a",
+  "availability_years": {
+    "EURUSD": 6.91,
+    "GBPUSD": 6.91,
+    "USDJPY": 6.91,
+    "USDCHF": 6.91,
+    "AUDUSD": 6.91,
+    "USDCAD": 6.91,
+    "NZDUSD": 6.91,
+    "XAUUSD": 6.91
+  },
+  "symbols_used": [
+    "EURUSD",
+    "GBPUSD",
+    "USDJPY",
+    "USDCHF",
+    "AUDUSD",
+    "USDCAD",
+    "NZDUSD",
+    "XAUUSD"
+  ],
+  "k": 2,
+  "by_hyp": {
+    "fvg": {
+      "verdict": "NO PASA",
+      "criteria": {
+        "1_n_ge_100": true,
+        "2_mean_ge_0.05R": false,
+        "3_t_nw_ge_2.50": false,
+        "4_both_halves_pos": false,
+        "5_stress_pos": false,
+        "6_secondary_pos": false
+      },
+      "n": 9854,
+      "mean_r_net": -0.2385,
+      "mean_r_net_stress": -0.2755,
+      "t_nw_daily": -13.2718,
+      "half1_daily_mean": -1.2507,
+      "half2_daily_mean": -1.1934,
+      "secondary": {
+        "n": 408,
+        "mean_r_net": -0.2319
+      },
+      "descriptive": {
+        "mean_r_gross": -0.0536,
+        "mean_cost_r": 0.1849,
+        "mean_bars_held": 7.4035,
+        "exit_reasons": {
+          "eod": 0.0,
+          "gap_sl": 0.006,
+          "sl": 0.647,
+          "time": 0.031,
+          "tp": 0.315
+        },
+        "by_symbol": {
+          "AUDUSD": {
+            "n": 1286,
+            "mean_r_net": -0.1986
+          },
+          "EURUSD": {
+            "n": 1229,
+            "mean_r_net": -0.2791
+          },
+          "GBPUSD": {
+            "n": 1219,
+            "mean_r_net": -0.2416
+          },
+          "NZDUSD": {
+            "n": 1241,
+            "mean_r_net": -0.1757
+          },
+          "USDCAD": {
+            "n": 1202,
+            "mean_r_net": -0.3021
+          },
+          "USDCHF": {
+            "n": 1233,
+            "mean_r_net": -0.274
+          },
+          "USDJPY": {
+            "n": 1238,
+            "mean_r_net": -0.2247
+          },
+          "XAUUSD": {
+            "n": 1206,
+            "mean_r_net": -0.2159
+          }
+        },
+        "by_year": {
+          "2011": {
+            "n": 1482,
+            "mean_r_net": -0.1662
+          },
+          "2012": {
+            "n": 1398,
+            "mean_r_net": -0.242
+          },
+          "2013": {
+            "n": 1497,
+            "mean_r_net": -0.2719
+          },
+          "2014": {
+            "n": 1427,
+            "mean_r_net": -0.2946
+          },
+          "2015": {
+            "n": 1408,
+            "mean_r_net": -0.2562
+          },
+          "2016": {
+            "n": 1350,
+            "mean_r_net": -0.1742
+          },
+          "2017": {
+            "n": 1292,
+            "mean_r_net": -0.2652
+          }
+        },
+        "by_session": {
+          "Asia": {
+            "n": 2171,
+            "mean_r_net": -0.2069
+          },
+          "LDN-NY": {
+            "n": 2419,
+            "mean_r_net": -0.3022
+          },
+          "London": {
+            "n": 2653,
+            "mean_r_net": -0.2724
+          },
+          "NY": {
+            "n": 1815,
+            "mean_r_net": -0.1366
+          },
+          "Off": {
+            "n": 796,
+            "mean_r_net": -0.2512
+          }
+        },
+        "by_direction": {
+          "long": {
+            "n": 4934,
+            "mean_r_net": -0.2303
+          },
+          "short": {
+            "n": 4920,
+            "mean_r_net": -0.2468
+          }
+        }
+      }
+    },
+    "ifvg": {
+      "verdict": "NO PASA",
+      "criteria": {
+        "1_n_ge_100": true,
+        "2_mean_ge_0.05R": false,
+        "3_t_nw_ge_2.50": false,
+        "4_both_halves_pos": false,
+        "5_stress_pos": false,
+        "6_secondary_pos": false
+      },
+      "n": 7423,
+      "mean_r_net": -0.274,
+      "mean_r_net_stress": -0.3127,
+      "t_nw_daily": -16.0271,
+      "half1_daily_mean": -1.0988,
+      "half2_daily_mean": -1.1466,
+      "secondary": {
+        "n": 302,
+        "mean_r_net": -0.3286
+      },
+      "descriptive": {
+        "mean_r_gross": -0.0808,
+        "mean_cost_r": 0.1933,
+        "mean_bars_held": 5.9167,
+        "exit_reasons": {
+          "gap_sl": 0.006,
+          "sl": 0.665,
+          "time": 0.016,
+          "tp": 0.313
+        },
+        "by_symbol": {
+          "AUDUSD": {
+            "n": 986,
+            "mean_r_net": -0.2775
+          },
+          "EURUSD": {
+            "n": 934,
+            "mean_r_net": -0.2395
+          },
+          "GBPUSD": {
+            "n": 918,
+            "mean_r_net": -0.3034
+          },
+          "NZDUSD": {
+            "n": 933,
+            "mean_r_net": -0.1882
+          },
+          "USDCAD": {
+            "n": 944,
+            "mean_r_net": -0.3325
+          },
+          "USDCHF": {
+            "n": 888,
+            "mean_r_net": -0.2885
+          },
+          "USDJPY": {
+            "n": 937,
+            "mean_r_net": -0.2383
+          },
+          "XAUUSD": {
+            "n": 883,
+            "mean_r_net": -0.3276
+          }
+        },
+        "by_year": {
+          "2011": {
+            "n": 1151,
+            "mean_r_net": -0.2224
+          },
+          "2012": {
+            "n": 1043,
+            "mean_r_net": -0.2164
+          },
+          "2013": {
+            "n": 1114,
+            "mean_r_net": -0.2667
+          },
+          "2014": {
+            "n": 1058,
+            "mean_r_net": -0.3536
+          },
+          "2015": {
+            "n": 1052,
+            "mean_r_net": -0.3488
+          },
+          "2016": {
+            "n": 1035,
+            "mean_r_net": -0.2014
+          },
+          "2017": {
+            "n": 970,
+            "mean_r_net": -0.3153
+          }
+        },
+        "by_session": {
+          "Asia": {
+            "n": 1584,
+            "mean_r_net": -0.2242
+          },
+          "LDN-NY": {
+            "n": 2064,
+            "mean_r_net": -0.3435
+          },
+          "London": {
+            "n": 1946,
+            "mean_r_net": -0.2313
+          },
+          "NY": {
+            "n": 1347,
+            "mean_r_net": -0.3122
+          },
+          "Off": {
+            "n": 482,
+            "mean_r_net": -0.2064
+          }
+        },
+        "by_direction": {
+          "long": {
+            "n": 3749,
+            "mean_r_net": -0.2651
+          },
+          "short": {
+            "n": 3674,
+            "mean_r_net": -0.2831
+          }
+        }
+      }
+    }
+  }
+}
