@@ -12,8 +12,8 @@
 Retomamos Trading Alert AI (bot de trading LOCAL, Python 3.12, Windows, repo en
 C:/Users/LENOVO/tradingalertaIA, venv en .venv). Respondé en español, claro y sin jerga
 innecesaria. Estado al 7-oct-2026: v3.15.0 (v3.14.1 = precio de los paper trades + v3.15.0 =
-agentes sombra), 923 tests verdes. Demo MT5 MetaQuotes-Demo (~2.990 USD). Research: 26 familias
-de hipótesis probadas con pre-registro → 0 operables.
+agentes sombra), 923 tests verdes. Demo MT5 MetaQuotes-Demo (~2.990 USD). Research: 27 familias
+de hipótesis probadas con pre-registro → 0 operables (la 27 = FVG/iFVG en H1, 7-oct: NO PASA).
 
 Leé ANTES de tocar nada: la memoria de Claude (MEMORY.md; en especial v3-13-0-ai-agent,
 gold-paper-futures-vs-spot, no-direct-mt5-trading, sesiones-paralelas-2026-10, mt5-server-time,

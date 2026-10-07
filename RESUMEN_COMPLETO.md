@@ -331,6 +331,11 @@ El user preguntó "¿cómo va el agente? ¿se pueden agregar más?" y después p
   - El oro mezclado es 38 de 195 trades, con media −0.68R.
   - Queda abierto, sin investigar: el cierre del paper al precio sondeado (no en el stop) con stops cortísimos.
 
+**H-FVG1 / H-IFVG1 (familia 27, 7-oct)**: el user pidió "leer todas las posibilidades" (noticias,
+estrategias, flujo, FVG/iFVG, volumen, patrones). Todo eso ya estaba probado o dentro del agente, salvo los
+FVG/iFVG. Se probaron con pre-registro en H1 de MT5 (2011-2017, no vista) → NO PASAN: −0.24 / −0.27R por
+trade, bruto ya negativo (el TP de 2R sale el 31 %), costo ~0.19R. 27 familias, 0 operables.
+
 ## 3. La verdad de fondo (la filosofía del proyecto)
 
 1. **El cuello de botella es DATA, no código.** No hay edge probado: el único +R agregado

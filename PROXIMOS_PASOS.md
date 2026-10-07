@@ -57,6 +57,11 @@
 > long Binance). **Registro único con todas las familias, commits y ventanas ya vistas:
 > `research/LEDGER_FAMILIAS.md`.** Main = origin/main en 13a3733 antes de este cierre.
 >
+> **🧱 7-oct-2026 — H-FVG1 / H-IFVG1 (familia 27): NO PASA.** Fair Value Gaps (retesteo) e inverse FVG en
+> H1 de MT5, 8 símbolos, 2011-01 → 2017-11 (ventana no vista) + secundaria 2026-06 → 2026-10: −0.24R y
+> −0.27R por trade (t NW −13.3 / −16.0), negativos ANTES de costos y en todos los símbolos, años y
+> direcciones. No entra al bot ni al agente. Ledger: 27 familias, 0 operables. La H1 de MT5 quedó vista entera.
+>
 > **🥇 7-oct-2026 — v3.14.1 + v3.15.0 (923 tests): precio mezclado del oro + agentes sombra.**
 > Revisando el agente se encontró un bug de DATOS: el oro abría con el futuro de Yahoo (GC=F) y se
 > marcaba con el spot de MT5 (~$21 abajo) → stops "tocados" al minuto (−3.5R / −5.1R falsos) que el
