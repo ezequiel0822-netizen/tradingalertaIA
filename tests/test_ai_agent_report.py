@@ -102,6 +102,19 @@ def test_adenda_original_tag_and_mixed_gold_do_not_count() -> None:
     assert late["n"] == 210
 
 
+def test_real_minus_paper_only_with_single_source() -> None:
+    """Adenda 2: la orden de NZDUSD (#26) entró con el SL/TP del paper sobre otra
+    entrada; su +10.95R real no es "realismo"."""
+    base = {"intended": "explore", "executed": 1, "block_reason": None,
+            "strategy_name": "mean_reversion", "created_at": "2026-10-07T06:19:00+00:00",
+            "mt5_status": "closed", "mt5_profit_usd": 0.0, "mixed_gold": False}
+    rows = [{**base, "reward_r": 1.69, "mt5_r": 10.95, "trade_price_source": None},
+            {**base, "reward_r": -1.0, "mt5_r": -1.2, "trade_price_source": "mt5"}]
+    s = report.summarize(rows)
+    assert s["mt5_minus_paper_mean_r"] == pytest.approx(-0.2)
+    assert s["mt5_pre_fix_paired"] == 1 and s["mt5_closed"] == 2
+
+
 def test_report_connection_is_read_only() -> None:
     db = _db()
     con = report.connect_ro(db)

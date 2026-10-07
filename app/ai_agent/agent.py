@@ -63,6 +63,11 @@ def _version_of(row: dict[str, Any]) -> int:
         return 1
 
 
+def single_source_decision(row: dict[str, Any]) -> bool:
+    """El paper trade de la decisión tiene UNA fuente de precio (v3.14.1, adenda 2)."""
+    return bool(str(row.get("trade_price_source") or "").strip())
+
+
 def mixed_gold_decision(row: dict[str, Any]) -> bool:
     """Decisión sobre un paper trade de "oro mezclado" (adenda 2026-10-07): oro cuyo
     paper trade no tiene fuente única de precio (`trade_price_source` NULL)."""
@@ -163,14 +168,19 @@ class AiAgent:
 
     def realism_gap(self, rows: list[dict[str, Any]] | None = None) -> float:
         """ĝ = Σ(R_mt5 − R_paper)/(n + 5) sobre las ejecuciones v2 con ambos R,
-        acotado a [−1, +0.25]. 0 sin datos (no hay con qué ajustar)."""
+        acotado a [−1, +0.25]. 0 sin datos (no hay con qué ajustar).
+
+        v3.14.1 (adenda 2): con PAPER_PRICE_FROM_MT5 solo cuentan las ejecuciones cuyo
+        paper trade tiene fuente única. Antes del fix la orden de MT5 usaba el SL/TP del
+        paper sobre OTRA entrada (NZDUSD #26: stop real de 0.4 pips → R_mt5 +10.95 vs
+        +1.69 en paper) y ĝ quedaba clavado en el tope."""
         if rows is None:
             rows = self.repository.fetch_ai_agent_decisions(limit=100000)
         fix = self.price_fix_on()
         diffs = [float(d["mt5_r"]) - float(d["reward_r"]) for d in rows
                  if _version_of(d) == 2 and int(d.get("executed") or 0) == 1
                  and d.get("mt5_r") is not None and d.get("reward_r") is not None
-                 and not (fix and mixed_gold_decision(d))]
+                 and not (fix and not single_source_decision(d))]
         if not diffs:
             return 0.0
         g = sum(diffs) / (len(diffs) + GAP_PRIOR_N)

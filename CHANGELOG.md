@@ -31,6 +31,10 @@ Hallazgo del 7-oct, revisando cómo iba el agente v2. Dos paper trades de oro de
   - Se evalúa SOLO `v2|eps0.20|xr0.10|r0.50|thr0.05|pv0.25|nv1.00|xmax3|xstop2.0|px1`.
   - Las decisiones del tag original (desde el 6-oct hasta el despliegue del fix; eran 10 al detectarse el bug) se reportan aparte y no deciden.
   - Fechas, criterios y predicción (NO PASA): sin cambios.
+- **Ajuste de realismo ĝ (adenda 2, `AGENTE_IA_V2_ADENDA2_2026-10-07_realismo.md`, 603e029)**:
+  - La misma mezcla pasaba en forex y en la orden REAL. La exploración NZDUSD #26 entró en MT5 2.1 pips bajo la entrada de Yahoo, con el SL/TP del paper: stop real de 0.4 pips, R_mt5 **+10.95** contra +1.69 en paper. Eso dejó ĝ clavado en el tope (+0.25R) para todas las decisiones.
+  - Con el flag, ĝ usa solo ejecuciones con fuente única.
+  - El reporte muestra "real − paper" solo con fuente única y cuenta aparte las previas al fix.
 - **Modelo**: `LinearThompson` guarda `meta` (sobrevive a las actualizaciones; los estados viejos cargan sin meta). `scripts/ai_agent_warmstart.py --exclude-mixed-gold` reconstruye sin oro mezclado y marca `excludes_mixed_gold`.
 - **No cambia**: parámetros del agente, reglas de decisión, límites y real-money bloqueado.
 - **Pendiente conocido** (no se tocó): `realized_pnl_today` y el exit shadow siguen leyendo los paper trades viejos tal cual.

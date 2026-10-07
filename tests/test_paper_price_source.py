@@ -386,12 +386,20 @@ def test_scoreboard_never_measures_mixed_gold() -> None:
     assert sum(mixed_gold_decision(d) for d in rows) == 1
 
 
-def test_realism_gap_ignores_mixed_gold_with_the_flag() -> None:
+def test_realism_gap_uses_only_single_source_executions_with_the_flag() -> None:
+    """Adenda 2: NZDUSD #26 entró en MT5 con el SL/TP del paper sobre otra entrada
+    (stop real de 0.4 pips) → R_mt5 +10.95 vs +1.69 en paper → ĝ clavado en +0.25."""
     repo = _repo()
-    did = _decision(repo, gold=True, source=None, reward=-3.5)
+    did = _decision(repo, gold=True, source=None, reward=-3.5)            # oro mezclado
     repo.update_ai_agent_decision(did, {"executed": 1, "reward_r": -3.5, "mt5_r": -1.0})
-    assert AiAgent(_v2_settings(), repo).realism_gap() == pytest.approx(min(2.5 / 6, 0.25))
-    assert AiAgent(_v2_settings(paper_price_from_mt5=True), repo).realism_gap() == 0.0
+    fx = _decision(repo, gold=False, source=None, reward=1.69)            # forex previo al fix
+    repo.update_ai_agent_decision(fx, {"executed": 1, "reward_r": 1.69, "mt5_r": 10.95})
+    assert AiAgent(_v2_settings(), repo).realism_gap() == pytest.approx(0.25)   # OFF: tope
+    on = AiAgent(_v2_settings(paper_price_from_mt5=True), repo)
+    assert on.realism_gap() == 0.0                                        # sin fuente única
+    ok = _decision(repo, gold=False, source="mt5", reward=-1.0)
+    repo.update_ai_agent_decision(ok, {"executed": 1, "reward_r": -1.0, "mt5_r": -1.2})
+    assert on.realism_gap() == pytest.approx(-0.2 / 6)                    # solo la limpia
 
 
 def test_status_text_shows_current_tag_and_the_fix() -> None:

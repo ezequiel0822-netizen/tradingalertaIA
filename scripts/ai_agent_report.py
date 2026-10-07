@@ -102,8 +102,11 @@ def summarize(rows: list[dict]) -> dict:
     r = [float(d["reward_r"]) for d in done]
     v = [weight(d["intended"]) * float(d["reward_r"]) for d in done]
     mt5 = [d for d in rows if d.get("mt5_status") == "closed"]
-    gaps = [float(d["mt5_r"]) - float(d["reward_r"]) for d in mt5
-            if d.get("mt5_r") is not None and d.get("reward_r") is not None]
+    paired = [d for d in mt5 if d.get("mt5_r") is not None and d.get("reward_r") is not None]
+    # adenda 2: real − paper solo con fuente única (antes del fix la orden de MT5 usaba
+    # el SL/TP del paper sobre otra entrada: NZDUSD #26 dio +10.95R real vs +1.69 paper)
+    single = [d for d in paired if str(d.get("trade_price_source") or "").strip()]
+    gaps = [float(d["mt5_r"]) - float(d["reward_r"]) for d in single]
     by_strat: dict[str, list[float]] = defaultdict(list)
     for d in done:
         by_strat[str(d.get("strategy_name"))].append(float(d["reward_r"]))
@@ -128,6 +131,7 @@ def summarize(rows: list[dict]) -> dict:
         "mt5_closed": len(mt5),
         "mt5_profit_usd": round(sum(float(d.get("mt5_profit_usd") or 0) for d in mt5), 2),
         "mt5_minus_paper_mean_r": round(sum(gaps) / len(gaps), 3) if gaps else None,
+        "mt5_pre_fix_paired": len(paired) - len(single),
         "by_strategy": {k: {"n": len(x), "mean_r": round(sum(x) / len(x), 3)}
                         for k, x in sorted(by_strat.items())},
         "first": rows[0]["created_at"][:16] if rows else None,
@@ -227,7 +231,8 @@ def main() -> int:
         print(f"  solo explotación {s['exploit_sum_r']:+.2f}R | exploraciones media "
               f"{s['explore_mean_r']:+.2f}R")
         print(f"  MT5 real: {s['mt5_closed']} cerradas, {s['mt5_profit_usd']:+.2f} USD, "
-              f"real − paper {s['mt5_minus_paper_mean_r']}")
+              f"real − paper {s['mt5_minus_paper_mean_r']} (fuente única; "
+              f"{s['mt5_pre_fix_paired']} previas al fix aparte)")
         for k, b in s["by_strategy"].items():
             print(f"    {k:24} n={b['n']:4} media {b['mean_r']:+.3f}R")
     if args.evaluate:
