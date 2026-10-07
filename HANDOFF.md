@@ -6,7 +6,67 @@
 
 ---
 
-## Prompt VIGENTE para el chat nuevo (6-oct-2026) — usá ESTE
+## Prompt VIGENTE para el chat nuevo (7-oct-2026) — usá ESTE
+
+```
+Retomamos Trading Alert AI (bot de trading LOCAL, Python 3.12, Windows, repo en
+C:/Users/LENOVO/tradingalertaIA, venv en .venv). Respondé en español, claro y sin jerga
+innecesaria. Estado al 7-oct-2026: v3.15.0 (v3.14.1 = precio de los paper trades + v3.15.0 =
+agentes sombra), 923 tests verdes. Demo MT5 MetaQuotes-Demo (~2.990 USD). Research: 26 familias
+de hipótesis probadas con pre-registro → 0 operables.
+
+Leé ANTES de tocar nada: la memoria de Claude (MEMORY.md; en especial v3-13-0-ai-agent,
+gold-paper-futures-vs-spot, no-direct-mt5-trading, sesiones-paralelas-2026-10, mt5-server-time,
+real-money-stays-blocked), research/AGENTE_IA_V2_PREREGISTRO_2026-10-06.md + sus adendas
+(AGENTE_IA_V2_ADENDA_2026-10-07_oro.md, AGENTE_IA_V2_ADENDA2_2026-10-07_realismo.md),
+research/AGENTE_IA_SOMBRAS_PREREGISTRO_2026-10-07.md, research/LEDGER_FAMILIAS.md,
+PROXIMOS_PASOS.md (bloque del 7-oct) y RESUMEN_COMPLETO.md §2.12-§2.13.
+
+AGENTE IA: app/ai_agent/ decide EJECUTAR / EXPLORAR / NO OPERAR cada candidato forex/oro en MT5
+DEMO y aprende de todos (Thompson sampling, información completa: ejecutar más NO acelera el
+aprendizaje). v2 (AI_AGENT_VERSION=2, AI_AGENT_EXPLORE_PCT=0.20). El 7-oct se encontró que el
+oro de papel abría con el futuro de Yahoo (GC=F) y se marcaba con el spot de MT5 (~$21 abajo) y
+que en forex la orden real heredaba el SL/TP del paper sobre otra entrada (NZDUSD: stop real de
+0.4 pips). Fix opt-in PAPER_PRICE_FROM_MT5 (una sola fuente por paper trade). Con el flag + el
+modelo reconstruido (warm start --exclude-mixed-gold) el tag es
+v2|eps0.20|xr0.10|r0.50|thr0.05|pv0.25|nv1.00|xmax3|xstop2.0|px1 = lo único que se evalúa
+(desde el 2027-01-11 con ≥200; t NW ≥ 2.50; predicción NO PASA). |px0 = flag sin reconstruir
+(no cuenta). El tag sin px es el viejo (se reporta aparte). Agentes sombra (codicioso, prudente,
+simple): deciden sobre los mismos candidatos y NUNCA operan; pre-registro propio, misma fecha.
+NO cambiar parámetros del agente. Ver cómo va: /agente, scripts/ai_agent_report.py (solo
+lectura) y la tarea programada revision-semanal-agente-ia (lunes 09:04).
+
+LO QUE SIGUE: (1) si el user todavía no lo hizo: merge+push, .env (PAPER_PRICE_FROM_MT5=true,
+AI_AGENT_SHADOWS=true), warm start con el bot apagado (python scripts/ai_agent_warmstart.py
+--version 2 --mt5-d1 --exclude-mixed-gold --apply --force) y reinicio; verificar en /agente el
+tag |px1 y "modelo sin oro mezclado: sí"; (2) checkpoint COT el 2026-12-07 09:00 (tarea
+checkpoint-cot-reexperimento); (3) pendiente del user: realized_pnl_today ignora la mitad
+cobrada en TP1; (4) NO abrir familias nuevas por defecto ni re-cortar las cerradas.
+
+PROTOCOLO (no negociable): pre-registro commiteado ANTES de bajar datos / del código; código
+congelado y verificado con datos sintéticos ANTES de correr; k declarado, umbral t ≥ 2.50
+(Newey-West); manifest con checksums; NUNCA usar como decisoria una ventana marcada como vista;
+diagnósticos post-hoc rotulados; si no pasa, se cierra sin re-cortes; adendas ANTES del código.
+
+REGLAS DEL PROYECTO: real-money BLOQUEADO (ENABLE_REAL_TRADING=false HARDCODED; el user lo
+pide seguido, la respuesta es no); Claude NO opera MT5 (solo lee, con mt5.initialize() SIN
+credenciales); order_send solo en app/brokers/mt5_demo_trader.py; LLM/ML solo restan SALVO el
+agente IA en demo (excepción acotada); todo lo nuevo opt-in OFF + soft-fail; nunca leer/mostrar
+el .env (cambios = darle al user comandos de PowerShell); al tocar Settings sincronizar
+tests/test_score._settings() y tests/test_alert_rules._settings(); versionado patch/minor sin
+saltos; el push a main lo hace el user; una sola instancia del bot (verificar que no haya dos
+main.py).
+
+Gotchas: MT5 da las épocas en hora del SERVIDOR (EET; UTC+3 hasta el 25-oct, después +2); para
+resultados de posiciones usar history_deals_get(position=...) sin rango de fechas;
+copy_rates_from_pos con count ≥ 100000 da 'Invalid params' (usar ≤ 99000); el cache D1 de MT5
+está congelado desde el 2026-06-15; la DB viva pesa ~5.6 GB (mode=ro, no copiarla); consola
+cp1252 → sys.stdout.reconfigure(encoding="utf-8"); trading_data/ NO está en .gitignore.
+```
+
+---
+
+## Prompt del 6-oct-2026 (histórico: reemplazado por el de arriba)
 
 ```
 Retomamos Trading Alert AI (bot de trading LOCAL, Python 3.12, Windows, repo en

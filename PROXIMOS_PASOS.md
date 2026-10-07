@@ -57,6 +57,19 @@
 > long Binance). **Registro único con todas las familias, commits y ventanas ya vistas:
 > `research/LEDGER_FAMILIAS.md`.** Main = origin/main en 13a3733 antes de este cierre.
 >
+> **🥇 7-oct-2026 — v3.14.1 + v3.15.0 (923 tests): precio mezclado del oro + agentes sombra.**
+> Revisando el agente se encontró un bug de DATOS: el oro abría con el futuro de Yahoo (GC=F) y se
+> marcaba con el spot de MT5 (~$21 abajo) → stops "tocados" al minuto (−3.5R / −5.1R falsos) que el
+> agente aprendía. En forex la misma mezcla rompía la orden REAL con stops de 2-3 pips (NZDUSD: stop
+> real de 0.4 pips → +10.95R "real" → ajuste de realismo clavado en +0.25R). Adendas 1 y 2 al
+> pre-registro v2 commiteadas ANTES del código; fix opt-in `PAPER_PRICE_FROM_MT5`. Se evalúa el tag
+> `...|px1` (mismas fechas, criterios y predicción). Además, **3 agentes sombra** (`codicioso`,
+> `prudente`, `simple`) con pre-registro propio: deciden sobre los mismos candidatos y nunca operan.
+> **Pasos del user** (bot apagado, en este orden): merge + push → `.env` (`PAPER_PRICE_FROM_MT5=true`,
+> `AI_AGENT_SHADOWS=true`) → `python scripts/ai_agent_warmstart.py --version 2 --mt5-d1
+> --exclude-mixed-gold --apply --force` → `.\start_bot.ps1` → `/agente` debe mostrar el tag `|px1` y
+> "modelo sin oro mezclado: sí".
+>
 > **🤖 6-oct-2026 — v3.14.0: agente IA v2 (889 tests, con v3.13.3 integrada) + H-FADE1 (familia 26).** Pedido del user:
 > "hacé el agente más activo y mejoralo". Orden seguido: (1) evaluación v1 CERRADA sin conclusiones
 > (n = 11: agente −1.08R vs ejecutar todo −9.83R) y pre-registro v2 commiteado ANTES del código

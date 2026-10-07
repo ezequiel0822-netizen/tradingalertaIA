@@ -311,6 +311,26 @@ para "generar el 10 %": se declinó; Claude solo LEE MT5 y no se usan metas de g
   del agente en el resumen diario de Telegram.
 - **H-FADE1 (familia 26)**: NO PASA las tres estrategias (familia 26): el reverso pierde −0.37 / −0.21 / −0.19R por trade (t NW −18.8 / −23.7 / −12.4) en M15 2023-2025. El bruto es ≈ 0 en ambas direcciones y se pierde el costo de stops cortísimos (0.19-0.32R por trade): las señales son ruido y darlas vuelta vuelve a pagar el spread. Post-hoc: el −0.92R del paper vivo de mean_reversion no se reproduce (directo bruto −0.01R) → artefacto de la simulación paper. El agente NO suma acción "fade". `research/HIPOTESIS_2026-10-06_fade.md`.
 
+## 2.13 v3.14.1 + v3.15.0 (7-oct-2026) — precio mezclado del oro y agentes sombra
+
+El user preguntó "¿cómo va el agente? ¿se pueden agregar más?" y después pidió "haz todo ya".
+
+- **Bug de datos (v3.14.1, opt-in `PAPER_PRICE_FROM_MT5`)**:
+  - Los paper trades de oro se abrían con el futuro de Yahoo (GC=F) y se marcaban con el spot de MT5 (XAUUSD). Desfase mediano de **+$21**; en el **53 %** de 311 trades, mayor o igual a un stop entero.
+  - Longs −1.68R y shorts +0.64R, casi todo artefacto. Dos trades del agente "tocaron" el stop al minuto (−3.5R / −5.1R).
+  - En forex el desfase medio es chico (+0.03R), pero con stops de 2-3 pips rompe la orden REAL: NZDUSD #26 entró en MT5 2.1 pips bajo Yahoo con el SL/TP del paper (stop real de 0.4 pips). Dio **+10.95R real** contra +1.69R paper y dejó el ajuste de realismo ĝ clavado en +0.25R.
+  - **Fix**: los niveles se trasladan al precio de MT5 al abrir (mismas distancias) y cada trade se marca solo con su fuente. El agente no aprende del "oro mezclado" y ĝ solo usa ejecuciones de fuente única.
+  - **Protocolo**: adendas 1 y 2 al pre-registro v2, commiteadas ANTES del código. Se evalúa el tag `...|px1` (flag + modelo reconstruido con `--exclude-mixed-gold`). El tag original se reporta aparte. Fechas, criterios y predicción sin cambios.
+- **Agentes sombra (v3.15.0)**:
+  - Más agentes operando la misma cuenta no suman: mismos candidatos, mismo aprendizaje (información completa), mismos topes, y ensucian la evaluación.
+  - Se armaron 3 sombras que deciden sobre los MISMOS candidatos y NUNCA operan: `codicioso`, `prudente` y `simple`.
+  - Pre-registro propio commiteado antes del código (k = 3, t NW ≥ 2.50, desde el 2027-01-11 sobre `px1`). Predicción: NO PASA ninguna.
+  - Las muestra el reporte; `/agente`, solo con `AI_AGENT_SHADOWS=true`.
+- **Post-hoc (rotulado)**: la mezcla de fuentes NO explica el −0.93R del paper de mean_reversion (el "artefacto" de H-FADE1).
+  - En forex, el desfase medio a la apertura es +0.09R y la media sigue en −0.99R sin oro.
+  - El oro mezclado es 38 de 195 trades, con media −0.68R.
+  - Queda abierto, sin investigar: el cierre del paper al precio sondeado (no en el stop) con stops cortísimos.
+
 ## 3. La verdad de fondo (la filosofía del proyecto)
 
 1. **El cuello de botella es DATA, no código.** No hay edge probado: el único +R agregado
