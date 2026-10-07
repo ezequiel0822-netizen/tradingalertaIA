@@ -11,3 +11,6 @@ venv/
 # v2.9.0 - modelos ML entrenados y datasets exportados (no versionar binarios/datos)
 models/
 exports/
+# v3.16.x - H-KRON1: entorno aparte de Kronos (PyTorch) y codigo/pesos de terceros
+.venv_kronos/
+vendor/

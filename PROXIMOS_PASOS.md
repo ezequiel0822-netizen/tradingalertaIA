@@ -57,6 +57,11 @@
 > long Binance). **Registro único con todas las familias, commits y ventanas ya vistas:
 > `research/LEDGER_FAMILIAS.md`.** Main = origin/main en 13a3733 antes de este cierre.
 >
+> **🔭 7-oct-2026 — H-KRON1 (familia 28, EN CURSO): Kronos hacia adelante.** El modelo base de velas
+> `shiyu-coder/Kronos` (Kronos-small, CPU) pronostica forex/oro a 12 h dos veces por día en un proceso APARTE
+> (`.\start_kronos.ps1`; instalado con `scripts\setup_kronos.ps1`). No opera. Evaluación desde el 2027-01-15
+> (`research/HIPOTESIS_2026-10-07_kronos.md`); antes NO se mira el resultado (`-Status` solo cuenta).
+>
 > **📈 7-oct-2026 — v3.16.0 (938 tests): colector de options flow.** Foto diaria de las cadenas de opciones
 > de Yahoo (26 símbolos) para un pre-registro cuando haya ≥ 120 sesiones (~abr-2027). NO se miran los
 > valores antes (`research/OPCIONES_COLECTA_2026-10-07.md`). Encender: `ENABLE_OPTIONS_COLLECTOR=true` + reinicio.

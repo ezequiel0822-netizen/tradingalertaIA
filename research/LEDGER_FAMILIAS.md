@@ -39,6 +39,7 @@
 | 25 | 2026-10-05 | H-NN1 redes neuronales (MLP-23 y MLP-SEQ con 30 s de historia) vs HGB en microestructura L1 BTCUSDT | bookTicker + aggTrades 2023-05-17 → 07-31 y 11-01 → 11-10 (86/86 días, checksum oficial por zip); train = los 92 días de H-MS1 | NO PASA: las redes son PEORES que el HGB (ΔAUC 30 s −0.005 t −5.2 / −0.018 t −16) y la economía pierde ~−7.5 bps/trade en las 6 combinaciones. Réplica de H-MS1 fuera de muestra: AUC HGB 0.595 / 0.576 (señal real y estable, 13× menor que el costo). No integrar redes | 8853632, 5e90204, veredicto | `HIPOTESIS_2026-10-05_redes_neuronales.md` |
 | 26 | 2026-10-06 | H-FADE1 operar el REVERSO de las señales del bot (mean_reversion, momentum, forex_session_breakout; 1:1 con la distancia de riesgo de la señal), k = 3 | MT5 M15 de 7 pares + XAUUSD, 2023-01-02 → 2025-12-31 (hora del servidor → UTC, regla UE), simulador pesimista del harness | NO PASA las tres: −0.37 / −0.21 / −0.19R por trade, t_NW −18.8 / −23.7 / −12.4. Bruto ≈ 0 en ambas direcciones; se pierde el costo (0.19-0.32R por stops de velas de 15 min). El −0.92R del paper vivo de mean_reversion no se reproduce (directo bruto −0.01R): artefacto de la simulación paper, no dirección revertible | b042301, fbf1a6b, veredicto | `HIPOTESIS_2026-10-06_fade.md` |
 | 27 | 2026-10-07 | H-FVG1 / H-IFVG1 Fair Value Gaps (retesteo = continuación) e inverse FVG (gap roto → retesteo del otro lado); límite en el borde del gap, stop al otro borde + 0.1 ATR, TP 2R, 48 velas; k = 2 | MT5 H1 de 7 pares + XAUUSD, decisoria 2011-01-03 → 2017-11-30 (no vista para intradía), secundaria 2026-06-16 → 2026-10-06; costos del harness | NO PASA las dos: −0.24R (n 9.854, t_NW −13.3) y −0.27R (n 7.423, t_NW −16.0) por trade; secundaria −0.23 / −0.33R. BRUTO ya negativo (−0.05 / −0.08R: el TP de 2R sale el 31 % de las veces, hace falta 33 %); costo ~0.19R. Negativo en los 8 símbolos, los 7 años y las dos direcciones | 797fe5f, 7ac8dd5, e96d690, veredicto | `HIPOTESIS_2026-10-07_fvg.md` |
+| 28 | 2026-10-07 | H-KRON1 Kronos-small (modelo base de velas, arXiv 2508.02739) HACIA ADELANTE: pronóstico a 12 h, long/short si \|r̂\| ≥ costo, salida 12 h después con bid/ask reales; k = 1 | MT5 H1 de 7 pares + XAUUSD, rondas 00:00/12:00 UTC desde el 2026-10-07 (pre-entrenamiento hasta 2024-06; toda nuestra intradía posterior ya está vista → solo vale hacia adelante) | **EN CURSO**: evaluación desde el 2027-01-15 con ≥ 300 decisiones; predicción NO PASA | 2a3587b | `HIPOTESIS_2026-10-07_kronos.md` |
 
 ## Lectura transversal (2026-10-05, 24 familias; nota del 2026-10-06 al final)
 
@@ -131,6 +132,8 @@ B5, DEX, Ethena, lending) por un agente, commit 62f8905,
 
 ## Pendiente (orden sugerido; detalle en PROXIMOS_PASOS.md)
 
+0. **H-KRON1** (familia 28, hacia adelante desde 2026-10-07): corre aparte con
+   `.\start_kronos.ps1`; NADIE mira resultados antes del 2027-01-15 (`--status` solo cuenta).
 0. **Options flow** (colecta desde v3.16.0, 2026-10-07): NO es una familia todavía. Se
    pre-registra cuando haya ≥ 120 sesiones guardadas (~abr-2027); hasta entonces NADIE
    mira los valores (`research/OPCIONES_COLECTA_2026-10-07.md`).

@@ -1,5 +1,18 @@
 # Changelog
 
+## Research — H-KRON1 Kronos hacia adelante (2026-10-07): EN CURSO (familia 28)
+
+El user trajo `shiyu-coder/Kronos` (modelo base pre-entrenado con más de 12 mil millones de velas; MIT). El pre-entrenamiento llega hasta jun-2024 y toda nuestra intradía de forex/oro posterior ya está vista, así que el único test limpio es **hacia adelante**. Pre-registro antes del primer pronóstico: `research/HIPOTESIS_2026-10-07_kronos.md` (2a3587b).
+
+- **Proceso APARTE del bot**: `.venv_kronos` (PyTorch CPU) + `vendor/Kronos` en el commit fijado + pesos fijados.
+  - Instalación: `scripts/setup_kronos.ps1`. Arranque: `start_kronos.ps1`, que no deja correr dos copias.
+  - No toca el bot ni su entorno y no opera nada.
+- **`scripts/kronos_forward.py`**:
+  - Rondas 00:00 y 12:00 UTC en días hábiles: Kronos-small, 400 velas H1 de contexto, 12 de horizonte, 5 trayectorias, ~6 min de CPU por ronda con 2 hilos.
+  - Long/short si \|r̂\| ≥ costo. La cotización se lee al final de la ronda y el resultado sale de la cotización 12 h después (spread real incluido).
+  - `--status` solo cuenta; `--evaluate` se niega antes del 2027-01-15; `--once`/`-Test` es una prueba que no cuenta; `--selftest` 25/25.
+- Sin bump: es tooling de research, el bot no cambia.
+
 ## v3.16.0 (2026-10-07) — colector de options flow (solo captura, para un pre-registro futuro)
 
 Pedido del user: "¿se puede agregar algo de options flow?". El flujo real de opciones es de pago y lo gratis (Yahoo) no trae historia, así que hoy no hay con qué probarlo. Lo honesto es **guardar la foto diaria desde ahora** y evaluarla con un pre-registro cuando haya ≥ 120 sesiones (~abr-2027), como se hizo con el COT. Reglas fijadas antes del primer día: `research/OPCIONES_COLECTA_2026-10-07.md`.

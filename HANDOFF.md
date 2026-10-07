@@ -19,7 +19,9 @@ Leé ANTES de tocar nada: la memoria de Claude (MEMORY.md; en especial v3-13-0-a
 gold-paper-futures-vs-spot, no-direct-mt5-trading, sesiones-paralelas-2026-10, mt5-server-time,
 real-money-stays-blocked), research/AGENTE_IA_V2_PREREGISTRO_2026-10-06.md + sus adendas
 (AGENTE_IA_V2_ADENDA_2026-10-07_oro.md, AGENTE_IA_V2_ADENDA2_2026-10-07_realismo.md),
-research/AGENTE_IA_SOMBRAS_PREREGISTRO_2026-10-07.md, research/LEDGER_FAMILIAS.md,
+research/AGENTE_IA_SOMBRAS_PREREGISTRO_2026-10-07.md, research/HIPOTESIS_2026-10-07_kronos.md
+(H-KRON1 hacia adelante: corre aparte con .\start_kronos.ps1; no mirar antes del 2027-01-15),
+research/OPCIONES_COLECTA_2026-10-07.md (no mirar options flow antes del pre-registro), research/LEDGER_FAMILIAS.md,
 PROXIMOS_PASOS.md (bloque del 7-oct) y RESUMEN_COMPLETO.md §2.12-§2.13.
 
 AGENTE IA: app/ai_agent/ decide EJECUTAR / EXPLORAR / NO OPERAR cada candidato forex/oro en MT5
