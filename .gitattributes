@@ -8,3 +8,4 @@ research/B13_*.json -text
 research/B12_*.json -text
 research/H-NN1_* -text
 research/H-FADE1_* -text
+research/H-FVG1_* -text
