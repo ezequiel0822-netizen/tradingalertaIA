@@ -1,5 +1,26 @@
 # Changelog
 
+## v3.15.0 (2026-10-07) — agentes sombra: 3 políticas que deciden y nunca operan
+
+Pedido del user: "¿se pueden agregar más [agentes]?", y después "ármalo cuando esté el arreglo del oro, pero haz todo ya". Pre-registro commiteado ANTES del código: `research/AGENTE_IA_SOMBRAS_PREREGISTRO_2026-10-07.md` (866e66b).
+
+- **Dicho sin vueltas**: más agentes operando la misma cuenta no suman. Verían los mismos ~10 candidatos por día y aprenderían del mismo paper (el agente ya aprende de TODOS: información completa). Además compartirían saldo y topes y ensuciarían la evaluación. Lo que se armó son sombras: deciden sobre los MISMOS candidatos que el agente v2 y no tienen ningún camino a MT5.
+- **Las tres sombras (k = 3)** usan lo que el agente ya registra en cada decisión (media y desvío del posterior, ĝ, tipo de candidato):
+  - `codicioso`: la media del agente + ĝ > 0.05R, sin muestreo;
+  - `prudente`: media − 1 desvío + ĝ > 0.05R;
+  - `simple`: modelo propio de 6 features (estrategia, dirección, oro), re-jugado en orden temporal con los paper trades cerrados ANTES de cada decisión (sin artifacts ni oro mezclado).
+- **Qué aíslan** (descriptivo): agente vs codicioso = muestreo + exploración; codicioso vs prudente = exigir confianza; codicioso vs simple = las 18 features de contexto.
+- **Evaluación**:
+  - Sobre las decisiones `...|px1` (adenda 1), desde el 2027-01-11 con ≥ 200.
+  - Criterio por sombra: media > 0, t NW ≥ 2.50 (Bonferroni 0.05/4 con el agente), media > ejecutar todo y ambas mitades positivas.
+  - Predicción: **NO PASA** ninguna.
+  - Un PASA no habilita órdenes: solo un pre-registro de confirmación.
+- **Dónde se ven**:
+  - `app/ai_agent/shadows.py`: puro, sin órdenes, sin MT5, sin escribir la DB (un test lo verifica en el código fuente).
+  - `scripts/ai_agent_report.py`: las muestra siempre por tag; `--evaluate` aplica su criterio desde la fecha.
+  - `/agente` y el resumen diario: con `AI_AGENT_SHADOWS=true` (opt-in, solo display).
+- Tests: +10 (`tests/test_ai_agent_shadows.py`): reglas, sin mirar el futuro, sin oro mezclado ni artifacts, determinismo, sin camino a órdenes, display solo con el flag, reporte y evaluación.
+
 ## v3.14.1 (2026-10-07) — oro con precio mezclado: una sola fuente de precio por paper trade
 
 Hallazgo del 7-oct, revisando cómo iba el agente v2. Dos paper trades de oro del agente "tocaron" el stop en 1-2 minutos con **−3.5R y −5.1R**, sin que el oro se moviera así. Adenda al pre-registro commiteada ANTES del código: `research/AGENTE_IA_V2_ADENDA_2026-10-07_oro.md` (245a32f).
@@ -38,7 +59,7 @@ Hallazgo del 7-oct, revisando cómo iba el agente v2. Dos paper trades de oro de
 - **Modelo**: `LinearThompson` guarda `meta` (sobrevive a las actualizaciones; los estados viejos cargan sin meta). `scripts/ai_agent_warmstart.py --exclude-mixed-gold` reconstruye sin oro mezclado y marca `excludes_mixed_gold`.
 - **No cambia**: parámetros del agente, reglas de decisión, límites y real-money bloqueado.
 - **Pendiente conocido** (no se tocó): `realized_pnl_today` y el exit shadow siguen leyendo los paper trades viejos tal cual.
-- Tests: +23 (`tests/test_paper_price_source.py`, con el caso real 4190/4160; adenda en `tests/test_ai_agent_report.py`).
+- Tests: +24 (`tests/test_paper_price_source.py`, con el caso real 4190/4160; adendas 1 y 2 en `tests/test_ai_agent_report.py`).
 
 ## Research — H-FADE1 operar el reverso de las señales del bot (2026-10-06): NO PASA (familia 26)
 

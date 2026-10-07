@@ -403,6 +403,8 @@ class AiAgent:
             new = ", ".join(f"{n} {coef[i]:+.2f}" for i, n in enumerate(FEATURE_NAMES_V2)
                             if i >= 16)
             lines.append(f"  Pesos de las features nuevas: {new}")
+        if self.shadows_on():
+            lines += ["", *self.shadow_lines(tag)]
         block = self.guardrail_block() if on else None
         lines += ["", f"Límites hoy: {'OK' if block is None else block}"]
         if on and self.version == 2 and self._explore_pct() > 0:
@@ -446,15 +448,55 @@ class AiAgent:
                 out.append((short, x))
         return out
 
+    # ------------------------------------------------------- agentes sombra
+    def shadows_on(self) -> bool:
+        """v3.15.0: AI_AGENT_SHADOWS (solo display; las sombras nunca operan)."""
+        return self.version == 2 and bool(getattr(self.settings, "ai_agent_shadows", False))
+
+    def shadow_population(self, tag: str) -> list[dict[str, Any]]:
+        """Decisiones v2 del tag dado, cerradas con R y sin oro mezclado (la población
+        del pre-registro de las sombras cuando el tag es el evaluado)."""
+        return [d for d in self.repository.fetch_ai_agent_decisions(limit=100000)
+                if _version_of(d) == 2 and d.get("policy_tag") == tag
+                and d.get("reward_r") is not None and not mixed_gold_decision(d)]
+
+    def shadow_lines(self, tag: str) -> list[str]:
+        from app.ai_agent.shadows import shadow_summary_lines
+
+        try:
+            closed = self.repository.fetch_closed_paper_trades(limit=5000)
+            return shadow_summary_lines(
+                self.shadow_population(tag), closed,
+                float(self.settings.ai_agent_prior_var), float(self.settings.ai_agent_noise_var))
+        except Exception:
+            return ["Agentes sombra: no disponibles (error al calcular)"]
+
     def summary_line(self, today: str) -> str:
-        """Una línea para el resumen diario de Telegram."""
+        """Una línea para el resumen diario de Telegram (v3.15.0: + una de las sombras
+        si AI_AGENT_SHADOWS está prendido)."""
         rows = [d for d in self.repository.fetch_ai_agent_decisions(limit=5000)
                 if _version_of(d) == self.version]
         todays = [d for d in rows if str(d.get("created_at") or "").startswith(today)]
         acted = sum(1 for d in todays if d["intended"] in ACTED)
         sent = sum(1 for d in todays if int(d.get("executed") or 0) == 1)
-        sb = self.scoreboard(version=self.version, policy_tag=self.policy_tag())
-        return (f"Agente IA v{self.version}: hoy {len(todays)} candidatos, quiso operar "
+        tag = self.policy_tag()
+        sb = self.scoreboard(version=self.version, policy_tag=tag)
+        line = (f"Agente IA v{self.version}: hoy {len(todays)} candidatos, quiso operar "
                 f"{acted}, a MT5 {sent} | acumulado {sb['policy_sum_r']:+.2f}R vs "
                 f"ejecutar todo {sb['execute_all_mean_r'] * sb['rewarded']:+.2f}R "
                 f"(n={sb['rewarded']})")
+        if self.shadows_on():
+            try:
+                from app.ai_agent.shadows import SHADOWS, shadow_decisions, shadow_scoreboard
+
+                pop = self.shadow_population(tag)
+                flags = shadow_decisions(
+                    pop, self.repository.fetch_closed_paper_trades(limit=5000),
+                    float(self.settings.ai_agent_prior_var),
+                    float(self.settings.ai_agent_noise_var))
+                ssb = shadow_scoreboard(pop, flags)
+                line += "\nSombras (no operan): " + " | ".join(
+                    f"{n} {ssb[n]['sum_r']:+.2f}R" for n in SHADOWS)
+            except Exception:
+                pass
+        return line

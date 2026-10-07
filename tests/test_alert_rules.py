@@ -184,6 +184,7 @@ def _settings() -> Settings:
         ai_agent_explore_risk_pct=0.10,
         ai_agent_explore_max_per_day=3,
         ai_agent_explore_daily_stop_r=2.0,
+        ai_agent_shadows=False,
         mt5_broker_profile="icmarkets",
         enable_walk_forward_backtest=True,
         walk_forward_train_days=14,

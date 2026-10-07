@@ -357,6 +357,11 @@ class Settings:
     ai_agent_explore_risk_pct: float
     ai_agent_explore_max_per_day: int
     ai_agent_explore_daily_stop_r: float
+    # v3.15.0 — agentes sombra (research/AGENTE_IA_SOMBRAS_PREREGISTRO_2026-10-07.md):
+    # 3 politicas que deciden sobre los mismos candidatos del agente v2 y NUNCA operan
+    # (se calculan de lo que el agente ya registra). Este flag solo las MUESTRA en
+    # /agente y en el resumen diario; el reporte las muestra siempre. Opt-in OFF.
+    ai_agent_shadows: bool
     # Phase 4 v2.3.0 — MT5 validation + walk-forward + data quality + CSV
     mt5_broker_profile: str
     enable_walk_forward_backtest: bool
@@ -541,7 +546,7 @@ def load_settings() -> Settings:
         obsidian_vault_path = safe_obsidian
 
     return Settings(
-        app_version=os.getenv("APP_VERSION", "v3.14.1"),
+        app_version=os.getenv("APP_VERSION", "v3.15.0"),
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
         telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID"),
         dexscreener_base_url=os.getenv(
@@ -806,6 +811,7 @@ def load_settings() -> Settings:
         ai_agent_explore_risk_pct=_get_float("AI_AGENT_EXPLORE_RISK_PCT", 0.10),
         ai_agent_explore_max_per_day=_get_int("AI_AGENT_EXPLORE_MAX_PER_DAY", 3),
         ai_agent_explore_daily_stop_r=_get_float("AI_AGENT_EXPLORE_DAILY_STOP_R", 2.0),
+        ai_agent_shadows=_get_bool("AI_AGENT_SHADOWS", False),
         # Phase 4 v2.3.0
         mt5_broker_profile=os.getenv("MT5_BROKER_PROFILE", "icmarkets"),
         enable_walk_forward_backtest=_get_bool("ENABLE_WALK_FORWARD_BACKTEST", True),

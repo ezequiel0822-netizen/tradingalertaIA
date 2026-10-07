@@ -13,6 +13,10 @@ evaluado pasa a ser el original + `|px1` (precio de MT5 de punta a punta + model
 oro mezclado). El tag original se reporta aparte y no decide. El "oro mezclado" (paper
 trade de oro sin `price_source`) nunca se mide: se cuenta aparte.
 
+v3.15.0 — agentes sombra (research/AGENTE_IA_SOMBRAS_PREREGISTRO_2026-10-07.md): qué
+habrían hecho `codicioso`, `prudente` y `simple` con las mismas decisiones (nunca
+operan). Se muestran siempre; `--evaluate` aplica su criterio desde la misma fecha.
+
   python scripts/ai_agent_report.py
   python scripts/ai_agent_report.py --json
   python scripts/ai_agent_report.py --evaluate
@@ -72,7 +76,8 @@ def load_decisions(con: sqlite3.Connection) -> list[dict]:
     psrc = "p.price_source" if "price_source" in pcols else "NULL"
     sel = ", ".join(["d.id", "d.created_at", "d.symbol", "d.category", "d.strategy_name",
                      "d.direction", "d.intended", "d.executed", "d.block_reason",
-                     "d.reward_r", "d.demo_request_id"] + [f"d.{c}" for c in extra])
+                     "d.reward_r", "d.demo_request_id", "d.mean_r", "d.std_r"]
+                    + [f"d.{c}" for c in extra])
     rows = con.execute(
         f"SELECT {sel}, p.status AS trade_status, p.category AS trade_category, "
         f"{psrc} AS trade_price_source FROM ai_agent_decisions d "
@@ -90,6 +95,29 @@ def is_mixed_gold(d: dict) -> bool:
     """Oro mezclado (adenda 2026-10-07): paper trade de oro sin fuente única de precio."""
     cat = str(d.get("trade_category") or d.get("category") or "").lower()
     return cat == "gold" and not str(d.get("trade_price_source") or "").strip()
+
+
+def load_closed_trades(con: sqlite3.Connection) -> list[dict]:
+    """Paper trades forex/oro cerrados (el modelo de la sombra `simple` aprende de ellos)."""
+    rows = con.execute(
+        "SELECT * FROM paper_trades WHERE category IN ('forex', 'gold') "
+        "AND status != 'open' AND closed_at IS NOT NULL").fetchall()
+    return [dict(r) for r in rows]
+
+
+def shadow_population(rows: list[dict], tag: str | None = PREREG_TAG_V2) -> list[dict]:
+    """Decisiones v2 (del tag, si se da) con R y sin oro mezclado."""
+    return [d for d in rows if d["agent_version"] == 2 and d.get("reward_r") is not None
+            and not d.get("mixed_gold") and (tag is None or d.get("policy_tag") == tag)]
+
+
+def shadows_for(pop: list[dict], closed: list[dict]) -> dict:
+    """Marcador de las sombras sobre una población (import perezoso: numpy)."""
+    sys.path.insert(0, str(ROOT))
+    from app.ai_agent.shadows import shadow_decisions, shadow_scoreboard
+
+    flags = shadow_decisions(pop, closed)
+    return {"flags": flags, "board": shadow_scoreboard(pop, flags)}
 
 
 def weight(intended: str) -> float:
@@ -192,6 +220,38 @@ def evaluate_v2(rows: list[dict], con: sqlite3.Connection, today: date) -> dict:
             "low_power": len(cand) < EVAL_MIN_N, "breaches": breaches}
 
 
+def evaluate_shadows(rows: list[dict], closed: list[dict], today: date) -> dict:
+    """Criterio pre-registrado de las sombras (§4): por sombra, media > 0, t NW ≥ 2.50,
+    media > ejecutar todo y ambas mitades > 0, sobre las decisiones `px1`."""
+    pop = shadow_population(rows)
+    if today < EVAL_FROM:
+        return {"status": "TODAVIA_NO", "detail": f"la evaluación es desde {EVAL_FROM}"}
+    if len(pop) < EVAL_MIN_N and today < EVAL_DEADLINE:
+        return {"status": "TODAVIA_NO", "detail": f"{len(pop)} < {EVAL_MIN_N} decisiones"}
+    sys.path.insert(0, str(ROOT))
+    from app.ai_agent.shadows import SHADOWS, daily_series, shadow_decisions, shadow_values
+
+    flags = shadow_decisions(pop, closed)
+    allr = [float(d["reward_r"]) for d in pop]
+    out: dict = {"n": len(pop), "low_power": len(pop) < EVAL_MIN_N, "shadows": {}}
+    for name in SHADOWS:
+        vals = shadow_values(pop, flags, name)
+        v = [x for _, x in vals]
+        series = daily_series(vals)
+        half = len(series) // 2
+        t = newey_west_t(series)
+        crit = {
+            "1_media_v_pos": (sum(v) / len(v) > 0) if v else False,
+            "2_t_nw_ge_2.50": (t is not None and t >= T_MIN),
+            "3_v_gt_ejecutar_todo": (sum(v) / len(v) > sum(allr) / len(allr)) if v else False,
+            "4_ambas_mitades_pos": bool(half) and sum(series[:half]) > 0
+            and sum(series[half:]) > 0,
+        }
+        out["shadows"][name] = {"status": "PASA" if all(crit.values()) else "NO PASA",
+                                "t_nw": t, "criteria": crit, "days": len(series)}
+    return out
+
+
 def main() -> int:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
@@ -202,6 +262,7 @@ def main() -> int:
 
     con = connect_ro(args.db)
     rows = load_decisions(con)
+    closed = load_closed_trades(con)
     groups: dict[str, list[dict]] = defaultdict(list)
     for d in rows:
         groups[d.get("policy_tag") or f"v{d['agent_version']} (sin tag)"].append(d)
@@ -210,8 +271,14 @@ def main() -> int:
         "groups": {k: summarize(v) for k, v in groups.items()},
         "prereg_tag_v2": PREREG_TAG_V2,
     }
+    for tag, members in groups.items():
+        pop = shadow_population(members, tag=None)
+        if pop:
+            report["groups"][tag]["shadows"] = shadows_for(pop, closed)["board"]
     if args.evaluate:
-        report["evaluation_v2"] = evaluate_v2(rows, con, datetime.now(timezone.utc).date())
+        today = datetime.now(timezone.utc).date()
+        report["evaluation_v2"] = evaluate_v2(rows, con, today)
+        report["evaluation_shadows"] = evaluate_shadows(rows, closed, today)
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2, default=str))
         return 0
@@ -235,9 +302,15 @@ def main() -> int:
               f"{s['mt5_pre_fix_paired']} previas al fix aparte)")
         for k, b in s["by_strategy"].items():
             print(f"    {k:24} n={b['n']:4} media {b['mean_r']:+.3f}R")
+        if s.get("shadows"):
+            print("  agentes sombra (no operan): " + " | ".join(
+                f"{n} {b['sum_r']:+.2f}R (ejecutaría {int(b['executes'])})"
+                for n, b in s["shadows"].items()))
     if args.evaluate:
         print("\nEvaluación v2:", json.dumps(report["evaluation_v2"], ensure_ascii=False,
                                             default=str))
+        print("Evaluación de las sombras:", json.dumps(report["evaluation_shadows"],
+                                                      ensure_ascii=False, default=str))
     print("\n(La t no se muestra antes de la fecha de evaluación: pre-registro v2 §3.)")
     return 0
 
