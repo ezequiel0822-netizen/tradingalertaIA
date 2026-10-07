@@ -1015,6 +1015,33 @@ class TradingAlertJob:
                 continue
 
             now = utc_now_iso()
+            # v3.14.1 (PAPER_PRICE_FROM_MT5): una sola fuente de precio por paper
+            # trade. El oro abria con el futuro de Yahoo (GC=F) y se marcaba con el
+            # spot de MT5 (~$21 abajo) -> stops "tocados" al minuto. Con el flag, los
+            # niveles se trasladan al precio de MT5 (mismas distancias). None = como
+            # siempre (flag apagado o categoria que no es forex/oro).
+            from dataclasses import replace as _dc_replace
+
+            from app.learning.price_source import PRICE_SOURCE_MT5, resolve_entry_levels
+
+            levels = resolve_entry_levels(
+                self.settings,
+                self.mt5_reader,
+                snapshot.category,
+                snapshot.token_address or snapshot.symbol,
+                signal.direction,
+                signal.entry,
+                signal.stop,
+                list(signal.targets or []),
+            )
+            opened = signal
+            if levels is not None and levels.offset:
+                opened = _dc_replace(
+                    signal,
+                    entry=levels.entry,
+                    stop=levels.stop,
+                    targets=list(levels.targets),
+                )
             trade = {
                 "alert_id": int(alert_id),
                 "token_id": int(alert_record.token_id),
@@ -1024,11 +1051,11 @@ class TradingAlertJob:
                 "symbol": snapshot.symbol,
                 "thesis": f"{signal.strategy_name}: {'; '.join(signal.reasoning[:2])}",
                 "readiness_grade": "A" if signal.confidence >= 80 else "B",
-                "entry_price": signal.entry,
-                "latest_price": signal.entry,
-                "stop_loss": signal.stop,
-                "take_profit_1": signal.targets[0] if signal.targets else None,
-                "take_profit_2": signal.targets[1] if len(signal.targets) > 1 else None,
+                "entry_price": opened.entry,
+                "latest_price": opened.entry,
+                "stop_loss": opened.stop,
+                "take_profit_1": opened.targets[0] if opened.targets else None,
+                "take_profit_2": opened.targets[1] if len(opened.targets) > 1 else None,
                 "invalidation": f"strategy {signal.strategy_name} signal pierde validez",
                 "status": "open",
                 "unrealized_return_pct": 0,
@@ -1037,7 +1064,7 @@ class TradingAlertJob:
                 "closed_at": None,
                 "mfe_pct": 0,
                 "mae_pct": 0,
-                "original_stop_loss": signal.stop,
+                "original_stop_loss": opened.stop,
                 "trailing_active": 0,
                 "strategy_name": signal.strategy_name,
                 "direction": signal.direction,
@@ -1062,11 +1089,17 @@ class TradingAlertJob:
                 "hurst_entry": pattern.hurst,
                 "clv_entry": pattern.candle_clv,
                 "candle_strength": pattern.candle_strength,
+                # v3.14.1 — fuente unica (None = como siempre).
+                "price_source": levels.source if levels is not None else None,
+                "source_entry_price": levels.source_entry if levels is not None else None,
             }
             created = self.repository.create_paper_trade(trade)
             if created and self.settings.enable_trade_action_reports:
                 try:
-                    msg = format_trade_opened(snapshot, signal, sizing)
+                    note = None
+                    if levels is not None and levels.source == PRICE_SOURCE_MT5 and levels.offset:
+                        note = f"precio MT5; la senal de Yahoo decia {levels.source_entry:g}"
+                    msg = format_trade_opened(snapshot, opened, sizing, price_note=note)
                     self.notifier.send_message(msg)
                 except Exception:
                     logger.exception("Trade opened report failed")
@@ -1839,7 +1872,7 @@ class TradingAlertJob:
                     "block_reason": block,
                     "model_n": model.n,
                     "agent_version": agent.version,
-                    "policy_tag": agent.policy_tag(),
+                    "policy_tag": agent.policy_tag(model),
                     "risk_cap_pct": dec.risk_cap_pct,
                     "realism_gap": dec.gap,
                 }
@@ -1954,7 +1987,8 @@ class TradingAlertJob:
         try:
             closed = self.repository.fetch_closed_paper_trades(limit=1500)
             extras["strat_recent_r"] = recent_strategy_r(
-                str(paper_trade.get("strategy_name") or ""), opened, closed)
+                str(paper_trade.get("strategy_name") or ""), opened, closed,
+                exclude_mixed_gold=bool(getattr(self.settings, "paper_price_from_mt5", False)))
         except Exception:
             logger.exception("Agente IA: feature de racha fallo; vale 0")
         return extras

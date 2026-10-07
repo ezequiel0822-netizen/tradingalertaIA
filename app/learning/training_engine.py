@@ -8,6 +8,7 @@ from app.config.settings import Settings
 from app.database.models import EstimateResult, TokenSnapshot
 from app.database.repository import Repository
 from app.learning.feature_extractor import extract_features
+from app.learning.price_source import PRICE_SOURCE_MT5, without_mixed_gold
 from app.learning.trade_outcomes import (
     build_realized_feature_lessons,
     build_sliced_performance,
@@ -295,8 +296,14 @@ def _update_paper_trades(
     alimentó el feedback loop (al cerrarse al instante, el dedup de posiciones
     abiertas no protegía y se reabría el mismo setup). Ahora respeta `direction`,
     igual que lifecycle_manager.manage_open_positions.
+
+    v3.14.1: los trades con `price_source='mt5'` (PAPER_PRICE_FROM_MT5) los marca
+    SOLO el lifecycle con MT5; este updater usa el precio de Yahoo y en el oro eso
+    es otro instrumento (futuro vs spot), así que los saltea.
     """
     for trade in repository.fetch_paper_trades(status="open", limit=200):
+        if str(trade.get("price_source") or "").strip().lower() == PRICE_SOURCE_MT5:
+            continue
         token = repository.get_token(str(trade.get("chain")), str(trade.get("token_address")))
         latest = _to_float((token or {}).get("latest_price"))
         entry = _to_float(trade.get("entry_price"))
@@ -379,7 +386,11 @@ def _refresh_realized_feature_lessons(
     honesta que consumen learned_weights y learning_gate cuando
     enable_realized_learning=True. Reusa los signal_outcomes ya fetched para
     mapear alert_id -> features (extraídas al crear el alert)."""
-    closed = repository.fetch_closed_paper_trades(limit=5000)
+    # v3.14.1: con PAPER_PRICE_FROM_MT5 el oro mezclado (futuro vs spot) no cuenta.
+    closed = without_mixed_gold(
+        repository.fetch_closed_paper_trades(limit=5000),
+        bool(getattr(settings, "paper_price_from_mt5", False)),
+    )
     if not closed:
         return 0
     features_by_alert_id: dict[int, list[str]] = {}
@@ -423,7 +434,11 @@ def _refresh_strategy_performance(repository: Repository, settings: Settings) ->
     alerta a horizonte fijo con umbrales absolutos, ~99% 'neutral'), mide el P&L
     realizado del trade normalizado por el riesgo asumido al entry.
     """
-    closed = repository.fetch_closed_paper_trades(limit=5000)
+    # v3.14.1: con PAPER_PRICE_FROM_MT5 el oro mezclado (futuro vs spot) no cuenta.
+    closed = without_mixed_gold(
+        repository.fetch_closed_paper_trades(limit=5000),
+        bool(getattr(settings, "paper_price_from_mt5", False)),
+    )
     if not closed:
         return 0
     frac = float(getattr(settings, "partial_close_fraction", 0.5) or 0.5)
@@ -476,7 +491,11 @@ def _refresh_sliced_performance(repository: Repository, settings: Settings) -> i
     OFF si enable_edge_slicing=False. Devuelve cuántas filas se upsertearon."""
     if not getattr(settings, "enable_edge_slicing", False):
         return 0
-    closed = repository.fetch_closed_paper_trades(limit=5000)
+    # v3.14.1: con PAPER_PRICE_FROM_MT5 el oro mezclado (futuro vs spot) no cuenta.
+    closed = without_mixed_gold(
+        repository.fetch_closed_paper_trades(limit=5000),
+        bool(getattr(settings, "paper_price_from_mt5", False)),
+    )
     if not closed:
         return 0
     frac = float(getattr(settings, "partial_close_fraction", 0.5) or 0.5)

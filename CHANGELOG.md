@@ -1,5 +1,41 @@
 # Changelog
 
+## v3.14.1 (2026-10-07) — oro con precio mezclado: una sola fuente de precio por paper trade
+
+Hallazgo del 7-oct, revisando cómo iba el agente v2. Dos paper trades de oro del agente "tocaron" el stop en 1-2 minutos con **−3.5R y −5.1R**, sin que el oro se moviera así. Adenda al pre-registro commiteada ANTES del código: `research/AGENTE_IA_V2_ADENDA_2026-10-07_oro.md` (245a32f).
+
+- **Causa**:
+  - Los paper trades de oro se abrían con la señal de Yahoo **GC=F (futuro COMEX)** y se marcaban con el tick de MT5 **XAUUSD (spot)**.
+  - El otro updater (`training_engine._update_paper_trades`) los marcaba con Yahoo, así que las fuentes se alternaban.
+  - El 6-oct a las 13:39 UTC: GC=F 4190.0 contra XAUUSD ~4160.
+- **Medido sobre los 311 paper trades de oro** (solo lectura):
+  - Desfase mediano de **+$21**; en el **53 %** de los trades, mayor o igual a un stop entero.
+  - Longs −1.68R (−1.75R es la fuente) y shorts +0.64R (+1.55R).
+  - Forex, como control: +0.03R, sin problema comparable.
+  - MT5 además rechazaba las órdenes de oro del agente: el SL de la señal quedaba por encima del precio real.
+- **Fix (opt-in `PAPER_PRICE_FROM_MT5`; apagado = idéntico a antes)**:
+  - Nuevo `app/learning/price_source.py`. Al abrir un paper trade forex/oro, los niveles de la señal (entrada, SL, TP1, TP2) se **trasladan al precio de MT5** (ask para long, bid para short), conservando las distancias.
+  - El trade guarda `price_source` (`mt5` | `yahoo`) y, en `source_entry_price`, la entrada original de Yahoo.
+  - Cada trade se marca SOLO con su fuente:
+    - el lifecycle no cae a Yahoo si MT5 no responde (saltea el ciclo);
+    - el updater de Yahoo saltea los `mt5`;
+    - un trade `yahoo` (MT5 caído al abrir, o desfase > 3 % = feed equivocado) nunca usa MT5.
+  - El mensaje de trade abierto aclara "precio MT5; la señal de Yahoo decía …".
+- **"Oro mezclado"** = paper trade de oro sin `price_source` (todos los anteriores al fix). Con el flag:
+  - el agente no aprende de él;
+  - lo excluye del ajuste de realismo ĝ y de la feature `strat_recent_r`;
+  - las stats por estrategia (performance, slices, lecciones) tampoco lo cuentan.
+- **Medición del agente (siempre, es medición)**: `/agente`, el resumen diario y `scripts/ai_agent_report.py` no miden el oro mezclado (lo cuentan aparte). `/agente` muestra la configuración ACTIVA (su tag) y cuántas decisiones v2 tienen otro tag.
+- **Evaluación (adenda §3)**:
+  - Con el flag, el tag v2 suma `|px1` si el modelo se reconstruyó sin oro mezclado, o `|px0` si no.
+  - Se evalúa SOLO `v2|eps0.20|xr0.10|r0.50|thr0.05|pv0.25|nv1.00|xmax3|xstop2.0|px1`.
+  - Las decisiones del tag original (desde el 6-oct hasta el despliegue del fix; eran 10 al detectarse el bug) se reportan aparte y no deciden.
+  - Fechas, criterios y predicción (NO PASA): sin cambios.
+- **Modelo**: `LinearThompson` guarda `meta` (sobrevive a las actualizaciones; los estados viejos cargan sin meta). `scripts/ai_agent_warmstart.py --exclude-mixed-gold` reconstruye sin oro mezclado y marca `excludes_mixed_gold`.
+- **No cambia**: parámetros del agente, reglas de decisión, límites y real-money bloqueado.
+- **Pendiente conocido** (no se tocó): `realized_pnl_today` y el exit shadow siguen leyendo los paper trades viejos tal cual.
+- Tests: +23 (`tests/test_paper_price_source.py`, con el caso real 4190/4160; adenda en `tests/test_ai_agent_report.py`).
+
 ## Research — H-FADE1 operar el reverso de las señales del bot (2026-10-06): NO PASA (familia 26)
 
 Pregunta del plan del agente v2: "¿y si el agente hace lo CONTRARIO de lo que dicen las estrategias?". Pre-registro b042301 (antes de bajar datos), código congelado fbf1a6b (selftest sintético 33/33), un tiro sobre velas M15 de MT5 (7 pares + XAUUSD, 2023-01-02 → 2025-12-31, hora del servidor → UTC con la regla UE; 0 huecos; manifest sha256 a6d62387…).

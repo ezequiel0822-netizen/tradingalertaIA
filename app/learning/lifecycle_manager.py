@@ -181,6 +181,13 @@ def manage_open_positions(
 def _fresh_price(
     trade: dict, repository: Repository, mt5_reader=None, broker_profile: str = "icmarkets"
 ) -> float | None:
+    # v3.14.1: un trade abierto con una fuente se marca SOLO con esa fuente
+    # (PAPER_PRICE_FROM_MT5). 'mt5' sin MT5 -> None (se saltea este ciclo; caer a
+    # Yahoo era justo el bug del oro: futuro vs spot). 'yahoo' -> nunca MT5.
+    # NULL (trades viejos / flag apagado) -> como siempre.
+    source = str(trade.get("price_source") or "").strip().lower()
+    if source == "yahoo":
+        mt5_reader = None
     # 1. MT5 si conectado y aplica
     if mt5_reader is not None and getattr(mt5_reader, "is_connected", lambda: False)():
         raw_symbol = trade.get("token_address") or trade.get("symbol")
@@ -206,6 +213,8 @@ def _fresh_price(
                         return float(value)
             except Exception:
                 pass
+    if source == "mt5":
+        return None  # sin MT5 no hay precio comparable: se reintenta el ciclo que viene
     # 2. token.latest_price del repo
     token = repository.get_token(
         str(trade.get("chain")), str(trade.get("token_address"))

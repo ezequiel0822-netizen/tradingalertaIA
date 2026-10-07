@@ -126,6 +126,7 @@ def _settings() -> Settings:
         mt5_server=None,
         mt5_connection_timeout_ms=5000,
         mt5_server_tz="",
+        paper_price_from_mt5=False,
         enable_macro_context=True,
         enable_trade_action_reports=True,
         enable_macro_collector=False,

@@ -16,9 +16,15 @@ No envía órdenes ni toca el ciclo vivo. Solo escribe el estado del modelo en
 `bot_state` si se pasa --apply (sin --apply, solo muestra qué aprendería).
 No lee el .env: usa la DB por ruta. Correrlo con el bot APAGADO.
 
+v3.14.1 — `--exclude-mixed-gold` (adenda 2026-10-07): deja afuera el "oro mezclado"
+(paper trades de oro abiertos con el futuro de Yahoo y marcados con el spot de MT5:
+su R no es del mercado), también en la feature de racha, y marca el modelo como
+limpio (`excludes_mixed_gold`) → con PAPER_PRICE_FROM_MT5 el tag pasa a `|px1`.
+
   python scripts/ai_agent_warmstart.py                              # vista previa v1
   python scripts/ai_agent_warmstart.py --version 2 --mt5-d1         # vista previa v2
   python scripts/ai_agent_warmstart.py --version 2 --mt5-d1 --apply # guarda el modelo v2
+  python scripts/ai_agent_warmstart.py --version 2 --mt5-d1 --exclude-mixed-gold --apply --force
 """
 
 from __future__ import annotations
@@ -48,6 +54,7 @@ from app.ai_agent.features import (  # noqa: E402
 )
 from app.ai_agent.model import LinearThompson  # noqa: E402
 from app.database.repository import Repository  # noqa: E402
+from app.learning.price_source import is_mixed_price_trade  # noqa: E402
 from app.learning.trade_outcomes import is_artifact, r_multiple  # noqa: E402
 
 D1_MAX_AGE_DAYS = 10     # = guard de frescura de jobs._d1_candles_for_regime
@@ -127,6 +134,8 @@ def main() -> int:
                     help="v2: velas D1 de MT5 en solo lectura (si no, cache de la DB)")
     ap.add_argument("--apply", action="store_true", help="guardar el modelo en bot_state")
     ap.add_argument("--force", action="store_true", help="pisar un modelo que ya aprendió")
+    ap.add_argument("--exclude-mixed-gold", action="store_true",
+                    help="sin el oro de precio mezclado (adenda 2026-10-07); marca el modelo limpio")
     args = ap.parse_args()
 
     repo = Repository(args.db)
@@ -141,6 +150,10 @@ def main() -> int:
 
     trades = sorted(repo.fetch_paper_trades(limit=100000), key=lambda r: int(r["id"]))
     fxg = [t for t in trades if str(t.get("category") or "").lower() in {"forex", "gold"}]
+    mixed = 0
+    if args.exclude_mixed_gold:
+        mixed = sum(1 for t in fxg if is_mixed_price_trade(t))
+        fxg = [t for t in fxg if not is_mixed_price_trade(t)]
     closed_all = [t for t in fxg if str(t.get("status") or "") != "open" and t.get("closed_at")]
 
     d1: dict[str, list[dict]] = {}
@@ -191,8 +204,14 @@ def main() -> int:
         seen.append((str(t.get("strategy_name") or ""), x))
         used += 1
 
+    if args.exclude_mixed_gold:
+        model.meta["excludes_mixed_gold"] = True
+        model.meta["built_utc"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        model.meta["mixed_gold_excluded"] = mixed
     print(f"Agente v{args.version}: trades forex/gold cerrados usados: {used} "
           f"(sin R utilizable: {skipped})")
+    if args.exclude_mixed_gold:
+        print(f"  oro con precio mezclado excluido: {mixed} paper trades (adenda 2026-10-07)")
     if args.version == 2:
         print(f"  con régimen D1 as-of: {with_regime} | con evento high a ±2 h: {with_event}")
     print("Lo que el agente creería (R esperado en el contexto MEDIO de cada estrategia):")

@@ -668,9 +668,10 @@ class Repository:
                     account_balance_at_open, is_scalping,
                     rsi_entry, atr_value, macd_value, macd_signal_value,
                     vwap_dist_pct, vwap_week_dist_pct,
-                    hurst_entry, clv_entry, candle_strength
+                    hurst_entry, clv_entry, candle_strength,
+                    price_source, source_entry_price
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     trade["alert_id"],
@@ -714,6 +715,8 @@ class Repository:
                     trade.get("hurst_entry"),             # v3.12.0 Hurst al entry
                     trade.get("clv_entry"),               # v3.12.0 footprint lite
                     trade.get("candle_strength"),
+                    trade.get("price_source"),            # v3.14.1 fuente unica
+                    trade.get("source_entry_price"),      # (None = como siempre)
                 ),
             )
         return True
@@ -2354,7 +2357,8 @@ class Repository:
         with get_connection(self.db_path) as connection:
             rows = connection.execute(
                 f"""
-                SELECT d.*, p.status AS trade_status, p.closed_at AS trade_closed_at
+                SELECT d.*, p.status AS trade_status, p.closed_at AS trade_closed_at,
+                       p.price_source AS trade_price_source
                 FROM ai_agent_decisions d
                 LEFT JOIN paper_trades p ON p.id = d.paper_trade_id
                 {where}

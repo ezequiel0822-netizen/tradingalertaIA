@@ -8,6 +8,11 @@ realismo. Las medias se muestran siempre; la t NO (pre-registro v2 §3).
 `--evaluate` corre el criterio pre-registrado de v2 (§4) y se niega antes del
 2027-01-11 o con menos de 200 decisiones (salvo que ya sea 2027-04-12: baja potencia).
 
+v3.14.1 — adenda 2026-10-07 (research/AGENTE_IA_V2_ADENDA_2026-10-07_oro.md): el tag
+evaluado pasa a ser el original + `|px1` (precio de MT5 de punta a punta + modelo sin
+oro mezclado). El tag original se reporta aparte y no decide. El "oro mezclado" (paper
+trade de oro sin `price_source`) nunca se mide: se cuenta aparte.
+
   python scripts/ai_agent_report.py
   python scripts/ai_agent_report.py --json
   python scripts/ai_agent_report.py --evaluate
@@ -26,7 +31,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-PREREG_TAG_V2 = "v2|eps0.20|xr0.10|r0.50|thr0.05|pv0.25|nv1.00|xmax3|xstop2.0"
+PREREG_TAG_V2_ORIGINAL = "v2|eps0.20|xr0.10|r0.50|thr0.05|pv0.25|nv1.00|xmax3|xstop2.0"
+PREREG_TAG_V2 = PREREG_TAG_V2_ORIGINAL + "|px1"     # adenda 2026-10-07 §3
 EVAL_FROM = date(2027, 1, 11)
 EVAL_DEADLINE = date(2027, 4, 12)
 EVAL_MIN_N = 200
@@ -62,18 +68,28 @@ def load_decisions(con: sqlite3.Connection) -> list[dict]:
     cols = {r[1] for r in con.execute("PRAGMA table_info(ai_agent_decisions)")}
     extra = [c for c in ("agent_version", "policy_tag", "risk_cap_pct", "realism_gap",
                          "mt5_r", "mt5_profit_usd", "mt5_status") if c in cols]
-    sel = ", ".join(["d.id", "d.created_at", "d.symbol", "d.strategy_name", "d.direction",
-                     "d.intended", "d.executed", "d.block_reason", "d.reward_r",
-                     "d.demo_request_id"] + [f"d.{c}" for c in extra])
+    pcols = {r[1] for r in con.execute("PRAGMA table_info(paper_trades)")}
+    psrc = "p.price_source" if "price_source" in pcols else "NULL"
+    sel = ", ".join(["d.id", "d.created_at", "d.symbol", "d.category", "d.strategy_name",
+                     "d.direction", "d.intended", "d.executed", "d.block_reason",
+                     "d.reward_r", "d.demo_request_id"] + [f"d.{c}" for c in extra])
     rows = con.execute(
-        f"SELECT {sel}, p.status AS trade_status FROM ai_agent_decisions d "
+        f"SELECT {sel}, p.status AS trade_status, p.category AS trade_category, "
+        f"{psrc} AS trade_price_source FROM ai_agent_decisions d "
         "LEFT JOIN paper_trades p ON p.id = d.paper_trade_id ORDER BY d.id").fetchall()
     out = []
     for r in rows:
         d = dict(r)
         d["agent_version"] = int(d.get("agent_version") or 1)
+        d["mixed_gold"] = is_mixed_gold(d)
         out.append(d)
     return out
+
+
+def is_mixed_gold(d: dict) -> bool:
+    """Oro mezclado (adenda 2026-10-07): paper trade de oro sin fuente única de precio."""
+    cat = str(d.get("trade_category") or d.get("category") or "").lower()
+    return cat == "gold" and not str(d.get("trade_price_source") or "").strip()
 
 
 def weight(intended: str) -> float:
@@ -81,7 +97,8 @@ def weight(intended: str) -> float:
 
 
 def summarize(rows: list[dict]) -> dict:
-    done = [d for d in rows if d.get("reward_r") is not None]
+    with_r = [d for d in rows if d.get("reward_r") is not None]
+    done = [d for d in with_r if not d.get("mixed_gold")]       # adenda 2026-10-07
     r = [float(d["reward_r"]) for d in done]
     v = [weight(d["intended"]) * float(d["reward_r"]) for d in done]
     mt5 = [d for d in rows if d.get("mt5_status") == "closed"]
@@ -90,9 +107,12 @@ def summarize(rows: list[dict]) -> dict:
     by_strat: dict[str, list[float]] = defaultdict(list)
     for d in done:
         by_strat[str(d.get("strategy_name"))].append(float(d["reward_r"]))
+    excluded = [d for d in with_r if d.get("mixed_gold")]
     return {
         "decisions": len(rows),
         "with_r": len(done),
+        "excluded_mixed_gold": len(excluded),
+        "excluded_mixed_gold_sum_r": round(sum(float(d["reward_r"]) for d in excluded), 3),
         "intended": {k: sum(1 for d in rows if d["intended"] == k)
                      for k in ("execute", "explore", "skip")},
         "sent_to_mt5": sum(1 for d in rows if int(d.get("executed") or 0) == 1),
@@ -141,7 +161,7 @@ def limit_breaches(con: sqlite3.Connection) -> list[str]:
 def evaluate_v2(rows: list[dict], con: sqlite3.Connection, today: date) -> dict:
     """Criterio pre-registrado (research/AGENTE_IA_V2_PREREGISTRO_2026-10-06.md §4)."""
     cand = [d for d in rows if d["agent_version"] == 2 and d.get("policy_tag") == PREREG_TAG_V2
-            and d.get("reward_r") is not None]
+            and d.get("reward_r") is not None and not d.get("mixed_gold")]
     if today < EVAL_FROM:
         return {"status": "TODAVIA_NO", "detail": f"la evaluación es desde {EVAL_FROM}"}
     if len(cand) < EVAL_MIN_N and today < EVAL_DEADLINE:
@@ -193,9 +213,14 @@ def main() -> int:
         return 0
     print(f"Agente IA — reporte (solo lectura) {report['generated_utc']}")
     for tag, s in report["groups"].items():
-        mark = "  <- EVALUADA (pre-registro v2)" if tag == PREREG_TAG_V2 else ""
+        mark = ("  <- EVALUADA (pre-registro v2 + adenda 2026-10-07)" if tag == PREREG_TAG_V2
+                else "  (tag original de v2: se reporta, NO decide — adenda 2026-10-07)"
+                if tag == PREREG_TAG_V2_ORIGINAL else "")
         print(f"\n[{tag}]{mark}")
         print(f"  decisiones {s['decisions']} ({s['first']} → {s['last']}), con R {s['with_r']}")
+        if s["excluded_mixed_gold"]:
+            print(f"  oro con precio mezclado (no se mide): {s['excluded_mixed_gold']} "
+                  f"decisiones, suma de su R paper {s['excluded_mixed_gold_sum_r']:+.2f}R")
         print(f"  intención: {s['intended']} | a MT5: {s['sent_to_mt5']} | frenadas: {s['blocked']}")
         print(f"  agente {s['policy_sum_r']:+.2f}R (media {s['policy_mean_r']}) | ejecutar todo "
               f"media {s['execute_all_mean_r']} | no operar 0")

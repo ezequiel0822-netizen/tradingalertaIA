@@ -226,11 +226,15 @@ def cost_r_feature(paper_trade: dict[str, Any]) -> float:
     return _clip(cost / risk_pct, 0.0, 1.0)
 
 
-def recent_strategy_r(strategy: str, opened_at: Any, closed_trades: list[dict[str, Any]]
-                      ) -> float:
+def recent_strategy_r(strategy: str, opened_at: Any, closed_trades: list[dict[str, Any]],
+                      exclude_mixed_gold: bool = False) -> float:
     """R medio (recortado a R_CLIP, sin artifacts) de los últimos 20 paper trades
-    forex/gold de la estrategia CERRADOS antes de la apertura; acotado [−2, 2] / 2."""
+    forex/gold de la estrategia CERRADOS antes de la apertura; acotado [−2, 2] / 2.
+
+    v3.14.1: `exclude_mixed_gold` (PAPER_PRICE_FROM_MT5 / warm start limpio) saca el
+    oro de precio mezclado, como a los artifacts (adenda 2026-10-07)."""
     from app.ai_agent.model import R_CLIP
+    from app.learning.price_source import is_mixed_price_trade
     from app.learning.trade_outcomes import is_artifact, r_multiple
 
     t = parse_utc(opened_at)
@@ -245,7 +249,7 @@ def recent_strategy_r(strategy: str, opened_at: Any, closed_trades: list[dict[st
         ct = parse_utc(tr.get("closed_at"))
         if ct is None or ct >= t or str(tr.get("status") or "") == "open":
             continue
-        if is_artifact(tr):
+        if is_artifact(tr) or (exclude_mixed_gold and is_mixed_price_trade(tr)):
             continue
         r = r_multiple(tr)
         if r is None:

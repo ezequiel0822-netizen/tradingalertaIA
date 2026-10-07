@@ -639,6 +639,12 @@ def _init_db_unsafe(db_path: Path) -> None:
         _ensure_column(connection, "paper_trades", "hurst_entry", "REAL")
         _ensure_column(connection, "paper_trades", "clv_entry", "REAL")
         _ensure_column(connection, "paper_trades", "candle_strength", "TEXT")
+        # v3.14.1 — fuente unica de precio por paper trade (PAPER_PRICE_FROM_MT5):
+        # price_source 'mt5' | 'yahoo' (NULL = trade viejo / flag apagado; en oro =
+        # "oro mezclado"); source_entry_price = entrada original de la senal (Yahoo)
+        # cuando los niveles se trasladaron al precio de MT5.
+        _ensure_column(connection, "paper_trades", "price_source", "TEXT")
+        _ensure_column(connection, "paper_trades", "source_entry_price", "REAL")
         # v3.14.0 — agente IA v2: versión/política de cada decisión (la evaluación
         # cuenta solo su policy_tag), riesgo usado, ajuste de realismo y el resultado
         # REAL de MT5 de las ejecutadas (mt5_status: closed | unavailable).

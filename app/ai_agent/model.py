@@ -29,6 +29,10 @@ class LinearThompson:
     A: np.ndarray = field(default=None)  # type: ignore[assignment]
     b: np.ndarray = field(default=None)  # type: ignore[assignment]
     n: int = 0
+    # v3.14.1 — datos sobre cómo se armó el modelo (p. ej. `excludes_mixed_gold`:
+    # reconstruido sin el oro de precio mezclado, adenda 2026-10-07). Viaja con el
+    # estado y sobrevive a las actualizaciones; no toca las cuentas.
+    meta: dict = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         d = len(self.feature_names)
@@ -76,6 +80,7 @@ class LinearThompson:
             "A": self.A.tolist(),
             "b": self.b.tolist(),
             "n": self.n,
+            "meta": dict(self.meta or {}),
         })
 
     @classmethod
@@ -97,7 +102,9 @@ class LinearThompson:
             k = len(feature_names)
             if A.shape != (k, k) or b.shape != (k,):
                 return fresh
+            meta = d.get("meta")
             return cls(feature_names=tuple(feature_names), prior_var=prior_var,
-                       noise_var=noise_var, A=A, b=b, n=int(d.get("n") or 0))
+                       noise_var=noise_var, A=A, b=b, n=int(d.get("n") or 0),
+                       meta=dict(meta) if isinstance(meta, dict) else {})
         except (ValueError, TypeError, KeyError):
             return fresh

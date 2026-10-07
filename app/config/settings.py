@@ -220,6 +220,14 @@ class Settings:
     # "EET" = MetaQuotes-Demo (UTC+2/+3, regla UE; medido 2026-10-06); "NY+7";
     # "UTC+N". Solo convierte ticks y velas INTRADIA (ver app/brokers/mt5_time.py).
     mt5_server_tz: str
+    # v3.14.1 — paper trades forex/oro con UNA sola fuente de precio. El oro abria
+    # con el futuro de Yahoo (GC=F, ~$21 sobre el spot) y se marcaba con el spot de
+    # MT5 (XAUUSD) -> R falsos de +-1.5-5R (research/AGENTE_IA_V2_ADENDA_2026-10-07_oro.md).
+    # ON: los niveles de la senal se trasladan al precio de MT5 al abrir (ask long /
+    # bid short, mismas distancias) y el trade se marca solo con MT5; si MT5 no
+    # responde, queda con Yahoo y se marca solo con Yahoo. El agente IA y las stats
+    # por estrategia dejan de aprender del "oro mezclado" viejo. Opt-in OFF.
+    paper_price_from_mt5: bool
     enable_macro_context: bool
     enable_trade_action_reports: bool
     # Phase 3 + 3.5 v2.2.0 — forex price-action + LLM integration
@@ -533,7 +541,7 @@ def load_settings() -> Settings:
         obsidian_vault_path = safe_obsidian
 
     return Settings(
-        app_version=os.getenv("APP_VERSION", "v3.14.0"),
+        app_version=os.getenv("APP_VERSION", "v3.14.1"),
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
         telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID"),
         dexscreener_base_url=os.getenv(
@@ -730,6 +738,7 @@ def load_settings() -> Settings:
         mt5_server=os.getenv("MT5_SERVER") or None,
         mt5_connection_timeout_ms=_get_int("MT5_CONNECTION_TIMEOUT_MS", 5000),
         mt5_server_tz=(os.getenv("MT5_SERVER_TZ") or "").strip(),
+        paper_price_from_mt5=_get_bool("PAPER_PRICE_FROM_MT5", False),
         enable_macro_context=_get_bool("ENABLE_MACRO_CONTEXT", True),
         enable_trade_action_reports=_get_bool("ENABLE_TRADE_ACTION_REPORTS", True),
         # Phase 3 + 3.5 v2.2.0

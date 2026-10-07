@@ -8,6 +8,12 @@ v3.14.0 — v2 (opt-in `AI_AGENT_VERSION=2`, pre-registro
 research/AGENTE_IA_V2_PREREGISTRO_2026-10-06.md): 24 features, exploración mínima con
 riesgo reducido y presupuesto propio, ajuste de realismo con el P&L REAL de MT5 y un
 `policy_tag` por decisión. v1 queda intacto (default) y con su propio modelo.
+
+v3.14.1 — adenda 2026-10-07 (research/AGENTE_IA_V2_ADENDA_2026-10-07_oro.md): el oro de
+"precio mezclado" (abierto con el futuro de Yahoo, marcado con el spot de MT5) no es
+mercado. La MEDICIÓN lo excluye siempre; con `PAPER_PRICE_FROM_MT5=true` el agente
+además no aprende de él ni lo usa en ĝ, y el tag v2 suma `|px1` (modelo reconstruido
+sin oro mezclado) o `|px0` (todavía no reconstruido: no cuenta).
 """
 
 from __future__ import annotations
@@ -21,6 +27,7 @@ import numpy as np
 
 from app.ai_agent.features import FEATURE_NAMES_V2, feature_names_for, parse_utc
 from app.ai_agent.model import LinearThompson
+from app.learning.price_source import is_mixed_price_trade
 from app.learning.trade_outcomes import is_artifact, r_multiple
 from app.utils.time_utils import utc_now
 
@@ -56,6 +63,13 @@ def _version_of(row: dict[str, Any]) -> int:
         return 1
 
 
+def mixed_gold_decision(row: dict[str, Any]) -> bool:
+    """Decisión sobre un paper trade de "oro mezclado" (adenda 2026-10-07): oro cuyo
+    paper trade no tiene fuente única de precio (`trade_price_source` NULL)."""
+    return is_mixed_price_trade({"category": row.get("category"),
+                                 "price_source": row.get("trade_price_source")})
+
+
 class AiAgent:
     def __init__(self, settings, repository) -> None:
         self.settings = settings
@@ -79,17 +93,34 @@ class AiAgent:
     def save_model(self, model: LinearThompson) -> None:
         self.repository.set_state(MODEL_STATE_KEYS[self.version], model.to_json())
 
-    def policy_tag(self) -> str:
+    def price_fix_on(self) -> bool:
+        """v3.14.1: PAPER_PRICE_FROM_MT5 (una sola fuente de precio por paper trade)."""
+        return bool(getattr(self.settings, "paper_price_from_mt5", False))
+
+    def policy_tag(self, model: LinearThompson | None = None) -> str:
         """Identifica la configuración que tomó cada decisión: la evaluación cuenta
-        solo las filas con el tag pre-registrado."""
+        solo las filas con el tag pre-registrado.
+
+        v3.14.1 (adenda 2026-10-07): con PAPER_PRICE_FROM_MT5, el tag v2 suma `|px1`
+        si el modelo se reconstruyó sin oro mezclado y `|px0` si todavía no."""
         s = self.settings
         core = (f"r{float(s.ai_agent_risk_pct):.2f}|thr{float(s.ai_agent_min_edge_r):.2f}"
                 f"|pv{float(s.ai_agent_prior_var):.2f}|nv{float(s.ai_agent_noise_var):.2f}")
         if self.version == 1:
             return f"v1|{core}"
-        return (f"v2|eps{self._explore_pct():.2f}|xr{float(s.ai_agent_explore_risk_pct):.2f}"
-                f"|{core}|xmax{int(s.ai_agent_explore_max_per_day)}"
-                f"|xstop{float(s.ai_agent_explore_daily_stop_r):.1f}")
+        tag = (f"v2|eps{self._explore_pct():.2f}|xr{float(s.ai_agent_explore_risk_pct):.2f}"
+               f"|{core}|xmax{int(s.ai_agent_explore_max_per_day)}"
+               f"|xstop{float(s.ai_agent_explore_daily_stop_r):.1f}")
+        if self.price_fix_on():
+            if model is None:
+                model = self.load_model()
+            tag += "|px1" if self.model_is_clean(model) else "|px0"
+        return tag
+
+    @staticmethod
+    def model_is_clean(model: LinearThompson) -> bool:
+        """El modelo se armó sin oro mezclado (warm start con --exclude-mixed-gold)."""
+        return bool((model.meta or {}).get("excludes_mixed_gold"))
 
     def _explore_pct(self) -> float:
         return min(max(float(getattr(self.settings, "ai_agent_explore_pct", 0.0) or 0.0), 0.0), 1.0)
@@ -135,9 +166,11 @@ class AiAgent:
         acotado a [−1, +0.25]. 0 sin datos (no hay con qué ajustar)."""
         if rows is None:
             rows = self.repository.fetch_ai_agent_decisions(limit=100000)
+        fix = self.price_fix_on()
         diffs = [float(d["mt5_r"]) - float(d["reward_r"]) for d in rows
                  if _version_of(d) == 2 and int(d.get("executed") or 0) == 1
-                 and d.get("mt5_r") is not None and d.get("reward_r") is not None]
+                 and d.get("mt5_r") is not None and d.get("reward_r") is not None
+                 and not (fix and mixed_gold_decision(d))]
         if not diffs:
             return 0.0
         g = sum(diffs) / (len(diffs) + GAP_PRIOR_N)
@@ -194,7 +227,10 @@ class AiAgent:
         """Registra el R del paper trade de cada decisión ya cerrada (de cualquier
         versión: es la medición) y actualiza el modelo ACTIVO solo con las decisiones
         de su versión. Devuelve cuántas observaciones incorporó el modelo. Artifacts y
-        trades sin R se marcan como procesados sin aprender (no se reintentan)."""
+        trades sin R se marcan como procesados sin aprender (no se reintentan).
+
+        v3.14.1: con PAPER_PRICE_FROM_MT5, el oro mezclado se registra (su R queda a la
+        vista, la medición lo excluye) pero el modelo NO aprende de él."""
         now_iso = (now or utc_now()).isoformat()
         pending = self.repository.fetch_ai_agent_decisions(pending_reward_only=True)
         closed = [d for d in pending
@@ -203,6 +239,7 @@ class AiAgent:
             return 0
         model = self.load_model()
         learned = 0
+        fix = self.price_fix_on()
         for d in sorted(closed, key=lambda r: int(r["id"])):
             trade = self.repository.fetch_paper_trade(int(d["paper_trade_id"]))
             r = None if (not trade or is_artifact(trade)) else r_multiple(trade)
@@ -211,6 +248,8 @@ class AiAgent:
                 continue
             self.repository.update_ai_agent_decision(
                 int(d["id"]), {"reward_r": float(r), "rewarded_at": now_iso})
+            if fix and is_mixed_price_trade(trade):
+                continue
             try:
                 x = json.loads(d["features_json"])
             except (TypeError, ValueError):
@@ -261,13 +300,17 @@ class AiAgent:
                    ) -> dict[str, Any]:
         """Valor de la política vs 'no operar' (0) y 'ejecutar todo', sobre las
         decisiones ya cerradas con R (el criterio pre-registrado). Exploración con
-        peso `explore_weight()`. Sin filtros = todas las filas."""
+        peso `explore_weight()`. Sin filtros = todas las filas.
+
+        v3.14.1 (adenda 2026-10-07): el oro mezclado NO se mide (siempre); se cuenta
+        aparte en `excluded_mixed_gold`."""
         rows = self.repository.fetch_ai_agent_decisions(limit=100000)
         if version is not None:
             rows = [d for d in rows if _version_of(d) == int(version)]
         if policy_tag is not None:
             rows = [d for d in rows if d.get("policy_tag") == policy_tag]
-        done = [d for d in rows if d.get("reward_r") is not None]
+        with_r = [d for d in rows if d.get("reward_r") is not None]
+        done = [d for d in with_r if not mixed_gold_decision(d)]
         w_x = self.explore_weight()
         weight = {"execute": 1.0, "explore": w_x}
         r = np.array([float(d["reward_r"]) for d in done]) if done else np.array([])
@@ -283,6 +326,7 @@ class AiAgent:
             "intended_explore": sum(1 for d in rows if d["intended"] == "explore"),
             "executed": sum(1 for d in rows if int(d.get("executed") or 0) == 1),
             "rewarded": len(done),
+            "excluded_mixed_gold": len(with_r) - len(done),
             "policy_sum_r": float(policy.sum()) if len(done) else 0.0,
             "policy_mean_r": float(policy.mean()) if len(done) else 0.0,
             "exploit_sum_r": float((exploit * r).sum()) if len(done) else 0.0,
@@ -300,18 +344,32 @@ class AiAgent:
     def status_text(self, version: str) -> str:
         on = bool(getattr(self.settings, "enable_ai_agent", False))
         model = self.load_model()
-        tag = self.policy_tag()
-        sb = self.scoreboard(version=self.version)
+        tag = self.policy_tag(model)
+        # v3.14.1: la medición es la de la configuración ACTIVA (su tag); las
+        # decisiones de otros tags (p. ej. antes del fix del oro) se cuentan aparte.
+        sb = self.scoreboard(version=self.version, policy_tag=tag)
+        all_v = self.scoreboard(version=self.version)
         lines = [
             f"Agente IA (sandbox demo) — {version}",
             f"Estado: {'ENCENDIDO' if on else 'APAGADO (ENABLE_AI_AGENT=false)'}",
             f"Versión del agente: v{self.version} ({tag})",
             f"Experiencia: aprendió de {model.n} trades cerrados",
-            f"Decisiones v{self.version}: {sb['decisions']} | quiso ejecutar "
+            f"Decisiones con este tag: {sb['decisions']} | quiso ejecutar "
             f"{sb['intended_execute']} | exploró {sb['intended_explore']} | "
             f"ejecutadas en MT5 {sb['executed']}",
+        ]
+        others = all_v["decisions"] - sb["decisions"]
+        if others:
+            lines.append(f"Decisiones v{self.version} con otro tag (no cuentan acá): {others}")
+        if self.version == 2 and self.price_fix_on():
+            lines.append(
+                "Precio: MT5 de punta a punta (PAPER_PRICE_FROM_MT5) | modelo sin oro "
+                f"mezclado: {'sí' if self.model_is_clean(model) else 'NO — reconstruirlo (ver adenda 2026-10-07)'}")
+        excluded = sb.get("excluded_mixed_gold") or 0
+        lines += [
             "",
-            f"Medición (decisiones cerradas: {sb['rewarded']}):",
+            f"Medición (decisiones cerradas: {sb['rewarded']}"
+            + (f"; sin {excluded} de oro con precio mezclado" if excluded else "") + "):",
             f"  Agente:        {sb['policy_sum_r']:+.2f}R total ({sb['policy_mean_r']:+.3f}R por candidato)",
             f"  Ejecutar todo: {sb['execute_all_mean_r']:+.3f}R por candidato",
             "  No operar:     +0.000R",
@@ -385,7 +443,7 @@ class AiAgent:
         todays = [d for d in rows if str(d.get("created_at") or "").startswith(today)]
         acted = sum(1 for d in todays if d["intended"] in ACTED)
         sent = sum(1 for d in todays if int(d.get("executed") or 0) == 1)
-        sb = self.scoreboard(version=self.version)
+        sb = self.scoreboard(version=self.version, policy_tag=self.policy_tag())
         return (f"Agente IA v{self.version}: hoy {len(todays)} candidatos, quiso operar "
                 f"{acted}, a MT5 {sent} | acumulado {sb['policy_sum_r']:+.2f}R vs "
                 f"ejecutar todo {sb['execute_all_mean_r'] * sb['rewarded']:+.2f}R "
