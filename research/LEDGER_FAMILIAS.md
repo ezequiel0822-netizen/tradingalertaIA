@@ -131,6 +131,10 @@ B5, DEX, Ethena, lending) por un agente, commit 62f8905,
 
 ## Pendiente (orden sugerido; detalle en PROXIMOS_PASOS.md)
 
+0. **Options flow** (colecta desde v3.16.0, 2026-10-07): NO es una familia todavía. Se
+   pre-registra cuando haya ≥ 120 sesiones guardadas (~abr-2027); hasta entonces NADIE
+   mira los valores (`research/OPCIONES_COLECTA_2026-10-07.md`).
+
 1. ~~B4b paper hacia adelante~~ → **CERRADA 2026-10-05** (NO PASA la secundaria por t NW;
    el forward no se corre; colector `scripts/b4b_forward_collector.py` queda en el repo sin
    programar).
