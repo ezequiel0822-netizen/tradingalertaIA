@@ -79,4 +79,8 @@ if ($expected) {
     Write-Host "(Sin STARTUP_PASSWORD_SHA256 en .env - arranque directo. Para activar: .\start_bot.ps1 -SetPassword)"
 }
 
+# v3.16.1: seleccionar texto en esta ventana congelaba el bot (2026-10-10, ~30 h).
+. (Join-Path $root "scripts\console_quickedit.ps1")
+Disable-QuickEdit
+
 & (Join-Path $root ".venv\Scripts\python.exe") (Join-Path $root "main.py")

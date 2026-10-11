@@ -38,6 +38,8 @@ if ($running) {
     exit 1
 }
 
+. (Join-Path $root "scripts\console_quickedit.ps1")
+Disable-QuickEdit   # seleccionar texto en la ventana congelaba el proceso (le paso al bot)
 $Host.UI.RawUI.WindowTitle = "Kronos H-KRON1 (registro hacia adelante, no opera)"
 Write-Host "Kronos H-KRON1: registro hacia adelante. Rondas 00:00 y 12:00 UTC en dias habiles."
 Write-Host "No opera nada. Deja esta ventana abierta; Ctrl+C para cortar."

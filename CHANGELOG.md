@@ -1,5 +1,13 @@
 # Changelog
 
+## v3.16.1 (2026-10-10) — el bot se congelaba si se seleccionaba texto en su ventana
+
+- **Qué pasó**: el bot quedó ~30 h sin hacer nada (desde el reinicio del viernes 23:11 hora local). El proceso estaba vivo pero con 3 s de CPU en todo ese tiempo.
+  - `py-spy dump` mostró el hilo principal bloqueado en `logging … emit`, escribiendo en la consola.
+  - Con la "Edición rápida" (QuickEdit) de Windows, si queda texto seleccionado en la ventana, la consola PAUSA la salida y el proceso se congela en el próximo print hasta soltar la selección (Enter/Esc).
+  - Efectos: sin ciclos, sin decisiones del agente, sin lifecycle y sin reconciliación con MT5 todo el fin de semana; el colector de opciones guardó 8 de 49 símbolos de la sesión del viernes.
+- **Fix**: `scripts/console_quickedit.ps1` apaga la Edición rápida de ESA ventana al arrancar (`SetConsoleMode`, sin tocar la configuración de Windows). `start_bot.ps1` y `start_kronos.ps1` lo llaman antes de lanzar Python.
+
 ## Research — H-KRON1 Kronos hacia adelante (2026-10-07): EN CURSO (familia 28)
 
 El user trajo `shiyu-coder/Kronos` (modelo base pre-entrenado con más de 12 mil millones de velas; MIT). El pre-entrenamiento llega hasta jun-2024 y toda nuestra intradía de forex/oro posterior ya está vista, así que el único test limpio es **hacia adelante**. Pre-registro antes del primer pronóstico: `research/HIPOTESIS_2026-10-07_kronos.md` (2a3587b).
