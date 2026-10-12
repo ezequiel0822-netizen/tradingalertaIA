@@ -2439,3 +2439,127 @@ class Repository:
                 (int(demo_request_id),),
             ).fetchone()
         return dict(row) if row else None
+
+    # ------------------------------------------------------------------ #
+    # v3.17.0 — quality gate en sombra + contador de frenados
+    # ------------------------------------------------------------------ #
+    _QUALITY_SHADOW_COLUMNS = (
+        "paper_trade_id", "created_at", "opened_at", "symbol", "category",
+        "strategy_name", "direction", "agent_path", "gate_version", "confidence",
+        "alert_score", "regime", "calendar_safe", "stop_atr", "min_confidence",
+        "min_score", "min_confluence", "news_status", "news_sources", "news_count",
+        "news_freshness", "news_sentiment", "news_catalyst", "news_age_hours",
+        "news_json", "action", "score", "confluence", "reasons_json", "decided_at",
+        "enforced",
+    )
+    _QUALITY_SHADOW_UPDATABLE = {
+        "news_status", "news_sources", "news_count", "news_freshness", "news_sentiment",
+        "news_catalyst", "news_age_hours", "news_json", "action", "score", "confluence",
+        "reasons_json", "decided_at",
+    }
+
+    def insert_quality_shadow(self, row: dict[str, Any]) -> bool:
+        """Una fila por paper trade (UNIQUE): si ya existe, no duplica. True si insertó.
+        Los flags NOT NULL sin valor van en 0 (OR IGNORE descartaría la fila en silencio)."""
+        cols = self._QUALITY_SHADOW_COLUMNS
+        values = {c: row.get(c) for c in cols}
+        for flag in ("agent_path", "enforced"):
+            if values[flag] is None:
+                values[flag] = 0
+        with get_connection(self.db_path) as connection:
+            cursor = connection.execute(
+                f"INSERT OR IGNORE INTO quality_gate_shadow ({', '.join(cols)}) "
+                f"VALUES ({', '.join('?' for _ in cols)})",
+                tuple(values[c] for c in cols),
+            )
+            return cursor.rowcount > 0
+
+    def fetch_quality_shadow_pending(self, limit: int = 20) -> list[dict[str, Any]]:
+        """Filas de acciones que esperan las noticias de Google (las más viejas primero)."""
+        with get_connection(self.db_path) as connection:
+            rows = connection.execute(
+                "SELECT * FROM quality_gate_shadow WHERE news_status = 'pending' "
+                "ORDER BY id ASC LIMIT ?",
+                (int(limit),),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def update_quality_shadow(self, row_id: int, updates: dict[str, Any]) -> None:
+        fields = [k for k in updates if k in self._QUALITY_SHADOW_UPDATABLE]
+        if not fields:
+            return
+        assignments = ", ".join(f"{f} = ?" for f in fields)
+        with get_connection(self.db_path) as connection:
+            connection.execute(
+                f"UPDATE quality_gate_shadow SET {assignments} WHERE id = ?",
+                [updates[f] for f in fields] + [int(row_id)],
+            )
+
+    def quality_shadow_stats(self, since_iso: str | None = None) -> dict[str, Any]:
+        """SOLO conteos (sin resultados de los trades: la regla de no mirar de
+        research/CALIDAD_SOMBRA_2026-10-12.md). `since_iso` = conteo de "hoy"."""
+        with get_connection(self.db_path) as connection:
+            head = connection.execute(
+                "SELECT COUNT(*) AS n, MIN(created_at) AS first, "
+                "SUM(enforced) AS enforced FROM quality_gate_shadow"
+            ).fetchone()
+            by_action = connection.execute(
+                "SELECT category, COALESCE(action, 'esperando') AS action, COUNT(*) AS n "
+                "FROM quality_gate_shadow GROUP BY category, COALESCE(action, 'esperando')"
+            ).fetchall()
+            by_news = connection.execute(
+                "SELECT news_status, COUNT(*) AS n FROM quality_gate_shadow "
+                "WHERE category = 'stock' GROUP BY news_status"
+            ).fetchall()
+            today = 0
+            if since_iso:
+                today = connection.execute(
+                    "SELECT COUNT(*) FROM quality_gate_shadow WHERE created_at >= ?",
+                    (since_iso,),
+                ).fetchone()[0]
+        return {
+            "rows": int(head["n"] or 0) if head else 0,
+            "first": head["first"] if head else None,
+            "enforced": int(head["enforced"] or 0) if head else 0,
+            "by_action": [dict(r) for r in by_action],
+            "by_news": [dict(r) for r in by_news],
+            "today": int(today or 0),
+        }
+
+    def bump_candidate_block(
+        self, day: str, stage: str, reason: str, category: str, unique: bool
+    ) -> None:
+        """Suma 1 al contador de frenados del día (y 1 setup distinto si `unique`)."""
+        with get_connection(self.db_path) as connection:
+            connection.execute(
+                """
+                INSERT INTO candidate_blocks_daily
+                    (day, stage, reason, category, events, unique_setups)
+                VALUES (?, ?, ?, ?, 1, ?)
+                ON CONFLICT(day, stage, reason, category) DO UPDATE SET
+                    events = events + 1,
+                    unique_setups = unique_setups + excluded.unique_setups
+                """,
+                (day, stage, reason, category, 1 if unique else 0),
+            )
+
+    def fetch_candidate_blocks(self, since_day: str) -> list[dict[str, Any]]:
+        with get_connection(self.db_path) as connection:
+            rows = connection.execute(
+                "SELECT * FROM candidate_blocks_daily WHERE day >= ? "
+                "ORDER BY day DESC, events DESC",
+                (since_day,),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def count_ai_agent_blocks_since(self, since_iso: str) -> list[dict[str, Any]]:
+        """Límites que frenaron ejecuciones del agente desde `since_iso` (solo lectura de
+        ai_agent_decisions: el camino del agente no se toca)."""
+        with get_connection(self.db_path) as connection:
+            rows = connection.execute(
+                "SELECT block_reason, COUNT(*) AS n FROM ai_agent_decisions "
+                "WHERE created_at >= ? AND block_reason IS NOT NULL AND block_reason != '' "
+                "GROUP BY block_reason ORDER BY n DESC",
+                (since_iso,),
+            ).fetchall()
+        return [dict(r) for r in rows]

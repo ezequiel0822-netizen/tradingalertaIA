@@ -22,6 +22,12 @@ from datetime import timedelta
 DISCLAIMER = "No es recomendacion financiera. Revisar manualmente."
 
 
+def _partial_fraction(settings) -> float:
+    """v3.17.0: fraccion cerrada en TP1 (PARTIAL_CLOSE_FRACTION), para el USD de /performance."""
+    frac = getattr(settings, "partial_close_fraction", 0.5)
+    return 0.5 if frac is None else float(frac)
+
+
 class BasicTelegramAssistant:
     def __init__(
         self,
@@ -236,6 +242,12 @@ class BasicTelegramAssistant:
         if normalized in {"/opciones", "opciones", "/options", "/options_flow", "options flow"}:
             return self.options_message()
 
+        if normalized in {"/filtro", "filtro", "/quality_gate", "quality gate", "/filtro_calidad"}:
+            return self.quality_gate_message()
+
+        if normalized in {"/frenados", "frenados", "/frenos", "/bloqueos", "bloqueos"}:
+            return self.blocks_message()
+
         if normalized in {"/edge", "edge", "/edges", "/borde", "bolsillos"}:
             return self.edge_message()
 
@@ -422,7 +434,7 @@ class BasicTelegramAssistant:
                         "/strategies", "/estrategias", "/demo_candidates",
                         "/demo_prepare", "/confirm_demo_trade", "/demo_positions",
                         "/demo_close_all", "/cerrar_demo", "/demo_halt",
-                        "/agente", "/opciones",
+                        "/agente", "/opciones", "/filtro", "/frenados",
                     }
                     if cmd in known_prefixes:
                         # Re-ejecutar como comando real (recursion controlada por longitud)
@@ -509,6 +521,8 @@ Comandos:
 /demo_halt - bloquea nuevas ordenes demo
 /agente - agente IA en sandbox demo: que decide, que aprendio y como le va
 /opciones - colector de options flow: cuantos dias guardo (sin valores, hasta el pre-registro)
+/filtro - quality gate en sombra: cuantos candidatos anoto (sin resultados, hasta el pre-registro)
+/frenados - por que se frenaron los candidatos hoy y en 7 dias (tope, cooldown, gates)
 /pausar - pausa alertas automaticas
 /reanudar - reactiva alertas automaticas
 /config - ver configuracion sin secretos
@@ -778,6 +792,100 @@ Forex/oro: {", ".join(symbol.upper() for symbol in getattr(self.settings, "forex
         ]
         return "\n".join(lines)
 
+    def quality_gate_message(self) -> str:
+        """v3.17.0: /filtro — quality gate en sombra. SOLO conteos: cruzar el resultado de
+        los trades con lo que dijo el gate antes del pre-registro contaminaria la prueba
+        (research/CALIDAD_SOMBRA_2026-10-12.md). Read-only."""
+        from app.risk.quality_gate import GATE_VERSION
+
+        today = utc_now().date().isoformat()
+        try:
+            st = self.repository.quality_shadow_stats(since_iso=f"{today}T00:00:00+00:00")
+        except Exception:
+            return "No pude leer el estado del filtro de calidad."
+        on = bool(getattr(self.settings, "enable_quality_gate", False))
+        enforce = bool(getattr(self.settings, "quality_gate_enforce", False))
+        web = bool(getattr(self.settings, "enable_web_news_enhancer", False))
+        agent = bool(getattr(self.settings, "enable_ai_agent", False))
+        lines = [
+            "Filtro de calidad (quality gate) en sombra",
+            f"Anotando: {'SI' if on else 'NO (ENABLE_QUALITY_GATE=false)'} | reglas {GATE_VERSION}"
+            f" | confluencias minimas {int(getattr(self.settings, 'quality_min_confluence', 2))}",
+            "Actua fuera del agente: "
+            + ("SI (QUALITY_GATE_ENFORCE=true)" if enforce else "NO (QUALITY_GATE_ENFORCE=false)")
+            + (" - con el agente encendido no cambia ninguna orden" if agent else ""),
+            f"Noticias de Google (solo acciones): {'SI' if web else 'NO (solo Yahoo)'}",
+            f"Candidatos anotados: {st['rows']}"
+            + (f" (desde {str(st['first'])[:10]})" if st["first"] else "")
+            + f" | hoy: {st['today']} | el gate actuo: {st['enforced']}",
+        ]
+        by_cat: dict[str, dict[str, int]] = {}
+        for r in st["by_action"]:
+            by_cat.setdefault(str(r.get("category") or "?"), {})[str(r.get("action"))] = int(r["n"])
+        for cat in sorted(by_cat):
+            parts = " / ".join(f"{k} {v}" for k, v in sorted(by_cat[cat].items()))
+            lines.append(f"  {cat}: {parts}")
+        if st["by_news"]:
+            parts = " | ".join(f"{r['news_status']} {r['n']}" for r in st["by_news"])
+            lines.append(f"Noticias (acciones): {parts}")
+        lines += [
+            "",
+            "No muestra resultados a proposito: se evaluan con un pre-registro desde el"
+            " 2027-01-11 con >= 300 filas con R cerrado. Mirarlos antes contaminaria la prueba.",
+        ]
+        return "\n".join(lines)
+
+    def blocks_message(self) -> str:
+        """v3.17.0: /frenados — por que se frenaron los candidatos (contador de descartes):
+        hoy y los ultimos 7 dias, mas los limites que frenaron al agente hoy. Read-only."""
+        from app.risk.block_log import reason_code
+
+        today = utc_now().date()
+        since = (today - timedelta(days=6)).isoformat()
+        try:
+            rows = self.repository.fetch_candidate_blocks(since)
+            agent = self.repository.count_ai_agent_blocks_since(f"{today.isoformat()}T00:00:00+00:00")
+        except Exception:
+            return "No pude leer el contador de frenados."
+        on = bool(getattr(self.settings, "enable_discard_log", False))
+        lines = [
+            "Candidatos frenados (por que no se abrio el trade o no fue a MT5)",
+            f"Contador: {'ENCENDIDO' if on else 'APAGADO (ENABLE_DISCARD_LOG=false)'}",
+        ]
+        today_rows = [r for r in rows if r["day"] == today.isoformat()]
+        lines.append(f"Hoy ({today.isoformat()} UTC):")
+        if today_rows:
+            for r in today_rows[:12]:
+                lines.append(
+                    f"  {r['stage']} | {r['reason']} | {r['category']}: "
+                    f"{r['events']} veces, {r['unique_setups']} setups"
+                )
+        else:
+            lines.append("  sin frenos registrados")
+        week: dict[tuple[str, str], list[int]] = {}
+        for r in rows:
+            acc = week.setdefault((r["stage"], r["reason"]), [0, 0])
+            acc[0] += int(r["events"] or 0)
+            acc[1] += int(r["unique_setups"] or 0)
+        if week:
+            lines.append("Ultimos 7 dias:")
+            for (stage, reason), (ev, un) in sorted(week.items(), key=lambda kv: -kv[1][0])[:10]:
+                lines.append(f"  {stage} | {reason}: {ev} veces, {un} setups")
+        if agent:
+            agg: dict[str, int] = {}
+            for r in agent:
+                code = reason_code(r.get("block_reason"))
+                agg[code] = agg.get(code, 0) + int(r.get("n") or 0)
+            parts = " | ".join(f"{k} {v}" for k, v in sorted(agg.items(), key=lambda kv: -kv[1]))
+            lines.append(f"Agente IA, ejecuciones frenadas hoy: {parts}")
+        lines += [
+            "",
+            "'veces' cuenta cada ciclo en que un candidato se freno (el mismo setup puede"
+            " repetirse cada ciclo); 'setups' cuenta los distintos del dia. /descartes sigue"
+            " mostrando las ALERTAS no enviadas.",
+        ]
+        return "\n".join(lines)
+
     def ai_agent_message(self) -> str:
         """v3.13.0: /agente — estado del agente IA en sandbox demo: decisiones, lo que
         aprendio, su medicion contra 'no operar' y 'ejecutar todo'. Read-only."""
@@ -931,7 +1039,8 @@ Forex/oro: {", ".join(symbol.upper() for symbol in getattr(self.settings, "forex
         except (TypeError, ValueError):
             balance = float(self.settings.account_starting_balance)
         perf = performance_since(
-            trades, baseline, executed, balance, _cost_map_from_settings(self.settings)
+            trades, baseline, executed, balance, _cost_map_from_settings(self.settings),
+            partial_fraction=_partial_fraction(self.settings),
         )
         ok3 = "[!]" if (perf.net_r > 0 and perf.account_pct > 0) else "[X]"
         lines.append(
@@ -981,7 +1090,8 @@ Forex/oro: {", ".join(symbol.upper() for symbol in getattr(self.settings, "forex
         except (TypeError, ValueError):
             balance = float(self.settings.account_starting_balance)
         summ = performance_since(
-            trades, baseline, executed, balance, _cost_map_from_settings(self.settings)
+            trades, baseline, executed, balance, _cost_map_from_settings(self.settings),
+            partial_fraction=_partial_fraction(self.settings),
         )
         since = baseline or "el inicio"
         lines = [

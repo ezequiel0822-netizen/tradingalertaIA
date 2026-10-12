@@ -1,16 +1,17 @@
-# Trading Alert AI v3.16.0
+# Trading Alert AI v3.17.0
 
 Trader engine algoritmico **local** (Python 3.12, Windows) enfocado **100% a LA BOLSA** (acciones US + forex + oro). Observa datos publicos, guarda historial en SQLite, decide entradas/salidas con un strategy router swing, opera paper trades simulados, aprende del P&L realizado neto de costos, y puede enviar ordenes **solo a cuenta MT5 demo** (con confirmacion manual o auto-confirmacion opt-in).
 
 **Real-money trading sigue bloqueado por design.** `enable_real_trading` es `False` HARDCODED en `settings.py` (ya no se lee del env), y la barrera real es `_is_demo_account()` en `mt5_demo_trader.py` (rechaza cualquier cuenta no-demo). El sistema no es recomendacion financiera: filtra candidatos, simula y aprende para revision manual.
 
-## Estado actual (v3.16.0, oct-2026)
+## Estado actual (v3.17.0, oct-2026)
 
-- **938 tests verdes.** Corriendo en la Lenovo contra MT5 demo (MetaQuotes-Demo, ~3.000 USD desde el 4-oct-2026) via `.\start_bot.ps1`. Una sola instancia a la vez.
+- **995 tests verdes.** Corriendo en la Lenovo contra MT5 demo (MetaQuotes-Demo, ~3.000 USD desde el 4-oct-2026) via `.\start_bot.ps1`. Una sola instancia a la vez.
 - **Research: 27 familias de hipótesis probadas, 0 operables** (la última, H-FVG1 del 7-oct: los Fair Value Gaps e inverse FVG pierden −0.24 / −0.27R por trade en H1 2011-2017, ya negativos antes de costos; antes, H-FADE1 del 6-oct: operar el reverso de las señales del bot tampoco sirve; el bruto es ≈ 0 en ambas direcciones y se pierde el costo).** Cada familia con pre-registro commiteado antes de mirar datos, código verificado con datos sintéticos, k declarado y umbral t ≥ 2.50 (Newey-West). Registro único: `research/LEDGER_FAMILIAS.md` (incluye la "Lectura transversal" y las ventanas ya vistas).
 - **Agente IA en sandbox demo** (v3.13.0, v2 en v3.14.0; opt-in `ENABLE_AI_AGENT`): decide ejecutar, explorar o no operar cada candidato forex/oro en MT5 DEMO y aprende de todos (Thompson sampling). Evaluación pre-registrada desde el 2027-01-11 (`research/AGENTE_IA_V2_PREREGISTRO_2026-10-06.md` + adendas 1 y 2 del 7-oct: se evalúa el tag `...|px1`); predicción declarada: NO PASA. **3 agentes sombra** (v3.15.0) deciden sobre los mismos candidatos y nunca operan. Ver la sección "Agente IA".
 - **Kronos hacia adelante (H-KRON1, familia 28)**: el modelo base de velas `shiyu-coder/Kronos` pronostica forex/oro dos veces por día en un proceso APARTE (`.\start_kronos.ps1`, primero `.\scripts\setup_kronos.ps1`). No opera; se evalúa con pre-registro desde el 2027-01-15.
 - **Options flow (v3.16.0, opt-in `ENABLE_OPTIONS_COLLECTOR`)**: guarda cada día la foto de las cadenas de opciones de Yahoo (26 símbolos) para evaluarla con un pre-registro cuando haya ≥ 120 sesiones (~abr-2027). No genera señal ni muestra valores (`/opciones` solo cuenta días). Reglas: `research/OPCIONES_COLECTA_2026-10-07.md`.
+- **Filtro de calidad en sombra (v3.17.0, opt-in `ENABLE_QUALITY_GATE`)**: el quality gate del paquete "v3.17 calidad", adaptado. Anota qué diría de cada candidato (confianza, tendencia D1, calendario, stop en ATR y, en acciones, noticias de Yahoo + Google publicadas antes de la apertura) y **nunca descarta**; en forex/oro anota después de que decide el agente. `QUALITY_GATE_ENFORCE` solo actúa fuera del agente. `/filtro` solo cuenta: el veredicto se cruza con resultados recién con un pre-registro (`research/CALIDAD_SOMBRA_2026-10-12.md`). También en v3.17.0: `/frenados` (por qué se frenó cada candidato, `ENABLE_DISCARD_LOG`) y el P&L del día que ahora cuenta la mitad cobrada en TP1.
 - **Precio de los paper trades (v3.14.1, opt-in `PAPER_PRICE_FROM_MT5`)**: el oro abría con el futuro de Yahoo (GC=F, ~$21 sobre el spot) y se marcaba con el spot de MT5 → stops "tocados" al minuto (−3.5R / −5.1R falsos). Con el flag, cada paper trade forex/oro usa UNA fuente (MT5) de punta a punta y el agente deja de aprender del "oro mezclado".
 - **REFOCUS v3.7.0 — 100% LA BOLSA.** Memecoins cortadas (`ENABLE_MEMECOIN_ENGINE=false`; el user tiene un bot aparte), scalping apagado. Acciones paper-only; solo forex/oro llegan a MT5 demo.
 - **Protecciones vivas (downward-only):** calendar gate, cap de exposición neta USD, cooldown por símbolo, exit shadow, regime gate, VWAP gate y COT collector. Promotion gate: todas las estrategias con muestra en SHADOW (cero órdenes por el camino normal); el agente decide por su cuenta pero mantiene los gates de RIESGO.
@@ -63,7 +64,7 @@ Copia `.env.example` como referencia y pon los valores reales solo en `.env`. Va
 # Obligatorias
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_CHAT_ID=
-# APP_VERSION: NO pinear (el default vive en settings.py = v3.16.0). Si se pinea, pisa al codigo.
+# APP_VERSION: NO pinear (el default vive en settings.py = v3.17.0). Si se pinea, pisa al codigo.
 
 # MT5 (read + demo). Credenciales reales SOLO en tu .env.
 ENABLE_MT5_READER=true
@@ -172,6 +173,9 @@ streamlit run app/dashboard/streamlit_app.py
 
 # Agente IA (sandbox demo)
 /agente
+
+# Medicion en sombra (solo cuentan, no muestran resultados)
+/filtro          /frenados        /opciones
 
 # Aprendizaje
 /aprendizaje     /entrenar        /expectancy      /edge            /gate_preview
@@ -326,12 +330,12 @@ SQLite en `SQLITE_PATH` (default `trading_alert_ai.db` en la raiz). Mantenela en
 - `obsidian/tradingbot v.1`: memoria del proyecto.
 - `scripts`: herramientas manuales del agente (`ai_agent_warmstart.py`, `ai_agent_report.py`) y de research (estudios pre-registrados, `cot_backfill.py`, ...).
 - `research`: pre-registros, veredictos y `LEDGER_FAMILIAS.md`.
-- `tests`: 938 tests.
+- `tests`: 995 tests.
 
 ## Tests
 
 ```powershell
-python -m pytest tests/ -q     # 938 verdes
+python -m pytest tests/ -q     # 995 verdes
 ```
 
 ## Advertencia

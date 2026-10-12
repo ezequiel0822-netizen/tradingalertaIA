@@ -1,5 +1,55 @@
 # Changelog
 
+## v3.17.0 (2026-10-12) — filtro de calidad en sombra, noticias de acciones, contador de frenados y P&L del día con TP1
+
+Es el paquete "v3.17 calidad" del user (`propuestas/2026-10-10_v3.17_calidad/`), adaptado según la revisión (`REVISION_CLAUDE_2026-10-12.md`) y lo que el user respondió el 12-oct:
+
+- `AI_AGENT_EXPLORE_PCT` se queda en 0.20.
+- `requirements.txt` no cambia.
+- Umbrales, `MAX_OPEN_TRADES_TOTAL` y `DEMO_ALLOWED_SYMBOLS` no se tocan por ahora.
+- En el gate, "lo mejor y más eficaz" sin romper la evaluación del agente.
+
+Las reglas de la colecta se commitearon ANTES del código: `research/CALIDAD_SOMBRA_2026-10-12.md` (7965f8b + 10e4562).
+
+- **Quality gate** (`app/risk/quality_gate.py`, puro: sin DB, sin red, sin MT5).
+  - Lee los datos reales del bot. El paquete leía claves que los candidatos no tienen y, pegado tal cual, mandaba TODO a "discard". Ahora usa:
+    - la confianza de la señal y el score de la alerta;
+    - la tendencia D1 `up`/`down`/`flat`;
+    - el calendario;
+    - la distancia al stop en ATR (el "risk_r" del paquete no medía nada: el stop ya es 1R).
+  - **Nunca descarta**: el escalón "discard" pasa a `paper_only` con motivo `quality_too_low`.
+  - Los puntos del paquete quedan congelados como reglas `qg1`.
+- **En sombra** (`ENABLE_QUALITY_GATE`, apagado).
+  - La tabla `quality_gate_shadow` guarda una fila por candidato (acciones, forex y oro): datos de entrada as-of la apertura, umbrales vigentes, puntaje, confluencias, acción y motivos.
+  - En forex y oro se anota **DESPUÉS** de que decide el agente, con la misma lectura D1 que usa él. No cambia su etiqueta, sus candidatos ni lo que ve.
+  - `/filtro` solo cuenta: cruzar resultados con el veredicto antes del pre-registro está prohibido (desde el 2027-01-11, con ≥ 300 filas).
+- **Actúa solo fuera del agente** (`QUALITY_GATE_ENFORCE`, apagado).
+  - Lo que el gate manda a `paper_only` no va a MT5. Es solo el camino que no es del agente; con el agente encendido no cambia ninguna orden.
+  - Nunca toca el paper trade. Downward-only y soft-fail.
+- **Noticias de acciones** (`app/collectors/web_news_enhancer.py`, `ENABLE_WEB_NEWS_ENHANCER`, apagado).
+  - En el momento del candidato se usan los titulares de Yahoo que el bot ya bajó: caché, sin red (`NewsCollector.cached_for_symbol`).
+  - Google News RSS se busca **después** de las decisiones del ciclo: ≤ 2 búsquedas por ciclo, 5 s cada una, caché de 30 min, pausa de 30 min tras 3 fallos seguidos y respuestas de ≤ 2 MB.
+  - Solo cuentan los titulares publicados antes de la apertura. Los de Google sin fecha se descartan.
+  - Una fila espera a Google como mucho 6 h. Si se apaga el flag, las pendientes se cierran con Yahoo.
+  - Forex y oro no buscan noticias: Google buscaría "EURUSD=X stock".
+  - Del sentimiento se sacan las palabras ambiguas: cut, cuts, lower, higher, baja.
+- **Contador de frenados** (`ENABLE_DISCARD_LOG`, apagado; `/frenados`). Es el "log de descartes" del plan (P2 #14).
+  - Cuenta por día por qué se frenó cada candidato: tope de trades, cooldown, kill-switch, sizing, "ya abierto" y cada gate del camino a MT5.
+  - Registra cuántas veces pasó y cuántos setups distintos. Muestra también los límites que frenaron al agente (leídos de `ai_agent_decisions`, sin tocar su código).
+  - Solo registro. `/descartes` sigue mostrando las alertas no enviadas.
+- **P&L del día con TP1** (arreglo; decisión pendiente desde v3.13.1, el user dijo que sí).
+  - `realized_pnl_today` (kill-switch) y el impacto en la cuenta de `/performance` sumaban solo la pierna final de un trade con cierre parcial: la mitad cobrada en TP1 desaparecía. En MT5 la orden cierra ENTERA en TP1.
+  - Ahora usan `trade_outcomes.realized_usd_pnl`, con la misma mezcla que el R. El kill-switch queda un poco menos sensible y más cerca de lo real.
+- **Lo que NO se aplicó del paquete**:
+  - `AI_AGENT_EXPLORE_PCT=0.10`: saca al agente de su evaluación.
+  - "discard" y el gate delante del agente.
+  - Umbrales más altos, tope de 3 trades y lista corta de símbolos.
+  - `requirements_mejorado.txt`: yfinance no se usa y trae paquetes sin pin.
+  - El `.env` recomendado: secretos vacíos y LLM dentro del ciclo.
+  - El refresco del cache D1: con el agente encendido no mejora nada y le cambiaría la fuente del D1.
+  - La meta de 58-65 % de acierto: sin evidencia, con 27 familias y 0 operables.
+- Tests: +57 (995). Son `test_quality_gate.py`, `test_web_news_enhancer.py` y `test_discard_log.py`, más los de TP1 en `test_trade_outcomes.py`, `test_performance.py` y `test_portfolio_manager.py`. Todos sin red.
+
 ## v3.16.1 (2026-10-10) — el bot se congelaba si se seleccionaba texto en su ventana
 
 - **Qué pasó**: el bot quedó ~30 h sin hacer nada (desde el reinicio del viernes 23:11 hora local). El proceso estaba vivo pero con 3 s de CPU en todo ese tiempo.

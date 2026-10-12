@@ -69,3 +69,11 @@ class NewsCollector:
         result = items[: self.settings.max_news_per_symbol]
         self._cache[key] = (time.monotonic(), result)  # solo exitos; fallos reintentan
         return result
+
+    def cached_for_symbol(self, symbol: str) -> list[NewsItem] | None:
+        """v3.17.0: los titulares que el ciclo YA bajó para el símbolo, SIN red (para el
+        quality gate en sombra). None si no hay caché vigente."""
+        hit = self._cache.get(str(symbol or "").upper())
+        if hit is None or time.monotonic() - hit[0] >= NEWS_CACHE_TTL_SECONDS:
+            return None
+        return list(hit[1])

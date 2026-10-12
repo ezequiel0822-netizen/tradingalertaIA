@@ -118,6 +118,7 @@ def _seed_closed_trade(
     unrealized_return_pct: float,
     direction: str = "long",
     executed_to_mt5: bool = True,
+    partial_closed: int = 0,
 ) -> int:
     """Helper: crea un paper_trade ya cerrado HOY (UTC) con notional opcional.
 
@@ -149,7 +150,7 @@ def _seed_closed_trade(
         "mfe_pct": 0, "mae_pct": 0, "original_stop_loss": entry * 0.95, "trailing_active": 0,
         "strategy_name": "breakout", "direction": direction,
         "size_notional": size_notional, "size_units": (size_notional / entry) if size_notional else 0,
-        "risk_pct": 1.0, "partial_closed": 0,
+        "risk_pct": 1.0, "partial_closed": partial_closed,
     }
     assert repo.create_paper_trade(trade) is True
 
@@ -426,3 +427,28 @@ def test_account_balance_falls_back_to_starting_if_nothing() -> None:
     repo = _repo()
     pm = PortfolioManager(settings, repo)  # sin mt5_reader
     assert pm.account_balance() == 25000.0
+
+
+# --- v3.17.0: la mitad cobrada en TP1 cuenta en el P&L del día (kill-switch) ---
+
+
+def test_realized_pnl_today_counts_the_tp1_half() -> None:
+    """Trade ejecutado: mitad cerrada en TP1 (+5 %) y el resto a breakeven. Antes el
+    P&L del día daba 0 % (solo la pierna final); en MT5 la orden cierra ENTERA en TP1."""
+    base = _settings()
+    settings = type(base)(**{**base.__dict__, "account_starting_balance": 100000.0})
+    repo = _repo()
+    # notional original 20k -> tras TP1 queda 10k; TP1 = entry x 1.05 (+5 %)
+    _seed_closed_trade(repo, "EURUSD", "forex", 1.10, 10000.0, 0.0, partial_closed=1)
+    pm = PortfolioManager(settings, repo)
+    # 20k x 0.5 x 5 % = +$500 -> +0.5 % de $100k
+    assert abs(pm.realized_pnl_today() - 0.5) < 0.0001
+
+
+def test_realized_pnl_today_tp1_leg_only_for_executed_trades() -> None:
+    base = _settings()
+    settings = type(base)(**{**base.__dict__, "account_starting_balance": 100000.0})
+    repo = _repo()
+    _seed_closed_trade(repo, "GC=F", "gold", 4400.0, 50000.0, 0.0,
+                       executed_to_mt5=False, partial_closed=1)
+    assert PortfolioManager(settings, repo).realized_pnl_today() == 0.0

@@ -82,6 +82,17 @@ def test_account_pct_from_usd_pnl():
     assert s.account_pct == 0.1
 
 
+def test_account_pct_counts_the_tp1_leg():
+    # v3.17.0: notional original 20k; mitad cerrada en TP1 (+2 %), resto a breakeven.
+    t = _t(1, entry=100.0, latest=100.0001, ostop=99.0,
+           closed_at="2026-06-05T10:00:00+00:00", notional=10000.0)
+    t.update({"partial_closed": 1, "take_profit_1": 102.0})
+    s = performance_since([t], BASE, executed_ids={1}, balance=100000.0)
+    assert s.account_pct == 0.2                 # 20k x 0.5 x 2 % = +200 (antes ~0)
+    s0 = performance_since([t], BASE, executed_ids={1}, balance=100000.0, partial_fraction=0.0)
+    assert s0.account_pct == 0.0
+
+
 def test_empty_baseline_includes_all_executed():
     old = _win(1, closed_at="2026-05-10T10:00:00+00:00")
     s = performance_since([old], "", executed_ids={1}, balance=100000.0)

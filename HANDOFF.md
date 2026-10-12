@@ -6,40 +6,43 @@
 
 ---
 
-## Prompt VIGENTE para el chat nuevo (12-oct-2026) — usá ESTE
+## Prompt VIGENTE para el chat nuevo (12-oct-2026, v3.17.0) — usá ESTE
 
 ```
 Retomamos Trading Alert AI (bot de trading LOCAL, Python 3.12, Windows, repo en
 C:/Users/LENOVO/tradingalertaIA, venv en .venv). Respondé en español, claro y sin jerga.
-Estado al 12-oct-2026: v3.16.1 (main = origin/main = 206f607 o posterior), 938 tests verdes.
-Demo MT5 MetaQuotes-Demo (~2.985 USD, sin posiciones). Research: 27 familias con pre-registro
--> 0 operables; la 28 (Kronos) corre HACIA ADELANTE.
+Estado al 12-oct-2026: v3.17.0 (rama johan/trading-alert-v3-17-quality-991613; verificá con git
+si el user ya la mergeó a main), 995 tests verdes. Demo MT5 MetaQuotes-Demo (~2.985 USD,
+sin posiciones). Research: 27 familias con pre-registro -> 0 operables; la 28 (Kronos) corre
+HACIA ADELANTE.
 
-TAREA PROPUESTA: el user dejó un paquete de mejoras "v3.17 calidad" (quality gate + web news +
-.env de selectividad) en propuestas/2026-10-10_v3.17_calidad/. ANTES del PROMPT del paquete leé
-propuestas/2026-10-10_v3.17_calidad/REVISION_CLAUDE_2026-10-12.md: varias recomendaciones chocan
-con lo pre-registrado (AI_AGENT_EXPLORE_PCT=0.10 cambia el tag del agente y lo saca de la
-evaluación; un gate delante del agente cambia la población evaluada; "discard" borra el dato;
-umbrales más altos achican los candidatos; requirements sin pin). Confirmá esos puntos con el
-user ANTES de implementar. Lo de valor: los módulos como medición en sombra (opt-in), refresco
-del cache D1 de MT5, log de descartes; realized_pnl_today con TP1 = decisión del user.
+v3.17.0 = el paquete "v3.17 calidad" del user APLICADO ADAPTADO (CHANGELOG): quality gate EN
+SOMBRA (ENABLE_QUALITY_GATE; anota, nunca descarta; forex/oro después de que decide el agente),
+QUALITY_GATE_ENFORCE (solo fuera del agente: hoy no cambia ninguna orden), noticias de acciones
+(ENABLE_WEB_NEWS_ENHANCER: Yahoo ya bajado + Google después, as-of), contador de frenados
+(ENABLE_DISCARD_LOG, /frenados) y P&L del día con la mitad de TP1. Todo opt-in. El user decidió
+NO tocar AI_AGENT_EXPLORE_PCT (0.20), umbrales, MAX_OPEN_TRADES_TOTAL, DEMO_ALLOWED_SYMBOLS ni
+requirements; el refresco del cache D1 quedó fuera.
 
-PRIMERO (operativo): el bot y Kronos estaban APAGADOS el 12-oct 06:51 UTC. El user los arranca
-con .\start_bot.ps1 y .\start_kronos.ps1 (los lanzadores apagan la "Edición rápida": con texto
-seleccionado en la ventana, Windows congela el proceso; pasó el 10-oct ~30 h). Para saber si
-el bot VIVE mirá filas nuevas en la DB (max(captured_at) de price_snapshots, training_runs por
-día ~700), no solo si existe main.py.
+PRIMERO (operativo): el 12-oct el bot y Kronos estaban APAGADOS (último snapshot 11-oct 05:27
+UTC). El user los arranca con .\start_bot.ps1 y .\start_kronos.ps1 (los lanzadores apagan la
+"Edición rápida": con texto seleccionado en la ventana, Windows congela el proceso; pasó el
+10-oct ~30 h). Para saber si el bot VIVE mirá filas nuevas en la DB (max(captured_at) de
+price_snapshots, training_runs por día ~700), no solo si existe main.py.
 
 Leé ANTES de tocar nada: la memoria de Claude (MEMORY.md; en especial propuesta-v3-17-calidad,
 v3-13-0-ai-agent, gold-paper-futures-vs-spot, console-quickedit-freeze, kronos-forward-test,
 options-flow-collector, no-direct-mt5-trading, real-money-stays-blocked),
 research/LEDGER_FAMILIAS.md, research/AGENTE_IA_V2_PREREGISTRO_2026-10-06.md + adendas 1 y 2,
-research/AGENTE_IA_SOMBRAS_PREREGISTRO_2026-10-07.md, PROXIMOS_PASOS.md (bloque del 12-oct).
+research/AGENTE_IA_SOMBRAS_PREREGISTRO_2026-10-07.md, research/CALIDAD_SOMBRA_2026-10-12.md,
+PROXIMOS_PASOS.md (bloque del 12-oct).
 
 EN MARCHA (no tocar ni mirar resultados antes de la fecha): agente v2 tag ...|px1 (eval desde
 2027-01-11, >=200); sombras (misma fecha); H-KRON1 Kronos (eval desde 2027-01-15, --status solo
-cuenta); colector de options flow (no mirar valores hasta >=120 sesiones, ~abr-2027); checkpoint
-COT 2026-12-07; tarea semanal revision-semanal-agente-ia (lunes 09:04).
+cuenta); colector de options flow (no mirar valores hasta >=120 sesiones, ~abr-2027); quality
+gate en sombra (no cruzar R con su veredicto antes del pre-registro, desde 2027-01-11 con >= 300
+filas; /filtro solo cuenta); checkpoint COT 2026-12-07; tarea semanal revision-semanal-agente-ia
+(lunes 09:04). NO repetir el warm start del agente (ya tiene |px1).
 
 PROTOCOLO (no negociable): pre-registro commiteado ANTES de bajar datos / del código; código
 congelado y verificado con datos sintéticos ANTES de correr; k declarado, t NW >= 2.50; manifest

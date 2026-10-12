@@ -86,7 +86,15 @@ class PortfolioManager:
         Ahora: solo trades con `has_successful_demo_order=True` entran al
         calculo. Memecoin paper, stock paper, y forex/gold sin ejecucion MT5
         se excluyen porque no afectan el balance demo real.
+
+        v3.17.0: cuenta tambien la parte cobrada en TP1 (`realized_usd_pnl`). Antes
+        solo sumaba la pierna final (size_notional ya reducido x retorno final): el
+        kill-switch veia menos ganancia que la real, y en MT5 la orden cierra ENTERA
+        en TP1. La pierna de TP1 se cuenta el dia en que cierra el trade (no hay fecha
+        del cierre parcial).
         """
+        from app.learning.trade_outcomes import realized_usd_pnl
+
         today = utc_now().date()
         start_iso = f"{today.isoformat()}T00:00:00+00:00"
         closed = self.repository.fetch_closed_trades_since(start_iso)
@@ -97,11 +105,13 @@ class PortfolioManager:
         if balance <= 0:
             return 0.0
 
+        # Sin "or 0.5": con PARTIAL_CLOSE_FRACTION=0 no hay pierna de TP1 que sumar.
+        frac = getattr(self.settings, "partial_close_fraction", 0.5)
+        frac = 0.5 if frac is None else float(frac)
         total_usd_pnl = 0.0
         for t in closed:
-            return_pct = _to_float(t.get("unrealized_return_pct"))
-            notional = _to_float(t.get("size_notional"))
-            if return_pct is None or notional is None or notional <= 0:
+            usd_pnl = realized_usd_pnl(t, frac)
+            if usd_pnl is None:
                 continue
             # v2.7.1: SOLO trades con ejecucion MT5 cuentan en realized_pnl_today.
             # Sin esto, paper-only trades con sizing teorico inflado (ej. gold
@@ -111,7 +121,6 @@ class PortfolioManager:
                 continue
             if not self.repository.has_successful_demo_order(int(trade_id)):
                 continue
-            usd_pnl = notional * (return_pct / 100.0)
             total_usd_pnl += usd_pnl
 
         return round((total_usd_pnl / balance) * 100.0, 4)

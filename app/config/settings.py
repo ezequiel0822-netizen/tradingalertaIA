@@ -373,6 +373,25 @@ class Settings:
     # (se calculan de lo que el agente ya registra). Este flag solo las MUESTRA en
     # /agente y en el resumen diario; el reporte las muestra siempre. Opt-in OFF.
     ai_agent_shadows: bool
+    # v3.17.0 — quality gate (paquete "v3.17 calidad", adaptado; reglas de la colecta en
+    # research/CALIDAD_SOMBRA_2026-10-12.md). ENABLE_QUALITY_GATE solo ANOTA en sombra
+    # (quality_gate_shadow) que diria el gate de cada candidato: nunca descarta ni toca al
+    # agente (forex/oro se anotan DESPUES de su decision). QUALITY_GATE_ENFORCE ademas
+    # deja en paper (sin order_send) lo que el gate manda a paper_only, SOLO en el camino
+    # a MT5 que NO es del agente (con el agente encendido no cambia ninguna orden).
+    # Downward-only, opt-in OFF, soft-fail.
+    enable_quality_gate: bool
+    quality_gate_enforce: bool
+    quality_min_confluence: int
+    # v3.17.0 — noticias web para el gate en sombra, SOLO acciones: Google News RSS
+    # buscado DESPUES de la decision (<= 2 por ciclo, 5 s, cache 30 min), solo titulares
+    # publicados antes de la apertura. Sin el flag, el gate usa solo los titulares de Yahoo
+    # que el bot ya bajo. Opt-in OFF, soft-fail.
+    enable_web_news_enhancer: bool
+    web_news_max_age_hours: float
+    # v3.17.0 — contador de frenados (/frenados): por dia, POR QUE se freno cada candidato
+    # (tope de trades, cooldown, kill-switch, sizing, gates a MT5). Solo registro. Opt-in OFF.
+    enable_discard_log: bool
     # Phase 4 v2.3.0 — MT5 validation + walk-forward + data quality + CSV
     mt5_broker_profile: str
     enable_walk_forward_backtest: bool
@@ -557,7 +576,7 @@ def load_settings() -> Settings:
         obsidian_vault_path = safe_obsidian
 
     return Settings(
-        app_version=os.getenv("APP_VERSION", "v3.16.1"),
+        app_version=os.getenv("APP_VERSION", "v3.17.0"),
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
         telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID"),
         dexscreener_base_url=os.getenv(
@@ -833,6 +852,13 @@ def load_settings() -> Settings:
         ai_agent_explore_max_per_day=_get_int("AI_AGENT_EXPLORE_MAX_PER_DAY", 3),
         ai_agent_explore_daily_stop_r=_get_float("AI_AGENT_EXPLORE_DAILY_STOP_R", 2.0),
         ai_agent_shadows=_get_bool("AI_AGENT_SHADOWS", False),
+        # v3.17.0 — quality gate en sombra + noticias web (acciones) + contador de frenados
+        enable_quality_gate=_get_bool("ENABLE_QUALITY_GATE", False),
+        quality_gate_enforce=_get_bool("QUALITY_GATE_ENFORCE", False),
+        quality_min_confluence=_get_int("QUALITY_MIN_CONFLUENCE", 2),
+        enable_web_news_enhancer=_get_bool("ENABLE_WEB_NEWS_ENHANCER", False),
+        web_news_max_age_hours=_get_float("WEB_NEWS_MAX_AGE_HOURS", 18.0),
+        enable_discard_log=_get_bool("ENABLE_DISCARD_LOG", False),
         # Phase 4 v2.3.0
         mt5_broker_profile=os.getenv("MT5_BROKER_PROFILE", "icmarkets"),
         enable_walk_forward_backtest=_get_bool("ENABLE_WALK_FORWARD_BACKTEST", True),

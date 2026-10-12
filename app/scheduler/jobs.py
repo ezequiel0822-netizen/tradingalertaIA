@@ -152,6 +152,11 @@ class TradingAlertJob:
                 )
             except Exception:
                 logger.exception("MLPredictor init failed; continuing without ML")
+        # v3.17.0: quality gate en sombra (contexto del candidato en curso), fuente de
+        # noticias web (lazy, solo con ENABLE_WEB_NEWS_ENHANCER) y contador de frenados.
+        self._quality_current = None
+        self._web_news_source = None
+        self._block_seen: tuple[str, set[str]] = ("", set())
 
     def run_forever(self) -> None:
         # Log solo el nombre del archivo (no path completo) para evitar filesystem leak.
@@ -525,6 +530,10 @@ class TradingAlertJob:
 
         # v3.4.0 (exit shadow): registra el camino de R de los abiertos (read/registro).
         self._maybe_record_exit_shadow()
+
+        # v3.17.0: noticias de Google para los candidatos de acciones anotados en sombra.
+        # Va DESPUES de las decisiones del ciclo (nunca las frena); presupuesto chico.
+        self._maybe_fill_quality_news()
 
         # v3.13.0: el agente IA aprende de los candidatos ya cerrados (opt-in, soft-fail).
         self._maybe_ai_agent_learn()
@@ -976,11 +985,15 @@ class TradingAlertJob:
             and str(p.get("token_address")) == snapshot.token_address
         ]
         if existing_open:
+            # v3.17.0: contador de frenados (opt-in ENABLE_DISCARD_LOG; solo registro)
+            _note_block(self, "abierto", "ya hay un paper trade abierto del simbolo",
+                        snapshot.category, str(snapshot.symbol))
             return
 
         balance = self.portfolio_manager.account_balance()
 
         for signal in signals:
+            setup = f"{snapshot.symbol}|{signal.strategy_name}|{signal.direction}"
             sizing = calculate_position_size(
                 entry=signal.entry,
                 stop=signal.stop,
@@ -994,6 +1007,7 @@ class TradingAlertJob:
                     sizing.invalid_reason,
                     snapshot.symbol,
                 )
+                _note_block(self, "sizing", sizing.invalid_reason, snapshot.category, setup)
                 continue
             ok, reason = self.risk_manager.check_can_open_trade(
                 snapshot.category,
@@ -1007,6 +1021,7 @@ class TradingAlertJob:
                     signal.strategy_name,
                     snapshot.symbol,
                 )
+                _note_block(self, "riesgo", reason, snapshot.category, setup)
                 continue
 
             # Insertar alert primero (necesitamos alert_id)
@@ -1112,7 +1127,21 @@ class TradingAlertJob:
             if created:
                 paper_trade = self.repository.fetch_paper_trade_by_alert_id(int(alert_id))
                 if paper_trade:
+                    # v3.17.0: quality gate en sombra (opt-in). Con el flag apagado este
+                    # camino queda exactamente como antes.
+                    quality_on = bool(getattr(self.settings, "enable_quality_gate", False))
+                    if quality_on:
+                        from app.risk.quality_gate import QualityCandidate
+
+                        self._quality_current = QualityCandidate(
+                            paper_trade_id=int(paper_trade["id"]),
+                            confidence=signal.confidence,
+                            alert_score=alert_record.score,
+                        )
                     self._try_prepare_demo_order(paper_trade)
+                    if quality_on:
+                        # DESPUES de la decision del agente: el gate no toca lo que el ve.
+                        self._record_quality_shadow(paper_trade)
             return  # solo 1 trade por snapshot (la primera signal valida)
 
     def _record_ml_decision(self, outcome: str) -> None:
@@ -1614,40 +1643,65 @@ class TradingAlertJob:
                     paper_trade.get("symbol"),
                     gate_reason,
                 )
+                _note_block(self, "mt5", "promotion gate", cat, _trade_setup(paper_trade))
                 return
 
         # v2.9.0 ML gate: señal adicional. Soft-fail; SOLO filtra hacia abajo.
         ml_allow, ml_low = self._ml_gate(paper_trade)
         if not ml_allow:
+            _note_block(self, "mt5", "ML gate", paper_trade.get("category"),
+                        _trade_setup(paper_trade))
             return  # ML manda a paper-only (sin order_send a MT5)
 
         # v3.0.0 LLM ensemble veto: dos modelos buscan red flags en el trade ya
         # aprobado. Soft-fail; SOLO veta (downward-only). No toca mt5_demo_trader.
         if not self._llm_ensemble_gate(paper_trade):
+            _note_block(self, "mt5", "LLM ensemble", paper_trade.get("category"),
+                        _trade_setup(paper_trade))
             return  # el ensemble veta -> paper-only (sin order_send a MT5)
 
         # v3.5.0 calendar gate: no ejecutar a MT5 con un evento high-impact de la
         # moneda del par dentro del buffer (el 10-jun abrio USDCAD 18 min antes del
         # BOC que estaba en su propia DB). Downward-only + soft-fail.
         if not self._calendar_gate(paper_trade):
+            _note_block(self, "mt5", "calendar gate", paper_trade.get("category"),
+                        _trade_setup(paper_trade))
             return  # evento cerca -> paper-only (sin order_send a MT5)
 
         # v3.5.0 cap de exposicion USD: no concentrar mas la apuesta al dolar (el
         # 10-jun 7 posiciones eran 1 sola apuesta long-USD y un movimiento las barrio
         # juntas). Downward-only + soft-fail.
         if not self._usd_exposure_gate(paper_trade):
+            _note_block(self, "mt5", "cap USD", paper_trade.get("category"),
+                        _trade_setup(paper_trade))
             return  # concentraria la apuesta USD -> paper-only (sin order_send)
 
         # v3.8.0: regime gate. Si el trade pelea la tendencia D1 (long en 'down' /
         # short en 'up'), queda paper-only. Defensivo: el slicing mostro que los
         # longs sangran contra el regimen. Downward-only + soft-fail.
         if not self._regime_gate(paper_trade):
+            _note_block(self, "mt5", "regime gate", paper_trade.get("category"),
+                        _trade_setup(paper_trade))
             return  # contra-regimen -> paper-only (sin order_send a MT5)
 
         # v3.12.0: VWAP gate. Si el trade pelea el VWAP semanal (long claramente
         # bajo / short claramente sobre), queda paper-only. Downward-only + soft-fail.
         if not self._vwap_gate(paper_trade):
+            _note_block(self, "mt5", "VWAP gate", paper_trade.get("category"),
+                        _trade_setup(paper_trade))
             return  # pelea el VWAP semanal -> paper-only (sin order_send a MT5)
+
+        # v3.17.0: quality gate. SOLO con ENABLE_QUALITY_GATE + QUALITY_GATE_ENFORCE: si el
+        # gate dice paper_only, queda en paper (sin order_send). Este camino NO es el del
+        # agente (el agente ya decidio arriba y no pasa por aca). Downward-only, soft-fail.
+        if (
+            getattr(self.settings, "enable_quality_gate", False)
+            and getattr(self.settings, "quality_gate_enforce", False)
+            and not self._quality_gate(paper_trade)
+        ):
+            _note_block(self, "mt5", "quality gate", paper_trade.get("category"),
+                        _trade_setup(paper_trade))
+            return  # el gate dice paper_only -> paper-only (sin order_send a MT5)
 
         from app.brokers.mt5_demo_trader import MT5DemoTrader
 
@@ -1665,6 +1719,8 @@ class TradingAlertJob:
                 result.reason,
                 paper_trade.get("symbol"),
             )
+            _note_block(self, "mt5", str(result.reason), paper_trade.get("category"),
+                        _trade_setup(paper_trade))
             return
 
         now = utc_now()
@@ -2077,6 +2133,312 @@ class TradingAlertJob:
         except Exception:
             logger.exception("Options collector fallo; el ciclo sigue")
 
+    # ------------------------------------------------------------------ #
+    # v3.17.0 — quality gate en sombra + noticias web (acciones)
+    # Reglas de la colecta: research/CALIDAD_SOMBRA_2026-10-12.md
+    # ------------------------------------------------------------------ #
+    def _quality_thresholds(self) -> tuple[float, float, int]:
+        s = self.settings
+        return (
+            float(getattr(s, "strategy_min_confidence", 60)),
+            float(getattr(s, "alert_score_threshold", 65)),
+            int(getattr(s, "quality_min_confluence", 2)),
+        )
+
+    def _quality_candidate_for(self, paper_trade: dict):
+        """Contexto del candidato en curso (lo arma _try_open_paper_trades con la confianza
+        de la señal y el score de la alerta). Si no corresponde a este paper trade, uno
+        vacío: el gate salta ese componente (confidence_unknown)."""
+        from app.risk.quality_gate import QualityCandidate
+
+        qc = getattr(self, "_quality_current", None)
+        pt_id = int(paper_trade.get("id") or 0)
+        if qc is None or qc.paper_trade_id != pt_id:
+            qc = QualityCandidate(paper_trade_id=pt_id)
+            self._quality_current = qc
+        return qc
+
+    def _quality_inputs(self, paper_trade: dict, qc):
+        """Datos del gate as-of la apertura, sin noticias (van aparte, solo acciones).
+        Tendencia D1 = la MISMA lectura que usa el agente (cache D1 de MT5 si está fresco;
+        si no, MT5 en vivo, sin la vela del día). Acciones: sin tendencia."""
+        from app.risk.quality_gate import QualityInputs, stop_distance_atr
+
+        category = str(paper_trade.get("category") or "").lower()
+        regime = None
+        if category in ("forex", "gold"):
+            regime, _vwap = self._ai_agent_context(paper_trade, live_fallback=True)
+        stop = paper_trade.get("original_stop_loss")
+        if stop in (None, ""):
+            stop = paper_trade.get("stop_loss")
+        return QualityInputs(
+            direction=str(paper_trade.get("direction") or "long"),
+            confidence=qc.confidence,
+            alert_score=qc.alert_score,
+            regime=regime,
+            calendar_safe=self._quality_calendar(paper_trade),
+            stop_atr=stop_distance_atr(
+                paper_trade.get("entry_price"), stop, paper_trade.get("atr_value")
+            ),
+        )
+
+    def _quality_calendar(self, paper_trade: dict) -> bool | None:
+        """True = sin eventos de alto impacto cerca; False = hay uno; None = sin dato (sin
+        colector de calendario o falla de la consulta). No depende de ENABLE_CALENDAR_GATE:
+        ese flag es para actuar, acá solo se mide."""
+        if not getattr(self.settings, "enable_economic_calendar", False):
+            return None
+        try:
+            from app.intelligence.calendar_filter import is_safe_window
+
+            safe, reason = is_safe_window(
+                str(paper_trade.get("symbol") or ""),
+                utc_now(),
+                self.repository,
+                int(getattr(self.settings, "calendar_buffer_minutes", 30)),
+            )
+            if "fail" in str(reason).lower():
+                return None
+            return bool(safe)
+        except Exception:
+            return None
+
+    def _quality_gate(self, paper_trade: dict) -> bool:
+        """v3.17.0: True = permitir order_send. Con ENABLE_QUALITY_GATE +
+        QUALITY_GATE_ENFORCE, un candidato que el gate manda a paper_only queda en paper
+        (sin order_send a MT5). Solo se llama desde el camino que NO es del agente.
+        Downward-only: nunca habilita nada; soft-fail = permitir."""
+        if not (
+            getattr(self.settings, "enable_quality_gate", False)
+            and getattr(self.settings, "quality_gate_enforce", False)
+        ):
+            return True
+        try:
+            from app.risk.quality_gate import evaluate
+
+            qc = self._quality_candidate_for(paper_trade)
+            if qc.inputs is None:
+                qc.inputs = self._quality_inputs(paper_trade, qc)
+            min_conf, min_score, min_confl = self._quality_thresholds()
+            qc.decision = evaluate(
+                qc.inputs,
+                min_confidence=min_conf,
+                min_score=min_score,
+                min_confluence=min_confl,
+            )
+            if qc.decision.paper_only:
+                qc.enforced = True
+                logger.info(
+                    "Quality gate: paper-only symbol=%s puntaje=%s confluencias=%s motivos=%s",
+                    paper_trade.get("symbol"), qc.decision.score,
+                    qc.decision.confluence, ",".join(qc.decision.reasons),
+                )
+                return False
+            return True
+        except Exception:
+            logger.exception("Quality gate fallo; soft-fail -> permitir")
+            return True
+
+    def _record_quality_shadow(self, paper_trade: dict) -> None:
+        """v3.17.0: anota qué diría el quality gate para este candidato
+        (quality_gate_shadow). SOLO registro: no toca el paper trade, ni la orden, ni al
+        agente (corre DESPUÉS de _try_prepare_demo_order). Acciones: titulares de Yahoo ya
+        bajados (sin red); con ENABLE_WEB_NEWS_ENHANCER la decisión espera los de Google
+        (paso diferido). Opt-in ENABLE_QUALITY_GATE, soft-fail."""
+        qc = getattr(self, "_quality_current", None)
+        self._quality_current = None
+        if not getattr(self.settings, "enable_quality_gate", False):
+            return
+        try:
+            from app.collectors.web_news_enhancer import (
+                features_from_headlines,
+                merge_as_of,
+                parse_iso,
+            )
+            from app.risk.quality_gate import GATE_VERSION, QualityCandidate, evaluate
+
+            pt_id = int(paper_trade["id"])
+            if qc is None or qc.paper_trade_id != pt_id:
+                qc = QualityCandidate(paper_trade_id=pt_id)
+            if qc.inputs is None:
+                qc.inputs = self._quality_inputs(paper_trade, qc)
+            min_conf, min_score, min_confl = self._quality_thresholds()
+            category = str(paper_trade.get("category") or "").lower()
+            now_iso = utc_now().isoformat()
+            opened_at = str(paper_trade.get("opened_at") or "") or now_iso
+            as_of = parse_iso(opened_at) or utc_now()
+            inputs = qc.inputs
+            row: dict[str, Any] = {
+                "paper_trade_id": pt_id,
+                "created_at": now_iso,
+                "opened_at": opened_at,
+                "symbol": paper_trade.get("symbol"),
+                "category": category,
+                "strategy_name": paper_trade.get("strategy_name"),
+                "direction": inputs.direction,
+                "agent_path": int(
+                    bool(getattr(self.settings, "enable_ai_agent", False))
+                    and category in ("forex", "gold")
+                ),
+                "gate_version": GATE_VERSION,
+                "confidence": inputs.confidence,
+                "alert_score": inputs.alert_score,
+                "regime": inputs.regime,
+                "calendar_safe": (
+                    None if inputs.calendar_safe is None else int(inputs.calendar_safe)
+                ),
+                "stop_atr": inputs.stop_atr,
+                "min_confidence": min_conf,
+                "min_score": min_score,
+                "min_confluence": min_confl,
+                "news_status": "n/a",
+                "enforced": int(qc.enforced),
+            }
+            decision = qc.decision
+            if category == "stock":
+                yahoo = merge_as_of([self._yahoo_headlines(paper_trade)], as_of)
+                if getattr(self.settings, "enable_web_news_enhancer", False):
+                    # Se decide cuando lleguen los titulares de Google (paso diferido).
+                    row["news_status"] = "pending"
+                    row["news_json"] = json.dumps(
+                        [h.to_dict() for h in yahoo], ensure_ascii=False
+                    )
+                    decision = None
+                else:
+                    news = features_from_headlines(
+                        yahoo, as_of, float(getattr(self.settings, "web_news_max_age_hours", 18.0))
+                    )
+                    row.update(_news_columns(news, "yahoo" if news.headlines else "none"))
+                    decision = evaluate(
+                        _with_news(inputs, news),
+                        min_confidence=min_conf,
+                        min_score=min_score,
+                        min_confluence=min_confl,
+                    )
+            elif decision is None:
+                decision = evaluate(
+                    inputs,
+                    min_confidence=min_conf,
+                    min_score=min_score,
+                    min_confluence=min_confl,
+                )
+            if decision is not None:
+                row.update(_decision_columns(decision, now_iso))
+            self.repository.insert_quality_shadow(row)
+        except Exception:
+            logger.exception("Quality gate (sombra) fallo; soft-fail")
+
+    def _yahoo_headlines(self, paper_trade: dict) -> list:
+        """Titulares de Yahoo que el ciclo YA bajó para el símbolo (caché, sin red)."""
+        from app.collectors.web_news_enhancer import SOURCE_YAHOO, Headline, parse_pub_date
+
+        collector = getattr(self, "news", None)
+        cached = getattr(collector, "cached_for_symbol", None)
+        if cached is None:
+            return []
+        items = cached(str(paper_trade.get("symbol") or "")) or []
+        return [
+            Headline(str(i.title).strip(), parse_pub_date(i.published), SOURCE_YAHOO)
+            for i in items
+            if str(getattr(i, "title", "") or "").strip()
+        ]
+
+    def _maybe_fill_quality_news(self) -> None:
+        """v3.17.0: completa las noticias de los candidatos de acciones anotados en sombra
+        con Google News RSS, DESPUÉS de las decisiones del ciclo: ≤ 2 búsquedas por ciclo
+        (5 s c/u), caché de 30 min por símbolo y pausa de 30 min tras 3 fallos seguidos.
+        Solo titulares publicados antes de la apertura. Si una fila espera > 6 h, se cierra
+        con lo que haya (Yahoo); si se apagó ENABLE_WEB_NEWS_ENHANCER, las pendientes se
+        cierran igual (estado web_off). Opt-in (ENABLE_QUALITY_GATE), soft-fail."""
+        if not getattr(self.settings, "enable_quality_gate", False):
+            return
+        try:
+            from app.collectors.web_news_enhancer import (
+                GOOGLE_MAX_FETCHES_PER_CYCLE,
+                PENDING_MAX_HOURS,
+                GoogleNewsSource,
+                parse_iso,
+            )
+
+            rows = self.repository.fetch_quality_shadow_pending(limit=50)
+            if not rows:
+                return
+            web_on = bool(getattr(self.settings, "enable_web_news_enhancer", False))
+            if web_on and getattr(self, "_web_news_source", None) is None:
+                self._web_news_source = GoogleNewsSource()
+            source = self._web_news_source if web_on else None
+            budget = GOOGLE_MAX_FETCHES_PER_CYCLE
+            now = utc_now()
+        except Exception:
+            logger.exception("Noticias web (sombra) fallaron; soft-fail")
+            return
+        for row in rows:
+            # Cada fila aparte: una fila rota se marca 'error' y no traba a las demás.
+            try:
+                as_of = parse_iso(row.get("opened_at")) or parse_iso(row.get("created_at")) or now
+                if source is None:          # se apagó Google: se cierran con Yahoo
+                    self._finalize_quality_row(row, [], "web_off", as_of)
+                    continue
+                waited_h = (now - as_of).total_seconds() / 3600.0
+                symbol = str(row.get("symbol") or "")
+                if source.is_cached(symbol):
+                    google = source.fetch(symbol)
+                elif budget > 0 and not source.paused:
+                    budget -= 1
+                    google = source.fetch(symbol)
+                elif waited_h >= PENDING_MAX_HOURS:
+                    self._finalize_quality_row(row, [], "expired", as_of)
+                    continue
+                else:
+                    continue  # sin presupuesto este ciclo: espera al próximo
+                status = "done" if google is not None else "google_failed"
+                self._finalize_quality_row(row, google or [], status, as_of)
+            except Exception:
+                logger.exception("Noticias web: la fila %s fallo; queda en 'error'", row.get("id"))
+                try:
+                    self.repository.update_quality_shadow(int(row["id"]), {"news_status": "error"})
+                except Exception:
+                    pass
+
+    def _finalize_quality_row(self, row: dict, google: list, status: str, as_of) -> None:
+        """Une Yahoo (guardado al abrir) + Google, solo lo publicado hasta la apertura, y
+        decide con los datos y umbrales GUARDADOS en la fila (as-of la apertura)."""
+        from app.collectors.web_news_enhancer import (
+            Headline,
+            features_from_headlines,
+            merge_as_of,
+        )
+        from app.risk.quality_gate import QualityInputs, evaluate
+
+        try:
+            yahoo = [Headline.from_dict(d) for d in json.loads(row.get("news_json") or "[]")]
+        except (TypeError, ValueError, AttributeError):
+            yahoo = []
+        news = features_from_headlines(
+            merge_as_of([yahoo, list(google)], as_of),
+            as_of,
+            float(getattr(self.settings, "web_news_max_age_hours", 18.0)),
+        )
+        min_conf, min_score, min_confl = self._quality_thresholds()
+        cal = row.get("calendar_safe")
+        inputs = QualityInputs(
+            direction=str(row.get("direction") or "long"),
+            confidence=row.get("confidence"),
+            alert_score=row.get("alert_score"),
+            regime=row.get("regime"),
+            calendar_safe=None if cal is None else bool(cal),
+            stop_atr=row.get("stop_atr"),
+        )
+        decision = evaluate(
+            _with_news(inputs, news),
+            min_confidence=_first_number(row.get("min_confidence"), min_conf),
+            min_score=_first_number(row.get("min_score"), min_score),
+            min_confluence=int(_first_number(row.get("min_confluence"), min_confl)),
+        )
+        updates = _news_columns(news, status)
+        updates.update(_decision_columns(decision, utc_now().isoformat()))
+        self.repository.update_quality_shadow(int(row["id"]), updates)
+
     def _maybe_ai_agent_learn(self) -> None:
         """v3.13.0: el agente aprende de los candidatos cuyo paper trade cerró.
         Corre cada ciclo (barato: solo decisiones pendientes). Soft-fail.
@@ -2162,3 +2524,84 @@ def _complete_d1_bars(candles: list[dict], now) -> list[dict]:
         if d < today:
             out.append(c)
     return out
+
+
+# ---------------------------------------------------------------------- #
+# v3.17.0 — helpers del quality gate en sombra y del contador de frenados
+# ---------------------------------------------------------------------- #
+def _with_news(inputs, news):
+    """Suma las noticias a los datos del gate. Sin titulares, el componente de noticias
+    no suma ni resta (igual que el "no_news" del paquete)."""
+    from dataclasses import replace as _dc_replace
+
+    if not news.headlines:
+        return inputs
+    return _dc_replace(
+        inputs,
+        news_catalyst=bool(news.has_catalyst),
+        news_freshness=float(news.freshness_score),
+        news_sentiment=float(news.sentiment),
+    )
+
+
+def _news_columns(news, status: str) -> dict[str, Any]:
+    has = bool(news.headlines)
+    return {
+        "news_status": status,
+        "news_sources": ",".join(news.sources) or None,
+        "news_count": len(news.headlines),
+        "news_freshness": float(news.freshness_score) if has else None,
+        "news_sentiment": round(float(news.sentiment), 4) if has else None,
+        "news_catalyst": int(bool(news.has_catalyst)) if has else None,
+        "news_age_hours": news.age_hours,
+        "news_json": json.dumps([h.to_dict() for h in news.headlines], ensure_ascii=False),
+    }
+
+
+def _decision_columns(decision, decided_at: str) -> dict[str, Any]:
+    return {
+        "action": decision.action,
+        "score": decision.score,
+        "confluence": decision.confluence,
+        "reasons_json": json.dumps(list(decision.reasons)),
+        "decided_at": decided_at,
+    }
+
+
+def _first_number(value, default: float) -> float:
+    try:
+        return float(value) if value is not None else float(default)
+    except (TypeError, ValueError):
+        return float(default)
+
+
+def _trade_setup(paper_trade: dict) -> str:
+    return (
+        f"{paper_trade.get('symbol')}|{paper_trade.get('strategy_name')}|"
+        f"{paper_trade.get('direction')}"
+    )
+
+
+def _note_block(job, stage: str, reason, category, setup: str) -> None:
+    """v3.17.0: contador de frenados (/frenados). Suma 1 vez por cada freno y 1 setup
+    distinto la primera vez del día (símbolo|estrategia|dirección + motivo). Solo
+    registro: no cambia ninguna decisión. Opt-in ENABLE_DISCARD_LOG, soft-fail. Es
+    función de módulo (no método) para que los stubs de los tests sigan andando."""
+    settings = getattr(job, "settings", None)
+    if not getattr(settings, "enable_discard_log", False):
+        return
+    try:
+        from app.risk.block_log import reason_code
+
+        day = utc_now().date().isoformat()
+        seen_day, seen = getattr(job, "_block_seen", ("", set()))
+        if seen_day != day:
+            seen = set()
+        code = reason_code(reason)
+        key = f"{stage}|{code}|{setup}"
+        unique = key not in seen
+        seen.add(key)
+        job._block_seen = (day, seen)
+        job.repository.bump_candidate_block(day, stage, code, str(category or "?"), unique)
+    except Exception:
+        logger.exception("Contador de frenados fallo; soft-fail")

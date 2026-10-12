@@ -617,6 +617,61 @@ def _init_db_unsafe(db_path: Path) -> None:
                 ON ai_agent_decisions(rewarded_at);
             CREATE INDEX IF NOT EXISTS idx_ai_agent_decisions_created
                 ON ai_agent_decisions(created_at);
+
+            -- v3.17.0: quality gate EN SOMBRA (research/CALIDAD_SOMBRA_2026-10-12.md).
+            -- Una fila por paper trade del strategy router con lo que diria el gate y
+            -- sus datos de entrada as-of la apertura. Solo registro: nunca descarta.
+            -- action NULL = esperando las noticias de Google (acciones).
+            CREATE TABLE IF NOT EXISTS quality_gate_shadow (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                paper_trade_id INTEGER NOT NULL UNIQUE,
+                created_at TEXT NOT NULL,
+                opened_at TEXT,
+                symbol TEXT,
+                category TEXT,
+                strategy_name TEXT,
+                direction TEXT,
+                agent_path INTEGER NOT NULL DEFAULT 0,
+                gate_version TEXT NOT NULL,
+                confidence REAL,
+                alert_score REAL,
+                regime TEXT,
+                calendar_safe INTEGER,
+                stop_atr REAL,
+                min_confidence REAL,
+                min_score REAL,
+                min_confluence INTEGER,
+                news_status TEXT NOT NULL,
+                news_sources TEXT,
+                news_count INTEGER,
+                news_freshness REAL,
+                news_sentiment REAL,
+                news_catalyst INTEGER,
+                news_age_hours REAL,
+                news_json TEXT,
+                action TEXT,
+                score REAL,
+                confluence INTEGER,
+                reasons_json TEXT,
+                decided_at TEXT,
+                enforced INTEGER NOT NULL DEFAULT 0,
+                FOREIGN KEY(paper_trade_id) REFERENCES paper_trades(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_quality_gate_shadow_news
+                ON quality_gate_shadow(news_status);
+
+            -- v3.17.0: contador de frenados (/frenados). Por dia UTC, etapa, motivo
+            -- normalizado y categoria: cuantas veces se freno un candidato (events) y
+            -- cuantos setups distintos (unique_setups).
+            CREATE TABLE IF NOT EXISTS candidate_blocks_daily (
+                day TEXT NOT NULL,
+                stage TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                category TEXT NOT NULL,
+                events INTEGER NOT NULL DEFAULT 0,
+                unique_setups INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY(day, stage, reason, category)
+            );
             """
         )
         _ensure_column(connection, "tokens", "latest_estimated_gain_pct", "REAL")

@@ -12,6 +12,7 @@ from app.learning.trade_outcomes import (
     outcome_label,
     r_multiple,
     realized_return_pct,
+    realized_usd_pnl,
     risk_at_entry_pct,
 )
 from app.learning.training_engine import _refresh_strategy_performance
@@ -160,3 +161,31 @@ def test_refresh_strategy_performance_persists_and_excludes_artifacts() -> None:
     assert row["artifacts_excluded"] == 1
     assert row["wins"] == 1
     assert abs(row["avg_r"] - 2.0) < 1e-6
+
+
+# v3.17.0 — P&L en USD con la pierna cobrada en TP1 (realized_pnl_today y /performance)
+def test_realized_usd_pnl_without_partial_is_notional_times_final() -> None:
+    t = {"unrealized_return_pct": -1.0, "size_notional": 10_000.0, "partial_closed": 0}
+    assert realized_usd_pnl(t) == -100.0
+    assert realized_usd_pnl({"unrealized_return_pct": 1.0, "size_notional": None}) is None
+    assert realized_usd_pnl({"unrealized_return_pct": None, "size_notional": 10.0}) is None
+
+
+def test_realized_usd_pnl_adds_the_tp1_leg_long_and_short() -> None:
+    # original 20k, mitad cerrada en TP1 (+5 %), el resto a breakeven (0 %)
+    long_t = {"direction": "long", "entry_price": 100.0, "take_profit_1": 105.0,
+              "partial_closed": 1, "size_notional": 10_000.0, "unrealized_return_pct": 0.0}
+    assert realized_usd_pnl(long_t, 0.5) == 500.0          # antes contaba 0
+    short_t = {**long_t, "direction": "short", "take_profit_1": 95.0,
+               "unrealized_return_pct": -1.0}
+    assert realized_usd_pnl(short_t, 0.5) == -100.0 + 500.0
+    # fracción 0 (sin cierre parcial real): no hay pierna de TP1 que sumar
+    assert realized_usd_pnl(long_t, 0.0) == 0.0
+
+
+def test_realized_usd_pnl_matches_the_blended_return() -> None:
+    t = {"direction": "long", "entry_price": 100.0, "latest_price": 104.0,
+         "take_profit_1": 102.0, "partial_closed": 1, "size_notional": 5_000.0,
+         "unrealized_return_pct": 4.0}
+    original = 10_000.0
+    assert realized_usd_pnl(t, 0.5) == original * realized_return_pct(t, 0.5) / 100.0

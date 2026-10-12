@@ -57,12 +57,24 @@
 > long Binance). **Registro único con todas las familias, commits y ventanas ya vistas:
 > `research/LEDGER_FAMILIAS.md`.** Main = origin/main en 13a3733 antes de este cierre.
 >
-> **🧭 12-oct-2026 — paquete "v3.17 calidad" GUARDADO, sin aplicar.** El user dejó propuestas (quality gate,
-> web news, .env de selectividad) en `propuestas/2026-10-10_v3.17_calidad/`. Leer primero
-> `REVISION_CLAUDE_2026-10-12.md`: `AI_AGENT_EXPLORE_PCT=0.10` sacaría al agente de su evaluación; el gate
-> delante del agente cambia la población; "discard" borra el dato; requirements sin pin. Confirmar con el user
-> antes de implementar. Estado: v3.16.1 (bot congelado ~30 h el 10-oct por la "Edición rápida" de la consola;
-> arreglado en los lanzadores). Bot y Kronos APAGADOS el 12-oct 06:51 UTC: arrancar con los `.ps1`.
+> **🧭 12-oct-2026 — v3.17.0 (995 tests): paquete "v3.17 calidad" APLICADO, adaptado.** Del paquete
+> (`propuestas/2026-10-10_v3.17_calidad/` + `REVISION_CLAUDE_2026-10-12.md`) entró, todo opt-in y apagado:
+> - el quality gate EN SOMBRA (`ENABLE_QUALITY_GATE`): anota qué diría de cada candidato y nunca descarta;
+>   en forex/oro anota después de que decide el agente;
+> - `QUALITY_GATE_ENFORCE`, que solo actúa fuera del agente (hoy, con el agente encendido, no cambia ninguna
+>   orden);
+> - las noticias de acciones (`ENABLE_WEB_NEWS_ENHANCER`): Yahoo ya bajado + Google buscado después, as-of;
+> - el contador de frenados (`ENABLE_DISCARD_LOG`, `/frenados`);
+> - el P&L del día con la mitad cobrada en TP1 (arreglo directo, decisión del user).
+>
+> El user decidió NO tocar `AI_AGENT_EXPLORE_PCT` (0.20), los umbrales, `MAX_OPEN_TRADES_TOTAL` ni
+> `DEMO_ALLOWED_SYMBOLS`, ni `requirements.txt`. Tampoco entró el refresco del cache D1.
+> **Regla de no mirar** (`research/CALIDAD_SOMBRA_2026-10-12.md`): no cruzar R con el veredicto del gate
+> antes del pre-registro (desde el 2027-01-11 con ≥ 300 filas); `/filtro` solo cuenta.
+> Para encender: los 3 flags de medición en el `.env` + reinicio. NO repetir el warm start del agente: el
+> `COMO_APLICAR` del paquete lo pide, pero el modelo ya tiene la etiqueta `|px1` y reconstruirlo a mitad de la
+> evaluación es un desvío.
+> Operativo: bot y Kronos APAGADOS desde el 11-oct (último snapshot 05:27 UTC); arrancar con los `.ps1`.
 >
 > **🔭 7-oct-2026 — H-KRON1 (familia 28, EN CURSO): Kronos hacia adelante.** El modelo base de velas
 > `shiyu-coder/Kronos` (Kronos-small, CPU) pronostica forex/oro a 12 h dos veces por día en un proceso APARTE

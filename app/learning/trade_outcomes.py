@@ -83,6 +83,36 @@ def realized_return_pct(
     return final - (cost_pct or 0.0)
 
 
+def realized_usd_pnl(trade: dict[str, Any], partial_fraction: float = 0.5) -> float | None:
+    """v3.17.0: P&L realizado en USD (bruto) de un paper trade, CONTANDO la parte cobrada
+    en TP1.
+
+    Tras el cierre parcial, el lifecycle deja `size_notional` reducido a la pierna final y
+    `unrealized_return_pct` es el retorno de esa pierna. Antes (realized_pnl_today y el
+    impacto de /performance) solo se sumaba `size_notional × retorno final`: la mitad
+    cobrada en TP1 desaparecía (y en MT5 la orden cierra ENTERA en TP1). La pierna de TP1
+    vale `notional_original × fracción × retorno a TP1`, con
+    `notional_original = size_notional / (1 − fracción)`. Misma mezcla que
+    `realized_return_pct`. None si falta el notional o el retorno."""
+    final_ret = _f(trade.get("unrealized_return_pct"))
+    notional = _f(trade.get("size_notional"))
+    if final_ret is None or notional is None or notional <= 0:
+        return None
+    usd = notional * (final_ret / 100.0)
+    if int(trade.get("partial_closed") or 0) == 1:
+        entry = _f(trade.get("entry_price"))
+        tp1 = _f(trade.get("take_profit_1"))
+        frac = max(0.0, min(1.0, float(partial_fraction)))
+        if entry is not None and entry > 0 and tp1 is not None and 0.0 < frac < 1.0:
+            if str(trade.get("direction") or "long") == "short":
+                tp1_ret = (entry - tp1) / entry * 100.0
+            else:
+                tp1_ret = (tp1 - entry) / entry * 100.0
+            original = notional / (1.0 - frac)
+            usd += original * frac * (tp1_ret / 100.0)
+    return usd
+
+
 def risk_at_entry_pct(trade: dict[str, Any]) -> float | None:
     """Riesgo asumido al entry (%) = distancia al stop ORIGINAL.
 

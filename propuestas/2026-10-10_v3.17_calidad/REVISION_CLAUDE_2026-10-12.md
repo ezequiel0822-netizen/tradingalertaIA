@@ -1,5 +1,16 @@
 # Revisión del paquete v3.17 "calidad" — LEER ANTES DEL PROMPT (Claude, 2026-10-12)
 
+> **Estado: APLICADO, adaptado, en v3.17.0 (12-oct-2026). Ver CHANGELOG.** Respuestas del user a
+> los choques:
+> - `AI_AGENT_EXPLORE_PCT` queda en 0.20 y `requirements.txt` no cambia.
+> - Gate: "lo mejor y más eficaz". Quedó en sombra sobre todos los candidatos (forex/oro
+>   después de que decide el agente), sin "discard", con `QUALITY_GATE_ENFORCE` solo fuera del
+>   agente.
+> - Umbrales, `MAX_OPEN_TRADES_TOTAL` y `DEMO_ALLOWED_SYMBOLS`: no por ahora.
+> - Alcance: lo recomendado (P&L del día con TP1, contador de frenados, noticias de acciones). El
+>   refresco del cache D1 quedó fuera.
+> - Reglas de la colecta: `research/CALIDAD_SOMBRA_2026-10-12.md`.
+
 **Qué es el paquete.** Lo preparó otra IA el 2026-10-10 sobre v3.16.0. Se guarda **tal
 cual** en esta carpeta (los nombres de archivo ya no llevan el prefijo de la subida).
 Hoy `main` = `origin/main` = **206f607 (v3.16.1)**, con 938 tests.

@@ -16,7 +16,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from app.learning.trade_outcomes import is_artifact, r_multiple, realized_return_pct
+from app.learning.trade_outcomes import (
+    is_artifact,
+    r_multiple,
+    realized_return_pct,
+    realized_usd_pnl,
+)
 
 
 @dataclass
@@ -31,13 +36,6 @@ class PerformanceSummary:
     account_pct: float = 0.0  # impacto USD / balance * 100 (mismo metodo que realized_pnl_today)
 
 
-def _to_float(value: Any) -> float | None:
-    try:
-        return float(value) if value is not None and value != "" else None
-    except (TypeError, ValueError):
-        return None
-
-
 def performance_since(
     trades: list[dict[str, Any]],
     baseline_iso: str,
@@ -45,11 +43,13 @@ def performance_since(
     balance: float,
     cost_pct_by_category: dict[str, float] | None = None,
     scratch_eps: float = 0.05,
+    partial_fraction: float = 0.5,
 ) -> PerformanceSummary:
     """Resume los trades cerrados, ejecutados a MT5 y no-artifact con closed_at >=
     baseline. `executed_ids` = paper_trade_id con demo_order 'sent' (los que tocaron el
     balance real). net_r y win/loss usan R realizado NETO de costos; account_pct usa
-    el retorno final almacenado * notional / balance (idem realized_pnl_today)."""
+    el P&L en USD / balance (idem realized_pnl_today). v3.17.0: el USD incluye la parte
+    cobrada en TP1 (`realized_usd_pnl`; antes solo la pierna final)."""
     costs = cost_pct_by_category or {}
     summary = PerformanceSummary(since=baseline_iso or "inicio")
     total_usd = 0.0
@@ -80,11 +80,10 @@ def performance_since(
             summary.losses += 1
         else:
             summary.scratches += 1
-        # Impacto USD en la cuenta: retorno final almacenado * notional real de MT5.
-        final_ret = _to_float(t.get("unrealized_return_pct"))
-        notional = _to_float(t.get("size_notional"))
-        if final_ret is not None and notional and notional > 0:
-            total_usd += notional * (final_ret / 100.0)
+        # Impacto USD en la cuenta: notional real de MT5 x retorno, con la pierna de TP1.
+        usd = realized_usd_pnl(t, partial_fraction)
+        if usd is not None:
+            total_usd += usd
 
     decided = summary.wins + summary.losses
     summary.win_rate = round(summary.wins / decided, 4) if decided else 0.0
