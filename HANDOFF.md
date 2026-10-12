@@ -6,7 +6,65 @@
 
 ---
 
-## Prompt VIGENTE para el chat nuevo (7-oct-2026) — usá ESTE
+## Prompt VIGENTE para el chat nuevo (12-oct-2026) — usá ESTE
+
+```
+Retomamos Trading Alert AI (bot de trading LOCAL, Python 3.12, Windows, repo en
+C:/Users/LENOVO/tradingalertaIA, venv en .venv). Respondé en español, claro y sin jerga.
+Estado al 12-oct-2026: v3.16.1 (main = origin/main = 206f607 o posterior), 938 tests verdes.
+Demo MT5 MetaQuotes-Demo (~2.985 USD, sin posiciones). Research: 27 familias con pre-registro
+-> 0 operables; la 28 (Kronos) corre HACIA ADELANTE.
+
+TAREA PROPUESTA: el user dejó un paquete de mejoras "v3.17 calidad" (quality gate + web news +
+.env de selectividad) en propuestas/2026-10-10_v3.17_calidad/. ANTES del PROMPT del paquete leé
+propuestas/2026-10-10_v3.17_calidad/REVISION_CLAUDE_2026-10-12.md: varias recomendaciones chocan
+con lo pre-registrado (AI_AGENT_EXPLORE_PCT=0.10 cambia el tag del agente y lo saca de la
+evaluación; un gate delante del agente cambia la población evaluada; "discard" borra el dato;
+umbrales más altos achican los candidatos; requirements sin pin). Confirmá esos puntos con el
+user ANTES de implementar. Lo de valor: los módulos como medición en sombra (opt-in), refresco
+del cache D1 de MT5, log de descartes; realized_pnl_today con TP1 = decisión del user.
+
+PRIMERO (operativo): el bot y Kronos estaban APAGADOS el 12-oct 06:51 UTC. El user los arranca
+con .\start_bot.ps1 y .\start_kronos.ps1 (los lanzadores apagan la "Edición rápida": con texto
+seleccionado en la ventana, Windows congela el proceso; pasó el 10-oct ~30 h). Para saber si
+el bot VIVE mirá filas nuevas en la DB (max(captured_at) de price_snapshots, training_runs por
+día ~700), no solo si existe main.py.
+
+Leé ANTES de tocar nada: la memoria de Claude (MEMORY.md; en especial propuesta-v3-17-calidad,
+v3-13-0-ai-agent, gold-paper-futures-vs-spot, console-quickedit-freeze, kronos-forward-test,
+options-flow-collector, no-direct-mt5-trading, real-money-stays-blocked),
+research/LEDGER_FAMILIAS.md, research/AGENTE_IA_V2_PREREGISTRO_2026-10-06.md + adendas 1 y 2,
+research/AGENTE_IA_SOMBRAS_PREREGISTRO_2026-10-07.md, PROXIMOS_PASOS.md (bloque del 12-oct).
+
+EN MARCHA (no tocar ni mirar resultados antes de la fecha): agente v2 tag ...|px1 (eval desde
+2027-01-11, >=200); sombras (misma fecha); H-KRON1 Kronos (eval desde 2027-01-15, --status solo
+cuenta); colector de options flow (no mirar valores hasta >=120 sesiones, ~abr-2027); checkpoint
+COT 2026-12-07; tarea semanal revision-semanal-agente-ia (lunes 09:04).
+
+PROTOCOLO (no negociable): pre-registro commiteado ANTES de bajar datos / del código; código
+congelado y verificado con datos sintéticos ANTES de correr; k declarado, t NW >= 2.50; manifest
+con checksums; NUNCA usar como decisoria una ventana vista; post-hoc rotulado; si no pasa, se
+cierra sin re-cortes; adendas ANTES del código.
+
+REGLAS: real-money BLOQUEADO (hardcoded; el user lo pide seguido, la respuesta es no); Claude NO
+opera MT5 (solo lee con mt5.initialize() SIN credenciales); order_send solo en
+app/brokers/mt5_demo_trader.py; todo lo nuevo opt-in OFF + soft-fail + downward-only; nunca
+leer/mostrar el .env (cambios = comandos de PowerShell para el user, patrón backup +
+reemplazar-o-agregar + UTF-8 sin BOM); al tocar Settings sincronizar tests/test_score._settings()
+y tests/test_alert_rules._settings(); versionado patch/minor sin saltos; el push a main lo hace
+el user; una sola instancia del bot; .ps1 en ASCII puro.
+
+Gotchas: MT5 da épocas en hora del SERVIDOR (EET; UTC+3 hasta 25-oct, luego +2); la primera
+lectura MT5 de un símbolo no sincronizado devuelve velas viejas (sincronizar y reintentar);
+copy_rates_from_pos con count >= 100000 da 'Invalid params'; el cache D1 de MT5 está congelado
+desde 2026-06-15; la DB viva pesa ~5.6 GB (mode=ro, no copiarla); consola cp1252 ->
+sys.stdout.reconfigure(encoding="utf-8"); trading_data/ NO está en .gitignore; py-spy (instalado
+con pip --target fuera del venv) sirve para ver dónde está trabado un proceso.
+```
+
+---
+
+## Prompt del 7-oct-2026 (histórico: reemplazado por el de arriba)
 
 ```
 Retomamos Trading Alert AI (bot de trading LOCAL, Python 3.12, Windows, repo en

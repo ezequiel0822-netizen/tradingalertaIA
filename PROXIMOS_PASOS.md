@@ -57,6 +57,13 @@
 > long Binance). **Registro único con todas las familias, commits y ventanas ya vistas:
 > `research/LEDGER_FAMILIAS.md`.** Main = origin/main en 13a3733 antes de este cierre.
 >
+> **🧭 12-oct-2026 — paquete "v3.17 calidad" GUARDADO, sin aplicar.** El user dejó propuestas (quality gate,
+> web news, .env de selectividad) en `propuestas/2026-10-10_v3.17_calidad/`. Leer primero
+> `REVISION_CLAUDE_2026-10-12.md`: `AI_AGENT_EXPLORE_PCT=0.10` sacaría al agente de su evaluación; el gate
+> delante del agente cambia la población; "discard" borra el dato; requirements sin pin. Confirmar con el user
+> antes de implementar. Estado: v3.16.1 (bot congelado ~30 h el 10-oct por la "Edición rápida" de la consola;
+> arreglado en los lanzadores). Bot y Kronos APAGADOS el 12-oct 06:51 UTC: arrancar con los `.ps1`.
+>
 > **🔭 7-oct-2026 — H-KRON1 (familia 28, EN CURSO): Kronos hacia adelante.** El modelo base de velas
 > `shiyu-coder/Kronos` (Kronos-small, CPU) pronostica forex/oro a 12 h dos veces por día en un proceso APARTE
 > (`.\start_kronos.ps1`; instalado con `scripts\setup_kronos.ps1`). No opera. Evaluación desde el 2027-01-15

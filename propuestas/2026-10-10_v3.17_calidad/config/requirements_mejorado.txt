@@ -1,0 +1,38 @@
+# ============================================================
+# requirements.txt mejorado — v3.17 propuesta
+# Basado en el original + dependencias que el código ya usa
+# (soft-fail donde corresponda)
+# ============================================================
+
+# --- Core (pinneadas como en el original) ---
+python-dotenv==1.2.2
+requests==2.34.2
+streamlit==1.57.0
+pandas==3.0.3
+pytest==9.0.3
+
+# --- ML (soft-fail si no se instalan) ---
+xgboost==3.2.0
+scikit-learn==1.9.0
+
+# --- Windows-only MT5 ---
+MetaTrader5>=5.0.45,<6.0.0; sys_platform == 'win32'
+
+# --- LLM opcional ---
+anthropic>=0.40.0,<1.0.0
+
+# --- Datos de mercado (muy usados, antes no estaban en requirements) ---
+yfinance>=0.2.40
+# ta-lib es opcional y a veces difícil de instalar; el código suele tener fallbacks
+# ta>=0.11.0
+
+# --- Utilidades útiles ---
+numpy>=1.26.0
+python-dateutil>=2.9.0
+pytz>=2024.1
+
+# --- RSS / XML ya viene en stdlib; requests cubre HTTP ---
+
+# Nota: si alguna dependencia falla al instalar, el bot debe seguir
+# funcionando en modo degradado (soft-fail). No pinnear demasiado agresivo
+# en las nuevas para no romper entornos existentes.
