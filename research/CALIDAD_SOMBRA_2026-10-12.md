@@ -68,6 +68,18 @@ Son los puntos del paquete, con el mapeo de la revisión del 12-oct:
 - Si no, `allow`.
 - **Nunca descarta.** El paper trade se abre siempre y el agente ve el candidato siempre.
 
+Las noticias (solo acciones) se resumen con las fórmulas del paquete, medidas contra la
+apertura:
+
+- **Frescura**, según la edad del titular más nuevo: hasta 3 h vale 95; hasta 8 h, 80;
+  hasta `WEB_NEWS_MAX_AGE_HOURS` (18 h), 60; si es más viejo, 25. Sin fechas, 40.
+- **Sentimiento**: promedio por título de (positivas − negativas) / (positivas +
+  negativas), acotado a [−1, 1].
+- **Catalizador**: |sentimiento| ≥ 0.25, o alguna de earnings, guidance, fda, merger,
+  acquisition, cpi, fomc o nfp en los títulos.
+- Se usan hasta 8 titulares, sin repetidos y del más nuevo al más viejo. Sin titulares,
+  el componente de noticias no suma ni resta.
+
 Cambios respecto del paquete, declarados:
 
 - Las claves se leen de los datos reales del bot. La tendencia `range` del paquete es
