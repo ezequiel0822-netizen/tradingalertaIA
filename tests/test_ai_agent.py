@@ -336,7 +336,8 @@ def test_agent_off_by_default(monkeypatch) -> None:
     for k in ("ENABLE_AI_AGENT", "APP_VERSION", "AI_AGENT_VERSION", "AI_AGENT_EXPLORE_PCT",
               "PAPER_PRICE_FROM_MT5", "AI_AGENT_SHADOWS", "ENABLE_OPTIONS_COLLECTOR",
               "ENABLE_QUALITY_GATE", "QUALITY_GATE_ENFORCE", "QUALITY_MIN_CONFLUENCE",
-              "ENABLE_WEB_NEWS_ENHANCER", "WEB_NEWS_MAX_AGE_HOURS", "ENABLE_DISCARD_LOG"):
+              "ENABLE_WEB_NEWS_ENHANCER", "WEB_NEWS_MAX_AGE_HOURS", "ENABLE_DISCARD_LOG",
+              "LOG_TO_FILE"):
         monkeypatch.delenv(k, raising=False)
     s = load_settings()
     assert s.enable_ai_agent is False and s.app_version.startswith("v3.17")
@@ -349,6 +350,7 @@ def test_agent_off_by_default(monkeypatch) -> None:
     assert s.enable_quality_gate is False and s.quality_gate_enforce is False
     assert s.enable_web_news_enhancer is False and s.enable_discard_log is False
     assert s.quality_min_confluence == 2 and s.web_news_max_age_hours == 18.0
+    assert s.log_to_file is False                       # v3.17.1: log a archivo, opt-in
 
 
 def test_ml_low_confidence_halves_lot_without_crashing(monkeypatch) -> None:

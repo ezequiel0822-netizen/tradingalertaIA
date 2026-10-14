@@ -57,6 +57,13 @@
 > long Binance). **Registro único con todas las familias, commits y ventanas ya vistas:
 > `research/LEDGER_FAMILIAS.md`.** Main = origin/main en 13a3733 antes de este cierre.
 >
+> **🔎 14-oct-2026 — auditoría + v3.17.1 (1003 tests).** Todo corriendo bien (bot y Kronos sin cortes
+> desde el 12-oct a la noche; demo 2.982 USD sin posiciones). Hallazgo: el tope global de trades abiertos,
+> lleno sobre todo de paper de acciones "por readiness" (sin estrategia, 48 h), frenó la mitad de los setups
+> de forex del agente el 13-oct; NO tocar sin adenda (al ritmo con el bot andando llega a 200 el 11-ene).
+> La revisión semanal se arregló (etiqueta |px1, permisos aprobados). v3.17.1: log a archivo opt-in
+> (`LOG_TO_FILE`) y secretos tapados en tracebacks.
+>
 > **🧭 12-oct-2026 — v3.17.0 (995 tests): paquete "v3.17 calidad" APLICADO, adaptado.** Del paquete
 > (`propuestas/2026-10-10_v3.17_calidad/` + `REVISION_CLAUDE_2026-10-12.md`) entró, todo opt-in y apagado:
 > - el quality gate EN SOMBRA (`ENABLE_QUALITY_GATE`): anota qué diría de cada candidato y nunca descarta;

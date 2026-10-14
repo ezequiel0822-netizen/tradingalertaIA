@@ -6,14 +6,14 @@
 
 ---
 
-## Prompt VIGENTE para el chat nuevo (12-oct-2026, v3.17.0) — usá ESTE
+## Prompt VIGENTE para el chat nuevo (14-oct-2026, v3.17.1) — usá ESTE
 
 ```
 Retomamos Trading Alert AI (bot de trading LOCAL, Python 3.12, Windows, repo en
 C:/Users/LENOVO/tradingalertaIA, venv en .venv). Respondé en español, claro y sin jerga.
-Estado al 12-oct-2026: v3.17.0 (rama johan/trading-alert-v3-17-quality-991613; verificá con git
-si el user ya la mergeó a main), 995 tests verdes. Demo MT5 MetaQuotes-Demo (~2.985 USD,
-sin posiciones). Research: 27 familias con pre-registro -> 0 operables; la 28 (Kronos) corre
+Estado al 14-oct-2026: v3.17.1 (rama johan/trading-alert-v3-17-quality-991613; verificá con git
+si el user ya la mergeó a main; v3.17.0 ya está en main), 1003 tests verdes. Demo MT5
+MetaQuotes-Demo (~2.982 USD, sin posiciones). Research: 27 familias con pre-registro -> 0 operables; la 28 (Kronos) corre
 HACIA ADELANTE.
 
 v3.17.0 = el paquete "v3.17 calidad" del user APLICADO ADAPTADO (CHANGELOG): quality gate EN
@@ -22,10 +22,14 @@ QUALITY_GATE_ENFORCE (solo fuera del agente: hoy no cambia ninguna orden), notic
 (ENABLE_WEB_NEWS_ENHANCER: Yahoo ya bajado + Google después, as-of), contador de frenados
 (ENABLE_DISCARD_LOG, /frenados) y P&L del día con la mitad de TP1. Todo opt-in. El user decidió
 NO tocar AI_AGENT_EXPLORE_PCT (0.20), umbrales, MAX_OPEN_TRADES_TOTAL, DEMO_ALLOWED_SYMBOLS ni
-requirements; el refresco del cache D1 quedó fuera.
+requirements; el refresco del cache D1 quedó fuera. v3.17.1 = log a archivo opt-in
+(LOG_TO_FILE: <carpeta de la DB>/logs/bot.log, UTC, rota por tamaño) y secretos tapados
+también en los tracebacks.
 
-PRIMERO (operativo): el 12-oct el bot y Kronos estaban APAGADOS (último snapshot 11-oct 05:27
-UTC). El user los arranca con .\start_bot.ps1 y .\start_kronos.ps1 (los lanzadores apagan la
+PRIMERO (operativo): auditoría del 14-oct: bot y Kronos corriendo desde el 12-oct 21:2x hora
+local (sin cortes); el tope global de trades abiertos (lleno de paper de acciones "por
+readiness") frena candidatos de forex del agente: NO tocar sin adenda. Si están apagados, el
+user los arranca con .\start_bot.ps1 y .\start_kronos.ps1 (los lanzadores apagan la
 "Edición rápida": con texto seleccionado en la ventana, Windows congela el proceso; pasó el
 10-oct ~30 h). Para saber si el bot VIVE mirá filas nuevas en la DB (max(captured_at) de
 price_snapshots, training_runs por día ~700), no solo si existe main.py.

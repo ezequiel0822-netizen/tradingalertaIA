@@ -1,5 +1,6 @@
 .env
 .env.bak*
+.env.backup*
 __pycache__/
 *.pyc
 .pytest_cache/
@@ -14,3 +15,6 @@ exports/
 # v3.16.x - H-KRON1: entorno aparte de Kronos (PyTorch) y codigo/pesos de terceros
 .venv_kronos/
 vendor/
+# v3.17.1 - log del bot a archivo (trading_data/logs/bot.log y sus rotaciones .1 .. .N)
+*.log
+*.log.[0-9]*

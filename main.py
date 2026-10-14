@@ -4,7 +4,7 @@ import logging
 from app.config.settings import load_settings
 from app.scheduler.jobs import TradingAlertJob
 from app.utils.log_redactor import install_log_redactor
-from app.utils.logging_config import setup_logging
+from app.utils.logging_config import setup_file_logging, setup_logging
 
 
 logger = logging.getLogger(__name__)
@@ -36,6 +36,9 @@ def main() -> int:
 
     setup_logging()
     settings = load_settings()
+    # v3.17.1: log a archivo (opt-in LOG_TO_FILE). ANTES del redactor, para que el
+    # archivo herede el enmascarado de secretos (mensajes y tracebacks).
+    setup_file_logging(settings)
     _install_log_redactor(settings)
     job = TradingAlertJob(settings, cli_mode_override=args.mode)
 

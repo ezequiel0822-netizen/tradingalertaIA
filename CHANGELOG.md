@@ -1,5 +1,20 @@
 # Changelog
 
+## v3.17.1 (2026-10-14) — log del bot a archivo y secretos tapados también en los tracebacks
+
+Lo pidió el user tras la auditoría del 14-oct. El bot solo escribía en la consola: si se caía o se congelaba, no quedaba rastro para revisar después.
+
+- **Log a archivo** (`LOG_TO_FILE`, apagado por defecto). `app/utils/logging_config.setup_file_logging` escribe en `<carpeta de la DB>/logs/bot.log` (con la DB por defecto, `trading_data/logs/`).
+  - Hora en UTC (la misma base que la DB) y nombre del hilo.
+  - Rota por tamaño: como máximo `LOG_FILE_MAX_MB` (10) × (`LOG_FILE_BACKUPS` (5) + 1), unos 60 MB.
+  - Si Windows no deja renombrar el archivo (otro programa lo tiene abierto), sigue escribiendo en el mismo y reintenta a los 5 min, sin romper ni llenar la consola de errores.
+  - Si no se puede abrir, sigue solo con la consola. En el arranque registra solo `logs/bot.log`, no la ruta completa.
+- **Secretos tapados también en los tracebacks.**
+  - El filtro que tapa el token de Telegram y la clave de MT5 solo veía el texto del mensaje. El traceback de un `logger.exception` salía tal cual: si la excepción traía la URL de la API de Telegram, el token aparecía en la consola y, con el archivo, habría quedado guardado en disco.
+  - `RedactingFormatter` (`app/utils/log_redactor.py`) tapa el texto ya armado en todos los handlers, consola incluida. `main.py` crea el handler del archivo ANTES de instalar el filtro, así el archivo también queda cubierto.
+- `.gitignore`: `*.log`, sus rotaciones y `.env.backup*` (los backups del `.env` del 12-oct quedaban sin ignorar).
+- Tests: +8 (1003), sin red (`tests/test_log_file.py`).
+
 ## v3.17.0 (2026-10-12) — filtro de calidad en sombra, noticias de acciones, contador de frenados y P&L del día con TP1
 
 Es el paquete "v3.17 calidad" del user (`propuestas/2026-10-10_v3.17_calidad/`), adaptado según la revisión (`REVISION_CLAUDE_2026-10-12.md`) y lo que el user respondió el 12-oct:

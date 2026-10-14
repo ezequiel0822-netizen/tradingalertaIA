@@ -392,6 +392,12 @@ class Settings:
     # v3.17.0 — contador de frenados (/frenados): por dia, POR QUE se freno cada candidato
     # (tope de trades, cooldown, kill-switch, sizing, gates a MT5). Solo registro. Opt-in OFF.
     enable_discard_log: bool
+    # v3.17.1 — log a archivo: <carpeta de la DB>/logs/bot.log, hora UTC, rota por tamaño
+    # (LOG_FILE_MAX_MB x LOG_FILE_BACKUPS como máximo). Los secretos se enmascaran igual
+    # que en la consola, tracebacks incluidos. Opt-in OFF, soft-fail.
+    log_to_file: bool
+    log_file_max_mb: int
+    log_file_backups: int
     # Phase 4 v2.3.0 — MT5 validation + walk-forward + data quality + CSV
     mt5_broker_profile: str
     enable_walk_forward_backtest: bool
@@ -576,7 +582,7 @@ def load_settings() -> Settings:
         obsidian_vault_path = safe_obsidian
 
     return Settings(
-        app_version=os.getenv("APP_VERSION", "v3.17.0"),
+        app_version=os.getenv("APP_VERSION", "v3.17.1"),
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
         telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID"),
         dexscreener_base_url=os.getenv(
@@ -859,6 +865,10 @@ def load_settings() -> Settings:
         enable_web_news_enhancer=_get_bool("ENABLE_WEB_NEWS_ENHANCER", False),
         web_news_max_age_hours=_get_float("WEB_NEWS_MAX_AGE_HOURS", 18.0),
         enable_discard_log=_get_bool("ENABLE_DISCARD_LOG", False),
+        # v3.17.1 — log a archivo (opt-in)
+        log_to_file=_get_bool("LOG_TO_FILE", False),
+        log_file_max_mb=_get_int("LOG_FILE_MAX_MB", 10),
+        log_file_backups=_get_int("LOG_FILE_BACKUPS", 5),
         # Phase 4 v2.3.0
         mt5_broker_profile=os.getenv("MT5_BROKER_PROFILE", "icmarkets"),
         enable_walk_forward_backtest=_get_bool("ENABLE_WALK_FORWARD_BACKTEST", True),
